@@ -9,7 +9,7 @@ use vulkano::{swapchain, Version};
 use vulkano::swapchain::{AcquireError, ColorSpace, FullscreenExclusive, PresentMode, SurfaceTransform, Swapchain, SwapchainCreationError, Surface, CompositeAlpha};
 use vulkano::sync;
 use vulkano::sync::{FlushError, GpuFuture, SharingMode};
-
+use vulkano::device::Features;
 use vulkano_win::VkSurfaceBuild;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -55,7 +55,7 @@ fn find_surface<'a>(device: &'a PhysicalDevice, surface: &Arc<Surface<Window>>) 
         .queue_families()
         .find(|&q| {
             // We take the first queue that supports drawing to our window.
-            q.supports_graphics() && q.supports_compute() && surface.is_supported(q).unwrap_or(false)
+            q.supports_graphics() && surface.is_supported(q).unwrap_or(false)
         }).ok_or_else(|| err_msg("Could not find a suitable queue family"))
 }
 
@@ -64,9 +64,10 @@ fn device_and_queue(physical: PhysicalDevice, queue_family: QueueFamily) -> Resu
         khr_swapchain: true,
         ..DeviceExtensions::none()
     };
+    println!("{:?}",physical.supported_features());
     let (device, mut queues) = Device::new(
         physical,
-        physical.supported_features(),
+        &Features::none(),
         &device_ext,
         [(queue_family, 0.5)].iter().cloned(),
     ).map_err(err_msg)?;
