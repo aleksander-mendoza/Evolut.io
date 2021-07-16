@@ -4,12 +4,12 @@ mod input;
 extern crate nalgebra_glm as glm;
 
 use vulkano::buffer::{BufferUsage, CpuAccessibleBuffer};
-use vulkano::command_buffer::{AutoCommandBufferBuilder, DynamicState, SubpassContents, CommandBufferUsage};
+use vulkano::command_buffer::{AutoCommandBufferBuilder, DynamicState, SubpassContents, CommandBufferUsage, PrimaryAutoCommandBuffer, PrimaryCommandBuffer};
 use vulkano::device::{Device, DeviceExtensions, Queue};
 use vulkano::image::{ImageUsage, SwapchainImage, ImageViewAbstract};
 use vulkano::instance::{Instance, PhysicalDevice, PhysicalDeviceType, QueueFamily};
 use vulkano::pipeline::viewport::Viewport;
-use vulkano::pipeline::GraphicsPipeline;
+use vulkano::pipeline::{GraphicsPipeline, GraphicsPipelineAbstract};
 use vulkano::{swapchain, Version};
 use vulkano::swapchain::{AcquireError, ColorSpace, FullscreenExclusive, PresentMode, SurfaceTransform, Swapchain, SwapchainCreationError, Surface, CompositeAlpha};
 use vulkano::sync;
@@ -30,6 +30,7 @@ use vulkano::impl_vertex;
 use crate::fps::FpsCounter;
 use winit::event::DeviceEvent::Key;
 use crate::input::Input;
+use vulkano::command_buffer::pool::StandardCommandPool;
 
 fn vulkan_instance() -> Result<Arc<Instance>, failure::Error> {
     let required_extensions = vulkano_win::required_extensions();
@@ -207,6 +208,46 @@ struct InstanceData {
 }
 impl_vertex!(InstanceData, position_offset, scale);
 
+fn build_command_buffer<V,Gp>(pool: &AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
+                           framebuffer:&Arc<dyn FramebufferAbstract + Send + Sync>,
+                           dynamic_state:&DynamicState,
+                           pipeline: Gp,
+                           vertex_source:V) -> Result<PrimaryAutoCommandBuffer, failure::Error>
+    where Gp: GraphicsPipelineAbstract + VertexSource<V> + Send + Sync + 'static + Clone
+{
+    // Before we can draw, we have to *enter a render pass*. There are two methods to do
+    // this: `draw_inline` and `draw_secondary`. The latter is a bit more advanced and is
+    // not covered here.
+    //
+    // The third parameter builds the list of values to clear the attachments with. The API
+    // is similar to the list of attachments when building the framebuffers, except that
+    // only the attachments that use `load: Clear` appear in the list.
+    pool.begin_render_pass(
+        framebuffer.clone(),
+        SubpassContents::Inline,
+        vec![[0.0, 0.0, 1.0, 1.0].into()],
+    ).map_err(err_msg)?
+        // We are now inside the first subpass of the render pass. We add a draw command.
+        //
+        // The last two parameters contain the list of resources to pass to the shaders.
+        // Since we used an `EmptyPipeline` object, the objects have to be `()`.
+        .draw(
+            pipeline,
+            &dynamic_state,
+            // We pass both our lists of vertices here.
+            vertex_source,
+            (),
+            (),
+            [],
+        )
+        .map_err(err_msg)?
+        // We leave the render pass by calling `draw_end`. Note that if we had multiple
+        // subpasses we could have called `next_inline` (or `next_secondary`) to jump to the
+        // next subpass.
+        .end_render_pass()
+        .map_err(err_msg)?
+        .build().map_err(err_msg)
+}
 fn main() -> Result<(), failure::Error> {
     let instance = vulkan_instance()?;
     let physical = device(&instance)?;
@@ -221,6 +262,12 @@ fn main() -> Result<(), failure::Error> {
     let render_pass = render_pass(&device, &swapchain)?;
     let pipeline = create_pipeline(&device, &render_pass)?;
     let mut fps_counter = FpsCounter::new(60);
+    let mut command_pool = AutoCommandBufferBuilder::primary(
+        device.clone(),
+        queue.family(),
+        CommandBufferUsage::MultipleSubmit,
+    ).map_err(err_msg)?;
+
     // We now create a buffer that will store the shape of our triangle.
     let vertex_buffer = CpuAccessibleBuffer::from_iter(
         device.clone(),
@@ -285,7 +332,10 @@ fn main() -> Result<(), failure::Error> {
     // Since we need to draw to multiple images, we are going to create a different framebuffer for
     // each image.
     let mut framebuffers = window_size_dependent_setup(&images, render_pass.clone(), &mut dynamic_state);
-
+    let command_buffers:Result<Vec<PrimaryAutoCommandBuffer>, failure::Error> = framebuffers.iter().map(|fb|
+        build_command_buffer(&command_pool,fb,&dynamic_state,pipeline.clone(), (vertex_buffer.clone(), instance_data_buffer.clone()))
+    ).collect();
+    let command_buffers = command_buffers?;
     // Initialization is finally finished!
 
     // In some situations, the swapchain will become invalid by itself. This includes for example
@@ -328,7 +378,7 @@ fn main() -> Result<(), failure::Error> {
             }
             Event::WindowEvent {
                 event: WindowEvent::KeyboardInput {
-                    input: KeyboardInput { state, virtual_keycode:Some(key), .. }, ..
+                    input: KeyboardInput { state, virtual_keycode: Some(key), .. }, ..
                 }, ..
             } => {
                 input.update_keyboard(state, key)
@@ -342,10 +392,10 @@ fn main() -> Result<(), failure::Error> {
             }
             Event::WindowEvent {
                 event: WindowEvent::MouseInput {
-                     state, button, ..
+                    state, button, ..
                 }, ..
             } => {
-                input.update_mouse_click(state,button)
+                input.update_mouse_click(state, button)
             }
             Event::MainEventsCleared => {
                 fps_counter.update();
@@ -383,48 +433,7 @@ fn main() -> Result<(), failure::Error> {
                 //
                 // Note that we have to pass a queue family when we create the command buffer. The command
                 // buffer will only be executable on that given queue family.
-                let mut builder = AutoCommandBufferBuilder::primary(
-                    device.clone(),
-                    queue.family(),
-                    CommandBufferUsage::OneTimeSubmit,
-                ).unwrap();
-                let clear_values = vec![[0.0, 0.0, 1.0, 1.0].into()];
-                builder
-                    // Before we can draw, we have to *enter a render pass*. There are two methods to do
-                    // this: `draw_inline` and `draw_secondary`. The latter is a bit more advanced and is
-                    // not covered here.
-                    //
-                    // The third parameter builds the list of values to clear the attachments with. The API
-                    // is similar to the list of attachments when building the framebuffers, except that
-                    // only the attachments that use `load: Clear` appear in the list.
-                    .begin_render_pass(
-                        framebuffers[image_num].clone(),
-                        SubpassContents::Inline,
-                        clear_values,
-                    )
-                    .unwrap()
-                    // We are now inside the first subpass of the render pass. We add a draw command.
-                    //
-                    // The last two parameters contain the list of resources to pass to the shaders.
-                    // Since we used an `EmptyPipeline` object, the objects have to be `()`.
-                    .draw(
-                        pipeline.clone(),
-                        &dynamic_state,
-                        // We pass both our lists of vertices here.
-                        (vertex_buffer.clone(), instance_data_buffer.clone()),
-                        (),
-                        (),
-                        [],
-                    )
-                    .unwrap()
-                    // We leave the render pass by calling `draw_end`. Note that if we had multiple
-                    // subpasses we could have called `next_inline` (or `next_secondary`) to jump to the
-                    // next subpass.
-                    .end_render_pass()
-                    .unwrap();
-
-                // Finish building the command buffer by calling `build`.
-                let command_buffer = builder.build().unwrap();
+                let command_buffer = &command_buffers[image_num];
 
                 let future = previous_frame_end
                     .take()
