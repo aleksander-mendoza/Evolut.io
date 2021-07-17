@@ -9,8 +9,9 @@ mod device;
 mod surface;
 mod swap_chain;
 mod block_world;
-mod shader;
+mod shader_module;
 mod imageview;
+mod pipeline;
 
 use winit::event::{Event, VirtualKeyCode, ElementState, KeyboardInput, WindowEvent};
 use winit::event_loop::{EventLoop, ControlFlow};
