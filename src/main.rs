@@ -12,6 +12,7 @@ mod block_world;
 mod shader_module;
 mod imageview;
 mod pipeline;
+mod render_pass;
 
 use winit::event::{Event, VirtualKeyCode, ElementState, KeyboardInput, WindowEvent};
 use winit::event_loop::{EventLoop, ControlFlow};
@@ -20,6 +21,7 @@ use winit::error::OsError;
 use crate::window::init_window;
 use crate::instance::Instance;
 use crate::device::pick_physical_device;
+use crate::pipeline::PipelineBuilder;
 
 
 struct VulkanApp;
@@ -69,6 +71,8 @@ fn main() -> Result<(), failure::Error>{
     let device = instance.create_device(&entry, physical_device)?;
     let swapchain = instance.create_swapchain(&device,&surface)?;
     let image_views = swapchain.create_image_views()?;
+    let pipeline = PipelineBuilder::new()
+        .build(&device)?;
     VulkanApp::main_loop(event_loop);
     Ok(())
 }
