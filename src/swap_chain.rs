@@ -2,6 +2,8 @@ use ash::vk;
 use crate::surface::Surface;
 use crate::window::{WINDOW_WIDTH, WINDOW_HEIGHT};
 use crate::device::Device;
+use ash::version::DeviceV1_0;
+use crate::imageview::ImageView;
 
 pub struct SwapChain {
     swapchain_loader: ash::extensions::khr::Swapchain,
@@ -9,6 +11,7 @@ pub struct SwapChain {
     images: Vec<vk::Image>,
     format: vk::Format,
     extent: vk::Extent2D,
+    device: Device
 }
 
 fn choose_swapchain_format(available_formats: &Vec<vk::SurfaceFormatKHR>) -> vk::SurfaceFormatKHR {
@@ -93,7 +96,22 @@ impl SwapChain {
             format: surface_format.format,
             extent,
             images,
+            device:device.clone()
         })
+    }
+
+    pub fn create_image_views(&self) -> Result<Vec<ImageView>,vk::Result> {
+        self.images.iter().map(|&image|ImageView::new(image,self.format,self.device())).collect()
+    }
+
+    pub fn format(&self)-> vk::Format{
+        self.format
+    }
+    pub fn extent(&self)-> vk::Extent2D{
+        self.extent
+    }
+    pub fn device(&self)-> &Device{
+        &self.device
     }
 }
 

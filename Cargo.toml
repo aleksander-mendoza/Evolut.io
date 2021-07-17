@@ -7,8 +7,7 @@ edition = "2018"
 
 [dependencies]
 ash = "0.32.1"
-glsl-to-spirv-macros = "0.1.1"
-glsl-to-spirv-macros-impl = "0.1.0"
+vk-shader-macros = "0.2.7"
 winit = "0.25.0"
 failure = "0.1.8"
 nalgebra-glm = "0.14.0"

@@ -1,3 +1,5 @@
+#[macro_use] extern crate vk_shader_macros;
+
 mod window;
 mod instance;
 mod constants;
@@ -6,6 +8,9 @@ mod validation_layer;
 mod device;
 mod surface;
 mod swap_chain;
+mod block_world;
+mod shader;
+mod imageview;
 
 use winit::event::{Event, VirtualKeyCode, ElementState, KeyboardInput, WindowEvent};
 use winit::event_loop::{EventLoop, ControlFlow};
@@ -62,6 +67,7 @@ fn main() -> Result<(), failure::Error>{
     let physical_device = instance.pick_physical_device(&surface)?;
     let device = instance.create_device(&entry, physical_device)?;
     let swapchain = instance.create_swapchain(&device,&surface)?;
+    let image_views = swapchain.create_image_views()?;
     VulkanApp::main_loop(event_loop);
     Ok(())
 }

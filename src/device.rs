@@ -6,6 +6,7 @@ use crate::instance::Instance;
 use crate::validation_layer::get_validation_layer_support;
 use crate::surface::Surface;
 use std::ffi::CStr;
+use std::rc::Rc;
 
 fn device_extensions() -> [*const i8;1]{
     [ash::extensions::khr::Swapchain::name().as_ptr()]
@@ -79,11 +80,16 @@ fn pick_queue_family(
         .expect("This should never happen if the physical device was picked in the first place") as u32
 }
 
-pub struct Device {
+struct DeviceInner {
     physical_device: vk::PhysicalDevice,
     device: ash::Device,
     queue: vk::Queue,
     family_index: u32,
+}
+
+#[derive(Clone)]
+pub struct Device {
+    inner:Rc<Box<DeviceInner>>
 }
 
 impl Device {
@@ -108,23 +114,23 @@ impl Device {
 
         let queue = unsafe { device.get_device_queue(family_index, 0) };
 
-        Ok(Self { device, queue, family_index, physical_device })
+        Ok(Self { inner:Rc::new(Box::new(DeviceInner{device, queue, family_index, physical_device }))})
     }
     pub fn family_index(&self) -> u32 {
-        self.family_index
+        self.inner.family_index
     }
     pub fn physical_device(&self) -> vk::PhysicalDevice {
-        self.physical_device
+        self.inner.physical_device
     }
     pub fn raw(&self) -> ash::vk::Device {
-        self.device.handle()
+        self.inner.device.handle()
     }
     pub fn device(&self) -> &ash::Device {
-        &self.device
+        &self.inner.device
     }
 }
 
-impl Drop for Device {
+impl Drop for DeviceInner {
     fn drop(&mut self) {
         unsafe {
             self.device.destroy_device(None)
