@@ -3,8 +3,9 @@ mod instance;
 mod constants;
 mod platforms;
 mod validation_layer;
-mod debug;
 mod device;
+mod surface;
+mod swap_chain;
 
 use winit::event::{Event, VirtualKeyCode, ElementState, KeyboardInput, WindowEvent};
 use winit::event_loop::{EventLoop, ControlFlow};
@@ -57,8 +58,10 @@ fn main() -> Result<(), failure::Error>{
     let event_loop = EventLoop::new();
     let window = init_window(&event_loop)?;
     let instance = Instance::new(&entry, true)?;
-    let physical_device = instance.pick_physical_device()?;
+    let surface = instance.create_surface(&entry,&window)?;
+    let physical_device = instance.pick_physical_device(&surface)?;
     let device = instance.create_device(&entry, physical_device)?;
+    let swapchain = instance.create_swapchain(&device,&surface)?;
     VulkanApp::main_loop(event_loop);
     Ok(())
 }

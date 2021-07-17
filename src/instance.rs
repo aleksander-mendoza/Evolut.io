@@ -4,9 +4,11 @@ use crate::constants::APP_INFO;
 use crate::platforms::{required_extension_names};
 use ash::InstanceError;
 use crate::validation_layer::{populate_debug_messenger_create_info, get_validation_layer_support};
-use failure::err_msg;
+use failure::{err_msg, Error};
 use ash::vk::DebugUtilsMessengerCreateInfoEXT;
 use crate::device::{pick_physical_device, Device};
+use crate::surface::Surface;
+use crate::swap_chain::SwapChain;
 
 pub struct Instance {
     raw: ash::Instance,
@@ -36,13 +38,21 @@ impl Instance {
         Ok(Self { raw: instance, debug: debug_utils })
     }
 
+    pub fn create_swapchain(&self, device: &Device, surface: &Surface) -> Result<SwapChain, failure::Error> {
+        SwapChain::new(&self.raw,device,surface)
+    }
 
-    pub fn pick_physical_device(&self) -> Result<ash::vk::PhysicalDevice, failure::Error> {
-        pick_physical_device(&self.raw)
+
+    pub fn pick_physical_device(&self,surface:&Surface) -> Result<ash::vk::PhysicalDevice, failure::Error> {
+        pick_physical_device(&self.raw,surface)
     }
 
     pub fn create_device(&self,entry:&ash::Entry, physical_device:ash::vk::PhysicalDevice) -> Result<Device, failure::Error> {
         Device::new(entry, &self.raw,physical_device)
+    }
+
+    pub fn create_surface(&self,entry:&ash::Entry, window: &winit::window::Window) -> Result<Surface, failure::Error> {
+        Surface::new(entry,&self.raw,window)
     }
 }
 
