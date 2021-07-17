@@ -20,32 +20,39 @@ use metal::CoreAnimationLayer;
 #[cfg(target_os = "macos")]
 use objc::runtime::YES;
 
+fn append_debug(mut v:Vec<*const i8>,debug:bool)->Vec<*const i8>{
+    if debug{
+        v.push( DebugUtils::name().as_ptr());
+        v
+    }else{
+        v
+    }
+}
+
 // required extension ------------------------------------------------------
 #[cfg(target_os = "macos")]
-pub fn required_extension_names() -> Vec<*const i8> {
-    vec![
+pub fn required_extension_names(debug:bool) -> Vec<*const i8> {
+    append_debug(vec![
         Surface::name().as_ptr(),
         MacOSSurface::name().as_ptr(),
-        DebugUtils::name().as_ptr(),
-    ]
+    ],debug)
 }
 
 #[cfg(all(windows))]
-pub fn required_extension_names() -> Vec<*const i8> {
-    vec![
+pub fn required_extension_names(debug:bool) -> Vec<*const i8> {
+    append_debug(vec![
         Surface::name().as_ptr(),
-        Win32Surface::name().as_ptr(),
-        DebugUtils::name().as_ptr(),
-    ]
+        Win32Surface::name().as_ptr()
+    ],debug)
 }
 
 #[cfg(all(unix, not(target_os = "android"), not(target_os = "macos")))]
-pub fn required_extension_names() -> Vec<*const i8> {
-    vec![
+pub fn required_extension_names(debug:bool) -> Vec<*const i8> {
+    append_debug(vec![
         Surface::name().as_ptr(),
         XlibSurface::name().as_ptr(),
         DebugUtils::name().as_ptr(),
-    ]
+    ],debug)
 }
 // ------------------------------------------------------------------------
 

@@ -4,6 +4,7 @@ mod constants;
 mod platforms;
 mod validation_layer;
 mod debug;
+mod device;
 
 use winit::event::{Event, VirtualKeyCode, ElementState, KeyboardInput, WindowEvent};
 use winit::event_loop::{EventLoop, ControlFlow};
@@ -11,6 +12,7 @@ use winit::window::Window;
 use winit::error::OsError;
 use crate::window::init_window;
 use crate::instance::Instance;
+use crate::device::pick_physical_device;
 
 
 struct VulkanApp;
@@ -55,6 +57,8 @@ fn main() -> Result<(), failure::Error>{
     let event_loop = EventLoop::new();
     let window = init_window(&event_loop)?;
     let instance = Instance::new(&entry, true)?;
+    let physical_device = instance.pick_physical_device()?;
+    let device = instance.create_device(&entry, physical_device)?;
     VulkanApp::main_loop(event_loop);
     Ok(())
 }
