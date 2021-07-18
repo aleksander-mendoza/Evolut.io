@@ -1,4 +1,5 @@
-#[macro_use] extern crate vk_shader_macros;
+#[macro_use]
+extern crate vk_shader_macros;
 
 mod window;
 mod instance;
@@ -13,6 +14,9 @@ mod shader_module;
 mod imageview;
 mod pipeline;
 mod render_pass;
+mod command_pool;
+mod semaphore;
+mod fence;
 
 use winit::event::{Event, VirtualKeyCode, ElementState, KeyboardInput, WindowEvent};
 use winit::event_loop::{EventLoop, ControlFlow};
@@ -22,57 +26,78 @@ use crate::window::init_window;
 use crate::instance::Instance;
 use crate::device::pick_physical_device;
 use crate::pipeline::PipelineBuilder;
+use crate::render_pass::RenderPassBuilder;
+use crate::shader_module::ShaderModule;
+use ash::vk::ShaderStageFlags;
+use crate::command_pool::{CommandPool, CommandBuffer, StateFinished};
+use crate::imageview::Framebuffer;
 
 
-struct VulkanApp;
-
-impl VulkanApp {
-
-    pub fn main_loop(event_loop: EventLoop<()>) {
-
-        event_loop.run(move |event, _, control_flow| {
-
-            match event {
-                | Event::WindowEvent { event, .. } => {
-                    match event {
-                        | WindowEvent::CloseRequested => {
-                            *control_flow = ControlFlow::Exit
-                        },
-                        | WindowEvent::KeyboardInput { input, .. } => {
-                            match input {
-                                | KeyboardInput { virtual_keycode, state, .. } => {
-                                    match (virtual_keycode, state) {
-                                        | (Some(VirtualKeyCode::Escape), ElementState::Pressed) => {
-                                            dbg!();
-                                            *control_flow = ControlFlow::Exit
-                                        },
-                                        | _ => {},
-                                    }
-                                },
-                            }
-                        },
-                        | _ => {},
-                    }
-                },
-                _ => (),
-            }
-
-        })
-    }
-}
-
-fn main() -> Result<(), failure::Error>{
-    let entry = unsafe{ash::Entry::new()}?;
+fn main() -> Result<(), failure::Error> {
+    let entry = unsafe { ash::Entry::new() }?;
     let event_loop = EventLoop::new();
     let window = init_window(&event_loop)?;
     let instance = Instance::new(&entry, true)?;
-    let surface = instance.create_surface(&entry,&window)?;
+    let surface = instance.create_surface(&entry, &window)?;
     let physical_device = instance.pick_physical_device(&surface)?;
     let device = instance.create_device(&entry, physical_device)?;
-    let swapchain = instance.create_swapchain(&device,&surface)?;
+    let swapchain = instance.create_swapchain(&device, &surface)?;
     let image_views = swapchain.create_image_views()?;
-    let pipeline = PipelineBuilder::new()
+    let render_pass = RenderPassBuilder::new()
+        .color_attachment(swapchain.format())
+        .graphics_subpass([], [ash::vk::AttachmentReference::builder()
+            .layout(ash::vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .attachment(0)
+            .build()])
         .build(&device)?;
-    VulkanApp::main_loop(event_loop);
-    Ok(())
+    let frag = ShaderModule::new(include_glsl!("assets/shaders/blocks.frag", kind: frag) as &[u32], ShaderStageFlags::FRAGMENT, &device)?;
+    let vert = ShaderModule::new(include_glsl!("assets/shaders/blocks.vert") as &[u32], ShaderStageFlags::VERTEX, &device)?;
+    let pipeline = PipelineBuilder::new()
+        .shader("main", frag)
+        .shader("main", vert)
+        .scissors(swapchain.render_area())
+        .viewports(swapchain.viewport())
+        .color_blend_attachment_states(ash::vk::PipelineColorBlendAttachmentState {
+            blend_enable: ash::vk::FALSE,
+            color_write_mask: ash::vk::ColorComponentFlags::all(),
+            src_color_blend_factor: ash::vk::BlendFactor::ONE,
+            dst_color_blend_factor: ash::vk::BlendFactor::ZERO,
+            color_blend_op: ash::vk::BlendOp::ADD,
+            src_alpha_blend_factor: ash::vk::BlendFactor::ONE,
+            dst_alpha_blend_factor: ash::vk::BlendFactor::ZERO,
+            alpha_blend_op: ash::vk::BlendOp::ADD,
+        })
+        .build(&render_pass)?;
+    let framebuffers: Result<Vec<Framebuffer>, ash::vk::Result> = image_views.iter().map(|v| v.create_framebuffer(&render_pass, &swapchain)).collect();
+    let framebuffers = framebuffers?;
+    let cmd_pool = CommandPool::new(&device)?;
+    let cmd_buffers = cmd_pool.create_command_buffers(framebuffers.len() as u32)?;
+    let clear_values = [ash::vk::ClearValue {
+        color: ash::vk::ClearColorValue {
+            float32: [0.0, 0.0, 0.0, 1.0],
+        },
+    }];
+    let cmd_buffers: Result<Vec<CommandBuffer<StateFinished>>, ash::vk::Result> = cmd_buffers.into_iter().zip(framebuffers.iter()).map(|(cmd_buff, frame_buff)|
+        cmd_buff.single_pass(ash::vk::CommandBufferUsageFlags::SIMULTANEOUS_USE, &render_pass, frame_buff,
+                             swapchain.render_area(), &clear_values, &pipeline, 3, 1, 0, 0)
+    ).collect();
+    let cmd_buffers = cmd_buffers?;
+
+    event_loop.run(move |event, _, control_flow| {
+        match event {
+            Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
+                *control_flow = ControlFlow::Exit
+            }
+            Event::WindowEvent { event: WindowEvent::KeyboardInput { input: KeyboardInput { virtual_keycode, state, .. }, .. }, .. } => {}
+            Event::LoopDestroyed => {
+                unsafe {
+                    device.device_wait_idle().expect("Failed to wait device idle!")
+                };
+            }
+            Event::MainEventsCleared => {
+
+            }
+            _ => (),
+        }
+    })
 }

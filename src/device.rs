@@ -7,8 +7,9 @@ use crate::validation_layer::get_validation_layer_support;
 use crate::surface::Surface;
 use std::ffi::CStr;
 use std::rc::Rc;
+use ash::prelude::VkResult;
 
-fn device_extensions() -> [*const i8;1]{
+fn device_extensions() -> [*const i8; 1] {
     [ash::extensions::khr::Swapchain::name().as_ptr()]
 }
 
@@ -17,6 +18,7 @@ pub fn extension_name(ext: &ExtensionProperties) -> &CStr {
         CStr::from_ptr(ext.extension_name.as_ptr())
     }
 }
+
 fn has_necessary_queues(queue_family: &QueueFamilyProperties) -> bool {
     queue_family.queue_flags.contains(vk::QueueFlags::GRAPHICS | vk::QueueFlags::COMPUTE)
 }
@@ -30,11 +32,11 @@ fn score_physical_device(
     //let device_features = unsafe { instance.get_physical_device_features(physical_device) };
     let device_queue_families = unsafe { instance.get_physical_device_queue_family_properties(physical_device) };
     let available_extensions = unsafe { instance.enumerate_device_extension_properties(physical_device) };
-    let available_extensions = match available_extensions{
+    let available_extensions = match available_extensions {
         Ok(available_extensions) => available_extensions,
         Err(_) => return 0
     };
-    let available_extensions:Vec<&CStr> = available_extensions.iter().map(extension_name).collect();
+    let available_extensions: Vec<&CStr> = available_extensions.iter().map(extension_name).collect();
     let device_type_score = match device_properties.device_type {
         vk::PhysicalDeviceType::CPU => 0,
         vk::PhysicalDeviceType::INTEGRATED_GPU => 3,
@@ -44,9 +46,9 @@ fn score_physical_device(
         _ => 0
     };
     if device_type_score == 0 { return 0; }
-    if surface.formats(physical_device).map(|v|v.len()).unwrap_or(0)==0{return 0;}
-    if surface.present_modes(physical_device).map(|v|v.len()).unwrap_or(0)==0{return 0;}
-    if !device_extensions().iter().all(|&extension| available_extensions.contains(&unsafe{CStr::from_ptr(extension)}) ){
+    if surface.formats(physical_device).map(|v| v.len()).unwrap_or(0) == 0 { return 0; }
+    if surface.present_modes(physical_device).map(|v| v.len()).unwrap_or(0) == 0 { return 0; }
+    if !device_extensions().iter().all(|&extension| available_extensions.contains(&unsafe { CStr::from_ptr(extension) })) {
         return 0;
     }
     let queue_score = device_queue_families.iter().enumerate()
@@ -89,7 +91,7 @@ struct DeviceInner {
 
 #[derive(Clone)]
 pub struct Device {
-    inner:Rc<Box<DeviceInner>>
+    inner: Rc<Box<DeviceInner>>,
 }
 
 impl Device {
@@ -114,7 +116,7 @@ impl Device {
 
         let queue = unsafe { device.get_device_queue(family_index, 0) };
 
-        Ok(Self { inner:Rc::new(Box::new(DeviceInner{device, queue, family_index, physical_device }))})
+        Ok(Self { inner: Rc::new(Box::new(DeviceInner { device, queue, family_index, physical_device })) })
     }
     pub fn family_index(&self) -> u32 {
         self.inner.family_index
@@ -125,8 +127,11 @@ impl Device {
     pub fn raw(&self) -> ash::vk::Device {
         self.inner.device.handle()
     }
-    pub fn device(&self) -> &ash::Device {
+    pub fn inner(&self) -> &ash::Device {
         &self.inner.device
+    }
+    pub fn device_wait_idle(&self) -> VkResult<()> {
+        unsafe { self.inner().device_wait_idle() }
     }
 }
 

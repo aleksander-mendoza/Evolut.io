@@ -4,6 +4,9 @@ use crate::window::{WINDOW_WIDTH, WINDOW_HEIGHT};
 use crate::device::Device;
 use ash::version::DeviceV1_0;
 use crate::imageview::ImageView;
+use ash::prelude::VkResult;
+use crate::semaphore::Semaphore;
+use crate::fence::Fence;
 
 pub struct SwapChain {
     swapchain_loader: ash::extensions::khr::Swapchain,
@@ -11,7 +14,7 @@ pub struct SwapChain {
     images: Vec<vk::Image>,
     format: vk::Format,
     extent: vk::Extent2D,
-    device: Device
+    device: Device,
 }
 
 fn choose_swapchain_format(available_formats: &Vec<vk::SurfaceFormatKHR>) -> vk::SurfaceFormatKHR {
@@ -85,7 +88,7 @@ impl SwapChain {
             .image_array_layers(1)
             .present_mode(present_mode);
 
-        let swapchain_loader = ash::extensions::khr::Swapchain::new(instance, device.device());
+        let swapchain_loader = ash::extensions::khr::Swapchain::new(instance, device.inner());
         let swapchain = unsafe { swapchain_loader.create_swapchain(&swapchain_create_info, None) }?;
 
         let images = unsafe { swapchain_loader.get_swapchain_images(swapchain) }?;
@@ -96,28 +99,55 @@ impl SwapChain {
             format: surface_format.format,
             extent,
             images,
-            device:device.clone()
+            device: device.clone(),
         })
     }
 
-    pub fn create_image_views(&self) -> Result<Vec<ImageView>,vk::Result> {
-        self.images.iter().map(|&image|ImageView::new(image,self.format,self.device())).collect()
+    pub fn create_image_views(&self) -> Result<Vec<ImageView>, vk::Result> {
+        self.images.iter().map(|&image| ImageView::new(image, self.format, self.device())).collect()
     }
 
-    pub fn format(&self)-> vk::Format{
+    pub fn format(&self) -> vk::Format {
         self.format
     }
-    pub fn extent(&self)-> vk::Extent2D{
+    pub fn extent(&self) -> vk::Extent2D {
         self.extent
     }
-    pub fn device(&self)-> &Device{
+    pub fn device(&self) -> &Device {
         &self.device
+    }
+    pub fn render_area(&self) -> vk::Rect2D {
+        ash::vk::Rect2D {
+            offset: ash::vk::Offset2D { x: 0, y: 0 },
+            extent: self.extent(),
+        }
+    }
+    pub fn viewport(&self) -> ash::vk::Viewport {
+        ash::vk::Viewport {
+            x: 0.0,
+            y: 0.0,
+            width: self.extent().width as f32,
+            height: self.extent().height as f32,
+            min_depth: 0.0,
+            max_depth: 1.0,
+        }
+    }
+
+    pub fn acquire_next_image(&self, timeout:Option<u64>,semaphore:Option<&Semaphore>, fence:Option<&Fence>) -> VkResult<(u32, bool)> {
+        unsafe {
+            self.swapchain_loader.acquire_next_image(
+                self.swapchain,
+                timeout.unwrap_or(u64::MAX),
+                semaphore.map(Semaphore::raw).unwrap_or(vk::Semaphore::null()),
+                fence.map(Fence::raw).unwrap_or(vk::Fence::null()),
+            )
+        }
     }
 }
 
-impl Drop for SwapChain{
+impl Drop for SwapChain {
     fn drop(&mut self) {
-        unsafe{
+        unsafe {
             self.swapchain_loader.destroy_swapchain(self.swapchain, None);
         }
     }

@@ -4,18 +4,31 @@ use crate::device::Device;
 use ash::version::DeviceV1_0;
 use std::ffi::{CStr, CString};
 use failure::err_msg;
+use crate::render_pass::{RenderPassBuilder, RenderPass};
 
 pub struct Pipeline{
-    p: vk::Pipeline,
+    raw: vk::Pipeline,
     layout: vk::PipelineLayout,
-    device:Device
+    render_pass:RenderPass // Keeping this reference prevents render pass from being deallocated
+    // before pipeline. While the specification says that it's not necessary and in principle RenderPass
+    // could outlive pipeline, some vendors may have bugs in their implementations. It's a lot
+    // safer to keep this reference just in case.
 }
-
+impl Pipeline{
+    pub fn device(&self)->&Device{
+        self.render_pass.device()
+    }
+    pub fn raw(&self)-> vk::Pipeline{
+        self.raw
+    }
+}
 impl Drop for Pipeline{
     fn drop(&mut self) {
         unsafe {
-            self.device.device().destroy_pipeline(self.p, None);
-            self.device.device().destroy_pipeline_layout(self.layout, None);
+            self.device().inner().destroy_pipeline(self.raw, None);
+            self.device().inner().destroy_pipeline_layout(self.layout, None);
+            // Safety: The pipeline is dropped first. Then the layout and the render pass is dropped
+            // last (unless some other pipeline uses it too)
         }
     }
 }
@@ -43,8 +56,11 @@ impl PipelineBuilder {
             viewport: vec![],
             scissors: vec![],
             shaders: vec![],
-            rasterizer: vk::PipelineRasterizationStateCreateInfo::builder().build(),
+            rasterizer: vk::PipelineRasterizationStateCreateInfo::builder()
+                .line_width(1.0)
+                .build(),
             multisample_state_create_info: vk::PipelineMultisampleStateCreateInfo::builder()
+                .rasterization_samples(vk::SampleCountFlags::TYPE_1)
                 .build(),
             depth_state_create_info: vk::PipelineDepthStencilStateCreateInfo::builder()
                 .front(stencil_state)
@@ -60,6 +76,10 @@ impl PipelineBuilder {
         }
     }
 
+    pub fn color_blend_attachment_states(mut self, blend_state:vk::PipelineColorBlendAttachmentState) -> Self{
+        self.color_blend_attachment_states.push(blend_state);
+        self
+    }
     pub fn viewports(mut self, viewport: vk::Viewport) -> Self {
         self.viewport.push(viewport);
         self
@@ -95,7 +115,7 @@ impl PipelineBuilder {
         self
     }
 
-    pub fn build(&mut self, device: &Device) -> Result<Pipeline, failure::Error> {
+    pub fn build(&mut self, render_pass:&RenderPass) -> Result<Pipeline, failure::Error> {
         let Self {
             viewport,
             scissors,
@@ -116,7 +136,7 @@ impl PipelineBuilder {
         color_blend_state.attachment_count = color_blend_attachment_states.len() as u32;
         color_blend_state.p_attachments = color_blend_attachment_states.as_ptr();
         let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo::builder();
-        let pipeline_layout = unsafe {device.device().create_pipeline_layout(&pipeline_layout_create_info, None)}?;
+        let pipeline_layout = unsafe {render_pass.device().inner().create_pipeline_layout(&pipeline_layout_create_info, None)}?;
         let p = vk::GraphicsPipelineCreateInfo::builder()
             .viewport_state(&vp)
             .stages(shader_stages.as_slice())
@@ -126,9 +146,12 @@ impl PipelineBuilder {
             .color_blend_state(color_blend_state)
             .depth_stencil_state(depth_state_create_info)
             .multisample_state(multisample_state_create_info)
-            .layout(pipeline_layout);
+            .layout(pipeline_layout)
+            .base_pipeline_index(-1)
+            .render_pass(render_pass.raw())
+            .subpass(0);
         let result = unsafe {
-            device.device().create_graphics_pipelines(
+            render_pass.device().inner().create_graphics_pipelines(
                 vk::PipelineCache::null(),
                 std::slice::from_ref(&p),
                 None,
@@ -136,15 +159,15 @@ impl PipelineBuilder {
         };
         match result{
             Ok(pipeline) => Ok(Pipeline{
-                p: pipeline.into_iter().next().unwrap(),
+                raw: pipeline.into_iter().next().unwrap(),
                 layout: pipeline_layout,
-                device: device.clone()
+                render_pass:render_pass.clone(),
             }),
             Err((pipeline,err)) => {
                 Pipeline{
-                    p: pipeline.into_iter().next().unwrap(),
+                    raw: pipeline.into_iter().next().unwrap(),
                     layout: pipeline_layout,
-                    device: device.clone()
+                    render_pass:render_pass.clone(),
                 };
                 Err(err_msg(err))
             }
