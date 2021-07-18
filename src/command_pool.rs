@@ -6,6 +6,8 @@ use crate::render_pass::RenderPass;
 use crate::imageview::Framebuffer;
 use ash::vk::ClearValue;
 use crate::pipeline::Pipeline;
+use crate::semaphore::Semaphore;
+use ash::prelude::VkResult;
 
 
 pub struct StateClear {}
@@ -116,6 +118,27 @@ impl<'a, 'b> CommandBuffer<'a, 'b, StateRenderPassBegan> {
             );
         }
         self.state_transition()
+    }
+}
+
+impl<'a, 'b> CommandBuffer<'a, 'b, StateFinished> {
+    pub fn submit(&self, wait_for: &[(Semaphore, vk::PipelineStageFlags)], then_signal: &[Semaphore]) -> VkResult<()> {
+        let wait_semaphores: Vec<vk::Semaphore> = wait_for.iter().map(|(s, _)| s.raw()).collect();
+        let wait_stages: Vec<vk::PipelineStageFlags> = wait_for.iter().map(|(_, s)| s).collect();
+        let signal_semaphores: Vec<vk::Semaphore> = then_signal.iter().map(Semaphore::raw).collect();
+        let submit_infos = vk::SubmitInfo::builder()
+            .wait_semaphores(wait_semaphores.as_slice())
+            .signal_semaphores(signal_semaphores.as_slice())
+            .command_buffers(std::slice::from_ref(&self.raw))
+            .wait_dst_stage_mask(wait_stages.as_slice());
+        unsafe {
+            self.pool.device.inner()
+                .queue_submit(
+                    self.graphics_queue,
+                    std::slice::from_ref(&submit_infos),
+                    self.in_flight_fences[self.current_frame],
+                )
+        }
     }
 }
 

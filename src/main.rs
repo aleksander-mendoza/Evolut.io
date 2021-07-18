@@ -49,6 +49,15 @@ fn main() -> Result<(), failure::Error> {
             .layout(ash::vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .attachment(0)
             .build()])
+        .dependency(ash::vk::SubpassDependency {
+            src_subpass: ash::vk::SUBPASS_EXTERNAL,
+            dst_subpass: 0,
+            src_stage_mask: ash::vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+            dst_stage_mask: ash::vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+            src_access_mask: ash::vk::AccessFlags::empty(),
+            dst_access_mask: ash::vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+            dependency_flags: ash::vk::DependencyFlags::empty(),
+        })
         .build(&device)?;
     let frag = ShaderModule::new(include_glsl!("assets/shaders/blocks.frag", kind: frag) as &[u32], ShaderStageFlags::FRAGMENT, &device)?;
     let vert = ShaderModule::new(include_glsl!("assets/shaders/blocks.vert") as &[u32], ShaderStageFlags::VERTEX, &device)?;

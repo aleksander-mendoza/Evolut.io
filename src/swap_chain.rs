@@ -143,6 +143,18 @@ impl SwapChain {
             )
         }
     }
+
+    pub fn present(&self, semaphores:&[Semaphore], image_index:u32) -> VkResult<bool> {
+        let semaphores:Vec<vk::Semaphore> = semaphores.iter().map(Semaphore::raw).collect();
+        let present_info = vk::PresentInfoKHR::builder()
+            .wait_semaphores(&semaphores)
+            .swapchains(std::slice::from_ref(&self.swapchain))
+            .image_indices(std::slice::from_ref(&image_index));
+
+        unsafe {
+            self.swapchain_loader.queue_present(self.device.raw_queue(), &present_info)
+        }
+    }
 }
 
 impl Drop for SwapChain {

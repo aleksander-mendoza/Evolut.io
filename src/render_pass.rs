@@ -31,6 +31,7 @@ impl Drop for RenderPassInner {
 pub struct RenderPassBuilder {
     attachments: Vec<vk::AttachmentDescription>,
     subpasses: Vec<(vk::PipelineBindPoint, Vec<vk::AttachmentReference>, Vec<vk::AttachmentReference>, Option<vk::AttachmentReference>)>,
+    dependencies: Vec<vk::SubpassDependency>
 }
 
 
@@ -68,6 +69,10 @@ impl RenderPassBuilder {
         self.subpasses.push((bind_point, inputs.into(), colors.into(), None));
         self
     }
+    pub fn dependency(mut self, dep:vk::SubpassDependency)->Self{
+        self.dependencies.push(dep);
+        self
+    }
 
     pub fn new() -> Self {
         Self { attachments: vec![], subpasses: vec![] }
@@ -88,7 +93,8 @@ impl RenderPassBuilder {
         ).collect();
         let renderpass_create_info = vk::RenderPassCreateInfo::builder()
             .attachments(&self.attachments)
-            .subpasses(&subpasses);
+            .subpasses(&subpasses)
+            .dependencies(&self.dependencies);
 
         unsafe {
             device.inner().create_render_pass(&renderpass_create_info, None)

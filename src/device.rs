@@ -127,6 +127,9 @@ impl Device {
     pub fn raw(&self) -> ash::vk::Device {
         self.inner.device.handle()
     }
+    pub fn raw_queue(&self) -> vk::Queue{
+        self.queue
+    }
     pub fn inner(&self) -> &ash::Device {
         &self.inner.device
     }
