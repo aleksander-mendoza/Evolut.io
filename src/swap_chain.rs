@@ -144,8 +144,8 @@ impl SwapChain {
         }
     }
 
-    pub fn present(&self, semaphores:&[Semaphore], image_index:u32) -> VkResult<bool> {
-        let semaphores:Vec<vk::Semaphore> = semaphores.iter().map(Semaphore::raw).collect();
+    pub fn present(&self, wait_for:&[Semaphore], image_index:u32) -> VkResult<bool> {
+        let semaphores:Vec<vk::Semaphore> = wait_for.iter().map(Semaphore::raw).collect();
         let present_info = vk::PresentInfoKHR::builder()
             .wait_semaphores(&semaphores)
             .swapchains(std::slice::from_ref(&self.swapchain))

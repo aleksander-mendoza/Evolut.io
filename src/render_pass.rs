@@ -75,7 +75,7 @@ impl RenderPassBuilder {
     }
 
     pub fn new() -> Self {
-        Self { attachments: vec![], subpasses: vec![] }
+        Self { attachments: vec![], subpasses: vec![], dependencies: vec![] }
     }
 
     pub fn build(&self, device: &Device) -> Result<RenderPass, ash::vk::Result> {

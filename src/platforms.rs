@@ -105,7 +105,7 @@ pub unsafe fn create_surface<E: EntryV1_0, I: InstanceV1_0>(
     view.setWantsLayer(YES);
 
     let create_info = vk::MacOSSurfaceCreateInfoMVK {
-        s_type: vk::StructureType::MACOS_SURFACE_CREATE_INFO_M,
+        s_type: vk::StructureType::MACOS_SURFACE_CREATE_INFO_MVK,
         p_next: ptr::null(),
         flags: Default::default(),
         p_view: window.ns_view() as *const c_void,

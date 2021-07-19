@@ -15,8 +15,12 @@ impl Fence {
         unsafe { device.inner().create_fence(&fence_create_info, None) }.map(|raw| Self { raw, device: device.clone() })
     }
 
-    pub fn wait(&self) -> VkResult<()> {
-        unsafe{self.device.inner().wait_for_fences(&[self.raw], true, u64::MAX)}
+    pub fn wait(&self, timeout:Option<u64>) -> VkResult<()> {
+        unsafe{self.device.inner().wait_for_fences(&[self.raw], true, timeout.unwrap_or(u64::MAX))}
+    }
+
+    pub fn reset(&self) -> VkResult<()> {
+        unsafe{self.device.inner().reset_fences(&[self.raw])}
     }
 
     pub fn raw(&self)->vk::Fence{

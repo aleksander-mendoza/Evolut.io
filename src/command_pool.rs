@@ -8,6 +8,7 @@ use ash::vk::ClearValue;
 use crate::pipeline::Pipeline;
 use crate::semaphore::Semaphore;
 use ash::prelude::VkResult;
+use crate::fence::Fence;
 
 
 pub struct StateClear {}
@@ -122,9 +123,9 @@ impl<'a, 'b> CommandBuffer<'a, 'b, StateRenderPassBegan> {
 }
 
 impl<'a, 'b> CommandBuffer<'a, 'b, StateFinished> {
-    pub fn submit(&self, wait_for: &[(Semaphore, vk::PipelineStageFlags)], then_signal: &[Semaphore]) -> VkResult<()> {
+    pub fn submit(&self, wait_for: &[(&Semaphore, vk::PipelineStageFlags)], then_signal: &[Semaphore], fence_to_signal:Option<&Fence>) -> VkResult<()> {
         let wait_semaphores: Vec<vk::Semaphore> = wait_for.iter().map(|(s, _)| s.raw()).collect();
-        let wait_stages: Vec<vk::PipelineStageFlags> = wait_for.iter().map(|(_, s)| s).collect();
+        let wait_stages: Vec<vk::PipelineStageFlags> = wait_for.iter().map(|(_, s)| *s).collect();
         let signal_semaphores: Vec<vk::Semaphore> = then_signal.iter().map(Semaphore::raw).collect();
         let submit_infos = vk::SubmitInfo::builder()
             .wait_semaphores(wait_semaphores.as_slice())
@@ -134,9 +135,9 @@ impl<'a, 'b> CommandBuffer<'a, 'b, StateFinished> {
         unsafe {
             self.pool.device.inner()
                 .queue_submit(
-                    self.graphics_queue,
+                    self.pool.device.raw_queue(),
                     std::slice::from_ref(&submit_infos),
-                    self.in_flight_fences[self.current_frame],
+                    fence_to_signal.map(Fence::raw).unwrap_or(vk::Fence::null()),
                 )
         }
     }
@@ -156,6 +157,9 @@ impl CommandPool {
         }.map(|raw| Self { raw, device: device.clone() })
     }
 
+    pub fn create_command_buffer(&self) -> Result<CommandBuffer<StateClear>, vk::Result> {
+        self.create_command_buffers(1).map(|v|v.into_iter().next().unwrap())
+    }
     pub fn create_command_buffers(&self, count: u32) -> Result<Vec<CommandBuffer<StateClear>>, vk::Result> {
         let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
             .command_pool(self.raw)
