@@ -9,9 +9,16 @@ use std::ffi::CStr;
 use std::rc::Rc;
 use ash::prelude::VkResult;
 
+#[cfg(not(target_os = "macos"))]
 fn device_extensions() -> [*const i8; 1] {
     [ash::extensions::khr::Swapchain::name().as_ptr()]
 }
+#[cfg(target_os = "macos")]
+fn device_extensions() -> [*const i8; 2] {
+    [ash::extensions::khr::Swapchain::name().as_ptr(),
+        b"VK_KHR_portability_subset\0".as_ptr() as *const i8]
+}
+
 
 pub fn extension_name(ext: &ExtensionProperties) -> &CStr {
     unsafe {

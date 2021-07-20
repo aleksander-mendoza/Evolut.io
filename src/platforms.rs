@@ -35,6 +35,7 @@ pub fn required_extension_names(debug:bool) -> Vec<*const i8> {
     append_debug(vec![
         Surface::name().as_ptr(),
         MacOSSurface::name().as_ptr(),
+        b"VK_KHR_get_physical_device_properties2\0".as_ptr() as *const i8
     ],debug)
 }
 
