@@ -19,43 +19,40 @@ pub struct StateRenderPassBegan {}
 
 pub struct StateFinished {}
 
-pub struct CommandBuffer<'a, 'b, State> {
+pub struct CommandBuffer<State> {
     raw: vk::CommandBuffer,
-    pool: &'a CommandPool,
+    device: Device,
     _state: PhantomData<State>,
-    _resources: PhantomData<&'b ()>,
 }
 
-impl<'a, 'b, X> CommandBuffer<'a, 'b, X> {
-    pub unsafe fn free(self) {
-        self.pool.device.inner().free_command_buffers(self.pool.raw, std::slice::from_ref(&self.raw))
-    }
-    fn state_transition<Y>(self) -> CommandBuffer<'a, 'b, Y> {
-        let Self { raw, pool, .. } = self;
-        CommandBuffer { raw, pool, _state: PhantomData, _resources: PhantomData }
+impl<X> CommandBuffer<X> {
+
+    fn state_transition<Y>(self) -> CommandBuffer<Y> {
+        let Self{raw, device, ..} = self;
+        CommandBuffer{raw, device, _state:PhantomData}
     }
 }
 
-impl<'a, 'b> CommandBuffer<'a, 'b, StateClear> {
-    pub fn begin(self, usage: vk::CommandBufferUsageFlags) -> Result<CommandBuffer<'a, 'b, StateBegan>, vk::Result> {
+impl CommandBuffer<StateClear> {
+    pub fn begin(self, usage: vk::CommandBufferUsageFlags) -> Result<CommandBuffer<StateBegan>, vk::Result> {
         let command_buffer_begin_info = vk::CommandBufferBeginInfo::builder().flags(usage);
         let result = unsafe {
-            self.pool.device.inner().begin_command_buffer(self.raw, &command_buffer_begin_info)
+            self.device.inner().begin_command_buffer(self.raw, &command_buffer_begin_info)
         };
         result.map(move |()| self.state_transition())
     }
 
     pub fn single_pass(self,
                        usage: vk::CommandBufferUsageFlags,
-                       render_pass: &'b RenderPass,
-                       framebuffer: &'b Framebuffer,
+                       render_pass: &RenderPass,
+                       framebuffer: &Framebuffer,
                        render_area: vk::Rect2D,
-                       clear: &'b [ClearValue],
-                       pipeline: &'b Pipeline,
+                       clear: &[ClearValue],
+                       pipeline: &Pipeline,
                        vertex_count: u32,
                        instance_count: u32,
                        first_vertex: u32,
-                       first_instance: u32) -> Result<CommandBuffer<'a, 'b, StateFinished>, vk::Result> {
+                       first_instance: u32) -> Result<CommandBuffer<StateFinished>, vk::Result> {
         self.begin(usage)?
             .render_pass(render_pass, framebuffer, render_area, clear)
             .bind_pipeline(pipeline)
@@ -65,8 +62,8 @@ impl<'a, 'b> CommandBuffer<'a, 'b, StateClear> {
     }
 }
 
-impl<'a, 'b> CommandBuffer<'a, 'b, StateBegan> {
-    pub fn render_pass(self, render_pass: &'b RenderPass, framebuffer: &'b Framebuffer, render_area: vk::Rect2D, clear: &'b [ClearValue]) -> CommandBuffer<'a, 'b, StateRenderPassBegan> {
+impl CommandBuffer<StateBegan> {
+    pub fn render_pass(self, render_pass: &RenderPass, framebuffer: &Framebuffer, render_area: vk::Rect2D, clear: &[ClearValue]) -> CommandBuffer<StateRenderPassBegan> {
         let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
             .render_pass(render_pass.raw())
             .framebuffer(framebuffer.raw())
@@ -74,7 +71,7 @@ impl<'a, 'b> CommandBuffer<'a, 'b, StateBegan> {
             .clear_values(clear);
 
         unsafe {
-            self.pool.device.inner().cmd_begin_render_pass(
+            self.device.inner().cmd_begin_render_pass(
                 self.raw,
                 &render_pass_begin_info,
                 vk::SubpassContents::INLINE,
@@ -82,9 +79,9 @@ impl<'a, 'b> CommandBuffer<'a, 'b, StateBegan> {
         }
         self.state_transition()
     }
-    pub fn finish(self) -> Result<CommandBuffer<'a, 'b, StateFinished>, vk::Result> {
+    pub fn finish(self) -> Result<CommandBuffer<StateFinished>, vk::Result> {
         let result = unsafe {
-            self.pool.device.inner().end_command_buffer(
+            self.device.inner().end_command_buffer(
                 self.raw,
             )
         };
@@ -92,10 +89,10 @@ impl<'a, 'b> CommandBuffer<'a, 'b, StateBegan> {
     }
 }
 
-impl<'a, 'b> CommandBuffer<'a, 'b, StateRenderPassBegan> {
-    pub fn bind_pipeline(self, pipeline: &'b Pipeline) -> Self {
+impl CommandBuffer<StateRenderPassBegan> {
+    pub fn bind_pipeline(self, pipeline: &Pipeline) -> Self {
         unsafe {
-            self.pool.device.inner().cmd_bind_pipeline(
+            self.device.inner().cmd_bind_pipeline(
                 self.raw,
                 vk::PipelineBindPoint::GRAPHICS,
                 pipeline.raw(),
@@ -105,7 +102,7 @@ impl<'a, 'b> CommandBuffer<'a, 'b, StateRenderPassBegan> {
     }
     pub fn draw(self, vertex_count: u32, instance_count: u32, first_vertex: u32, first_instance: u32) -> Self {
         unsafe {
-            self.pool.device.inner().cmd_draw(
+            self.device.inner().cmd_draw(
                 self.raw,
                 vertex_count,
                 instance_count,
@@ -115,9 +112,9 @@ impl<'a, 'b> CommandBuffer<'a, 'b, StateRenderPassBegan> {
         }
         self
     }
-    pub fn end_render_pass(self) -> CommandBuffer<'a, 'b, StateBegan> {
+    pub fn end_render_pass(self) -> CommandBuffer<StateBegan> {
         unsafe {
-            self.pool.device.inner().cmd_end_render_pass(
+            self.device.inner().cmd_end_render_pass(
                 self.raw,
             );
         }
@@ -125,7 +122,7 @@ impl<'a, 'b> CommandBuffer<'a, 'b, StateRenderPassBegan> {
     }
 }
 
-impl<'a, 'b> CommandBuffer<'a, 'b, StateFinished> {
+impl CommandBuffer<StateFinished> {
     pub fn submit(&self, wait_for: &[(&Semaphore, vk::PipelineStageFlags)], then_signal: &[Semaphore], fence_to_signal: Option<&Fence>) -> VkResult<()> {
         let wait_semaphores: Vec<vk::Semaphore> = wait_for.iter().map(|(s, _)| s.raw()).collect();
         let wait_stages: Vec<vk::PipelineStageFlags> = wait_for.iter().map(|(_, s)| *s).collect();
@@ -136,8 +133,8 @@ impl<'a, 'b> CommandBuffer<'a, 'b, StateFinished> {
             .command_buffers(std::slice::from_ref(&self.raw))
             .wait_dst_stage_mask(wait_stages.as_slice());
         unsafe {
-            self.pool.device.inner().queue_submit(
-                self.pool.device.raw_queue(),
+            self.device.inner().queue_submit(
+                self.device.raw_queue(),
                 std::slice::from_ref(&submit_infos),
                 fence_to_signal.map(Fence::raw).unwrap_or(vk::Fence::null()),
             )
@@ -171,7 +168,7 @@ impl CommandPool {
         unsafe {
             self.device.inner()
                 .allocate_command_buffers(&command_buffer_allocate_info)
-        }.map(|vec| vec.into_iter().map(|raw| CommandBuffer { raw, pool: self, _state: PhantomData, _resources: PhantomData }).collect())
+        }.map(|vec| vec.into_iter().map(|raw| CommandBuffer { raw, device: self.device.clone(), _state: PhantomData }).collect())
     }
 }
 
