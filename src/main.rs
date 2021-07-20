@@ -18,6 +18,7 @@ mod command_pool;
 mod semaphore;
 mod fence;
 mod frames_in_flight;
+mod vulkan_context;
 
 use winit::event::{Event, VirtualKeyCode, ElementState, KeyboardInput, WindowEvent};
 use winit::event_loop::{EventLoop, ControlFlow};
@@ -35,36 +36,43 @@ use crate::imageview::{Framebuffer, ImageView};
 use crate::frames_in_flight::FramesInFlight;
 use crate::surface::Surface;
 use crate::swap_chain::SwapChain;
+use crate::vulkan_context::VulkanContext;
+use failure::Error;
 
-struct Vulkan {
-    entry: ash::Entry,
-    window: Window,
-    instance: Instance,
-    surface: Surface,
-    physical_device: PhysicalDevice,
-    device: Device,
-    swapchain: SwapChain,
-    image_views: Vec<ImageView>,
+
+struct Display {
+    // The order of all fields
+    // is very important, because
+    // they will be dropped
+    // in the exact same order
     framebuffers: Vec<Framebuffer>,
-    cmd_pool: CommandPool,
-    render_pass: RenderPass,
-    frames_in_flight: FramesInFlight,
     pipeline: Pipeline,
     clear_values: [ClearValue; 1],
+    render_pass: RenderPass,
+    cmd_pool: CommandPool,
+    image_views: Vec<ImageView>,
+    swapchain: SwapChain,
+    vulkan: VulkanContext
 }
 
-impl Vulkan {
-    pub fn new(event_loop: &EventLoop<()>) -> Result<Self, failure::Error> {
-        let entry = unsafe { ash::Entry::new() }?;
-        let window = init_window(event_loop)?;
-        let instance = Instance::new(&entry, true)?;
-        let surface = instance.create_surface(&entry, &window)?;
-        let physical_device = instance.pick_physical_device(&surface)?;
-        let device = instance.create_device(&entry, physical_device)?;
-        let swapchain = instance.create_swapchain(&device, &surface)?;
+impl Display {
+    pub fn device(&self) -> &Device {
+        self.vulkan.device()
+    }
+    pub fn destroy(self)->VulkanContext{
+        let Self{vulkan,..} = self;
+        vulkan
+    }
+
+    pub fn recreate(self) -> Result<Display, Error> {
+        Self::new(self.destroy())
+    }
+
+    pub fn new(vulkan: VulkanContext) -> Result<Self, failure::Error> {
+        let swapchain = vulkan.instance().create_swapchain(vulkan.device(), vulkan.surface())?;
         let image_views = swapchain.create_image_views()?;
 
-        let cmd_pool = CommandPool::new(&device)?;
+        let cmd_pool = CommandPool::new(vulkan.device())?;
         let render_pass = RenderPassBuilder::new()
             .color_attachment(swapchain.format())
             .graphics_subpass([], [ash::vk::AttachmentReference::builder()
@@ -80,9 +88,9 @@ impl Vulkan {
                 dst_access_mask: ash::vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
                 dependency_flags: ash::vk::DependencyFlags::empty(),
             })
-            .build(&device)?;
-        let frag = ShaderModule::new(include_glsl!("assets/shaders/blocks.frag", kind: frag) as &[u32], ShaderStageFlags::FRAGMENT, &device)?;
-        let vert = ShaderModule::new(include_glsl!("assets/shaders/blocks.vert") as &[u32], ShaderStageFlags::VERTEX, &device)?;
+            .build(&vulkan.device())?;
+        let frag = ShaderModule::new(include_glsl!("assets/shaders/blocks.frag", kind: frag) as &[u32], ShaderStageFlags::FRAGMENT, vulkan.device())?;
+        let vert = ShaderModule::new(include_glsl!("assets/shaders/blocks.vert") as &[u32], ShaderStageFlags::VERTEX, vulkan.device())?;
         let pipeline = PipelineBuilder::new()
             .shader("main", frag)
             .shader("main", vert)
@@ -106,31 +114,24 @@ impl Vulkan {
                 float32: [0.0, 0.0, 0.0, 1.0],
             },
         }];
-        let mut frames_in_flight = FramesInFlight::new(&device, 2)?;
         Ok(Self {
-            entry,
-            window,
-            instance,
-            surface,
-            physical_device,
-            device,
             swapchain,
             image_views,
             framebuffers,
             cmd_pool,
             render_pass,
-            frames_in_flight,
             pipeline,
             clear_values,
+            vulkan
         })
     }
 
     pub fn render(&mut self) -> Result<(), ash::vk::Result> {
-        let fence = self.frames_in_flight.current_fence();
+        let fence = self.vulkan.frames_in_flight().current_fence();
         fence.wait(None)?;
-        let image_available = self.frames_in_flight.current_image_semaphore();
+        let image_available = self.vulkan.frames_in_flight().current_image_semaphore();
         let (image_idx, is_suboptimal) = self.swapchain.acquire_next_image(None, Some(image_available), None)?;
-        let render_finished = self.frames_in_flight.current_rendering();
+        let render_finished = self.vulkan.frames_in_flight().current_rendering();
         fence.reset()?;
         let command_buffer = self.cmd_pool.create_command_buffer()?;
         let framebuffer = &self.framebuffers[image_idx as usize];
@@ -144,16 +145,16 @@ impl Vulkan {
         command_buffers.submit(&[(image_available, ash::vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)],
                                std::slice::from_ref(render_finished),
                                Some(fence))?;
-        self.swapchain.present(std::slice::from_ref(render_finished),image_idx)?;
-        self.frames_in_flight.rotate();
+        self.swapchain.present(std::slice::from_ref(render_finished), image_idx)?;
+        self.vulkan.frames_in_flight_mut().rotate();
         Ok(())
     }
 }
 
 fn main() -> Result<(), failure::Error> {
     let event_loop = EventLoop::new();
-    let mut app = Vulkan::new(&event_loop)?;
-
+    let vulkan = VulkanContext::new(&event_loop)?;
+    let mut display = Display::new(vulkan)?;
     event_loop.run(move |event, _, control_flow| {
         match event {
             Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
@@ -162,11 +163,11 @@ fn main() -> Result<(), failure::Error> {
             Event::WindowEvent { event: WindowEvent::KeyboardInput { input: KeyboardInput { virtual_keycode, state, .. }, .. }, .. } => {}
             Event::LoopDestroyed => {
                 unsafe {
-                    app.device.device_wait_idle().expect("Failed to wait device idle!");
+                    display.device().device_wait_idle().expect("Failed to wait device idle!");
                 }
             }
             Event::MainEventsCleared => {
-                app.render().expect("Rendering failed");
+                display.render().expect("Rendering failed");
             }
             _ => (),
         }

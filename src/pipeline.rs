@@ -5,24 +5,29 @@ use ash::version::DeviceV1_0;
 use std::ffi::{CStr, CString};
 use failure::err_msg;
 use crate::render_pass::{RenderPassBuilder, RenderPass};
+use std::rc::Rc;
+use ash::vk::PipelineLayout;
 
-pub struct Pipeline{
+
+pub struct Pipeline {
     raw: vk::Pipeline,
     layout: vk::PipelineLayout,
-    render_pass:RenderPass // Keeping this reference prevents render pass from being deallocated
+    render_pass: RenderPass, // Keeping this reference prevents render pass from being deallocated
     // before pipeline. While the specification says that it's not necessary and in principle RenderPass
     // could outlive pipeline, some vendors may have bugs in their implementations. It's a lot
     // safer to keep this reference just in case.
 }
-impl Pipeline{
-    pub fn device(&self)->&Device{
+
+impl Pipeline {
+    pub fn device(&self) -> &Device {
         self.render_pass.device()
     }
-    pub fn raw(&self)-> vk::Pipeline{
+    pub fn raw(&self) -> vk::Pipeline {
         self.raw
     }
 }
-impl Drop for Pipeline{
+
+impl Drop for Pipeline {
     fn drop(&mut self) {
         unsafe {
             self.device().inner().destroy_pipeline(self.raw, None);
@@ -76,7 +81,7 @@ impl PipelineBuilder {
         }
     }
 
-    pub fn color_blend_attachment_states(mut self, blend_state:vk::PipelineColorBlendAttachmentState) -> Self{
+    pub fn color_blend_attachment_states(mut self, blend_state: vk::PipelineColorBlendAttachmentState) -> Self {
         self.color_blend_attachment_states.push(blend_state);
         self
     }
@@ -115,7 +120,7 @@ impl PipelineBuilder {
         self
     }
 
-    pub fn build(&mut self, render_pass:&RenderPass) -> Result<Pipeline, failure::Error> {
+    pub fn build(&mut self, render_pass: &RenderPass) -> Result<Pipeline, failure::Error> {
         let Self {
             viewport,
             scissors,
@@ -136,7 +141,7 @@ impl PipelineBuilder {
         color_blend_state.attachment_count = color_blend_attachment_states.len() as u32;
         color_blend_state.p_attachments = color_blend_attachment_states.as_ptr();
         let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo::builder();
-        let pipeline_layout = unsafe {render_pass.device().inner().create_pipeline_layout(&pipeline_layout_create_info, None)}?;
+        let pipeline_layout = unsafe { render_pass.device().inner().create_pipeline_layout(&pipeline_layout_create_info, None) }?;
         let p = vk::GraphicsPipelineCreateInfo::builder()
             .viewport_state(&vp)
             .stages(shader_stages.as_slice())
@@ -157,18 +162,17 @@ impl PipelineBuilder {
                 None,
             )
         };
-        match result{
-            Ok(pipeline) => Ok(Pipeline{
+        fn new(pipeline: Vec<vk::Pipeline>, pipeline_layout: PipelineLayout, render_pass: &RenderPass) -> Pipeline {
+            Pipeline {
                 raw: pipeline.into_iter().next().unwrap(),
                 layout: pipeline_layout,
-                render_pass:render_pass.clone(),
-            }),
-            Err((pipeline,err)) => {
-                Pipeline{
-                    raw: pipeline.into_iter().next().unwrap(),
-                    layout: pipeline_layout,
-                    render_pass:render_pass.clone(),
-                };
+                render_pass: render_pass.clone(),
+            }
+        }
+        match result {
+            Ok(pipeline) => Ok(new(pipeline, pipeline_layout, render_pass)),
+            Err((pipeline, err)) => {
+                new(pipeline, pipeline_layout, render_pass);
                 Err(err_msg(err))
             }
         }

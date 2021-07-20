@@ -27,6 +27,9 @@ pub struct CommandBuffer<'a, 'b, State> {
 }
 
 impl<'a, 'b, X> CommandBuffer<'a, 'b, X> {
+    pub unsafe fn free(self) {
+        self.pool.device.inner().free_command_buffers(self.pool.raw, std::slice::from_ref(&self.raw))
+    }
     fn state_transition<Y>(self) -> CommandBuffer<'a, 'b, Y> {
         let Self { raw, pool, .. } = self;
         CommandBuffer { raw, pool, _state: PhantomData, _resources: PhantomData }
@@ -123,7 +126,7 @@ impl<'a, 'b> CommandBuffer<'a, 'b, StateRenderPassBegan> {
 }
 
 impl<'a, 'b> CommandBuffer<'a, 'b, StateFinished> {
-    pub fn submit(&self, wait_for: &[(&Semaphore, vk::PipelineStageFlags)], then_signal: &[Semaphore], fence_to_signal:Option<&Fence>) -> VkResult<()> {
+    pub fn submit(&self, wait_for: &[(&Semaphore, vk::PipelineStageFlags)], then_signal: &[Semaphore], fence_to_signal: Option<&Fence>) -> VkResult<()> {
         let wait_semaphores: Vec<vk::Semaphore> = wait_for.iter().map(|(s, _)| s.raw()).collect();
         let wait_stages: Vec<vk::PipelineStageFlags> = wait_for.iter().map(|(_, s)| *s).collect();
         let signal_semaphores: Vec<vk::Semaphore> = then_signal.iter().map(Semaphore::raw).collect();
@@ -133,12 +136,11 @@ impl<'a, 'b> CommandBuffer<'a, 'b, StateFinished> {
             .command_buffers(std::slice::from_ref(&self.raw))
             .wait_dst_stage_mask(wait_stages.as_slice());
         unsafe {
-            self.pool.device.inner()
-                .queue_submit(
-                    self.pool.device.raw_queue(),
-                    std::slice::from_ref(&submit_infos),
-                    fence_to_signal.map(Fence::raw).unwrap_or(vk::Fence::null()),
-                )
+            self.pool.device.inner().queue_submit(
+                self.pool.device.raw_queue(),
+                std::slice::from_ref(&submit_infos),
+                fence_to_signal.map(Fence::raw).unwrap_or(vk::Fence::null()),
+            )
         }
     }
 }
@@ -158,7 +160,7 @@ impl CommandPool {
     }
 
     pub fn create_command_buffer(&self) -> Result<CommandBuffer<StateClear>, vk::Result> {
-        self.create_command_buffers(1).map(|v|v.into_iter().next().unwrap())
+        self.create_command_buffers(1).map(|v| v.into_iter().next().unwrap())
     }
     pub fn create_command_buffers(&self, count: u32) -> Result<Vec<CommandBuffer<StateClear>>, vk::Result> {
         let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
