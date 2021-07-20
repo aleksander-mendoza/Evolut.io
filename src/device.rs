@@ -1,7 +1,7 @@
 use ash::version::{InstanceV1_0, DeviceV1_0};
 use ash::vk;
 use failure::err_msg;
-use ash::vk::{QueueFamilyProperties, ExtensionProperties};
+use ash::vk::{QueueFamilyProperties, ExtensionProperties, PhysicalDeviceMemoryProperties};
 use crate::instance::Instance;
 use crate::validation_layer::get_validation_layer_support;
 use crate::surface::Surface;
@@ -93,6 +93,7 @@ struct DeviceInner {
     physical_device: vk::PhysicalDevice,
     device: ash::Device,
     queue: vk::Queue,
+    instance: Instance,
     family_index: u32,
 }
 
@@ -102,8 +103,8 @@ pub struct Device {
 }
 
 impl Device {
-    pub fn new(entry: &ash::Entry, instance: &ash::Instance, physical_device: vk::PhysicalDevice) -> Result<Self, failure::Error> {
-        let family_index = pick_queue_family(instance, physical_device);
+    pub fn new(entry: &ash::Entry, instance: &Instance, physical_device: vk::PhysicalDevice) -> Result<Self, failure::Error> {
+        let family_index = pick_queue_family(instance.raw(), physical_device);
 
         let queue_create_info = vk::DeviceQueueCreateInfo::builder()
             .queue_family_index(family_index)
@@ -119,11 +120,11 @@ impl Device {
             .enabled_features(&features)
             .enabled_extension_names(&extensions);
 
-        let device = unsafe { instance.create_device(physical_device, &device_create_info, None) }?;
+        let device = unsafe { instance.raw().create_device(physical_device, &device_create_info, None) }?;
 
         let queue = unsafe { device.get_device_queue(family_index, 0) };
 
-        Ok(Self { inner: Rc::new(Box::new(DeviceInner { device, queue, family_index, physical_device })) })
+        Ok(Self { inner: Rc::new(Box::new(DeviceInner { device, instance:instance.clone(), queue, family_index, physical_device })) })
     }
     pub fn family_index(&self) -> u32 {
         self.inner.family_index
@@ -140,8 +141,14 @@ impl Device {
     pub fn inner(&self) -> &ash::Device {
         &self.inner.device
     }
+    pub fn instance(&self) -> &Instance {
+        &self.inner.instance
+    }
     pub fn device_wait_idle(&self) -> VkResult<()> {
         unsafe { self.inner().device_wait_idle() }
+    }
+    pub fn get_physical_device_memory_properties(&self) -> PhysicalDeviceMemoryProperties {
+        unsafe { self.instance().raw().get_physical_device_memory_properties(self.physical_device()) }
     }
 }
 

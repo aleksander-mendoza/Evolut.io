@@ -1,5 +1,8 @@
 #[macro_use]
 extern crate vk_shader_macros;
+extern crate nalgebra_glm as glm;
+#[macro_use]
+extern crate memoffset;
 
 use crate::vulkan_context::VulkanContext;
 use crate::display::Display;
@@ -26,6 +29,8 @@ mod fence;
 mod frames_in_flight;
 mod vulkan_context;
 mod display;
+mod data;
+mod buffer;
 
 
 fn main() -> Result<(), failure::Error> {

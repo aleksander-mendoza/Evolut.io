@@ -7,6 +7,7 @@ use crate::imageview::ImageView;
 use ash::prelude::VkResult;
 use crate::semaphore::Semaphore;
 use crate::fence::Fence;
+use crate::instance::Instance;
 
 pub struct SwapChain {
     swapchain_loader: ash::extensions::khr::Swapchain,
@@ -56,7 +57,7 @@ fn choose_swapchain_extent(capabilities: &vk::SurfaceCapabilitiesKHR) -> vk::Ext
 }
 
 impl SwapChain {
-    pub fn new(instance: &ash::Instance, device: &Device, surface: &Surface) -> Result<Self, failure::Error> {
+    pub fn new(instance: &Instance, device: &Device, surface: &Surface) -> Result<Self, failure::Error> {
         let capabilities = surface.capabilities(device.physical_device())?;
         let formats = surface.formats(device.physical_device())?;
         let present_modes = surface.present_modes(device.physical_device())?;
@@ -88,7 +89,7 @@ impl SwapChain {
             .image_array_layers(1)
             .present_mode(present_mode);
 
-        let swapchain_loader = ash::extensions::khr::Swapchain::new(instance, device.inner());
+        let swapchain_loader = ash::extensions::khr::Swapchain::new(instance.raw(), device.inner());
         let swapchain = unsafe { swapchain_loader.create_swapchain(&swapchain_create_info, None) }?;
 
         let images = unsafe { swapchain_loader.get_swapchain_images(swapchain) }?;

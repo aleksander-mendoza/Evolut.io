@@ -9,6 +9,8 @@ use crate::pipeline::Pipeline;
 use crate::semaphore::Semaphore;
 use ash::prelude::VkResult;
 use crate::fence::Fence;
+use crate::buffer::{Buffer, Usage, SharingMode};
+use crate::data::VertexSource;
 
 
 pub struct StateClear {}
@@ -60,6 +62,23 @@ impl CommandBuffer<StateClear> {
             .end_render_pass()
             .finish()
     }
+
+    pub fn single_pass_vertex_input<V:VertexSource, U:Usage, S:SharingMode>(self,
+                       usage: vk::CommandBufferUsageFlags,
+                       render_pass: &RenderPass,
+                       framebuffer: &Framebuffer,
+                       render_area: vk::Rect2D,
+                       clear: &[ClearValue],
+                       pipeline: &Pipeline,
+                       buffer:&Buffer<V,U,S>) -> Result<CommandBuffer<StateFinished>, vk::Result> {
+        self.begin(usage)?
+            .render_pass(render_pass, framebuffer, render_area, clear)
+            .bind_pipeline(pipeline)
+            .vertex_input(buffer)
+            .draw(buffer.len() as u32, 1, 0, 0)
+            .end_render_pass()
+            .finish()
+    }
 }
 
 impl CommandBuffer<StateBegan> {
@@ -96,6 +115,17 @@ impl CommandBuffer<StateRenderPassBegan> {
                 self.raw,
                 vk::PipelineBindPoint::GRAPHICS,
                 pipeline.raw(),
+            );
+        }
+        self
+    }
+    pub fn vertex_input<V:VertexSource, U:Usage, S:SharingMode>(self, buffer: &Buffer<V,U,S>) -> Self {
+        unsafe {
+            self.device.inner().cmd_bind_vertex_buffers(
+                self.raw,
+                0,
+                &[buffer.raw()],
+                &[0]
             );
         }
         self

@@ -16,6 +16,8 @@ use crate::swap_chain::SwapChain;
 use crate::vulkan_context::VulkanContext;
 use failure::Error;
 use ash::vk;
+use crate::data::Vertex;
+use crate::buffer::{Buffer, VertexBuffer, Exclusive};
 
 struct DisplayInner{
     // The order of all fields
@@ -32,8 +34,33 @@ struct DisplayInner{
     swapchain: SwapChain,
 }
 
+struct DisplayData{
+    data:Buffer<Vertex,VertexBuffer,Exclusive>
+}
+
+impl DisplayData{
+    pub fn new(device:&Device) -> Result<DisplayData, ash::vk::Result> {
+        let data: [Vertex; 3] = [
+            Vertex {
+                pos: glm::vec2(0.0, -0.5),
+                color: glm::vec3(1.0, 0.0, 0.0),
+            },
+            Vertex {
+                pos: glm::vec2(0.5, 0.5),
+                color: glm::vec3(0.0, 1.0, 0.0),
+            },
+            Vertex {
+                pos: glm::vec2(-0.5, 0.5),
+                color: glm::vec3(0.0, 0.0, 1.0),
+            },
+        ];
+        Buffer::new(device, data).map(|data|Self{data})
+    }
+}
+
+
 impl DisplayInner{
-    pub fn new(vulkan: &VulkanContext) -> Result<Self, failure::Error> {
+    pub fn new(vulkan: &VulkanContext, data:&DisplayData) -> Result<Self, failure::Error> {
         let swapchain = vulkan.instance().create_swapchain(vulkan.device(), vulkan.surface())?;
         let image_views = swapchain.create_image_views()?;
 
@@ -61,6 +88,7 @@ impl DisplayInner{
             .shader("main", vert)
             .scissors(swapchain.render_area())
             .viewports(swapchain.viewport())
+            .vertex_input::<Vertex>(0)
             .color_blend_attachment_states(vk::PipelineColorBlendAttachmentState {
                 blend_enable: vk::FALSE,
                 color_write_mask: vk::ColorComponentFlags::all(),
@@ -81,7 +109,7 @@ impl DisplayInner{
         }];
         let command_buffers:Result<Vec<CommandBuffer<StateFinished>>,vk::Result> = cmd_pool.create_command_buffers(framebuffers.len() as u32)?
             .into_iter().zip(framebuffers.iter()).map(|(cmd,fb)|
-            cmd.single_pass(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE,&render_pass,fb,swapchain.render_area(),&clear_values,&pipeline,3,1,0,0)
+            cmd.single_pass_vertex_input(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE,&render_pass,fb,swapchain.render_area(),&clear_values,&pipeline,&data.data)
         ).collect();
         let command_buffers = command_buffers?;
         Ok(Self {
@@ -100,6 +128,7 @@ impl DisplayInner{
 pub struct Display {
     inner: DisplayInner,
     vulkan: VulkanContext,
+    data: DisplayData
 }
 
 impl Display {
@@ -112,15 +141,17 @@ impl Display {
     }
 
     pub fn recreate(&mut self) -> Result<(), failure::Error> {
-        self.inner = DisplayInner::new(&self.vulkan)?;
+        self.inner = DisplayInner::new(&self.vulkan,&self.data)?;
         Ok(())
     }
 
     pub fn new(vulkan:VulkanContext) -> Result<Display, failure::Error> {
-        let inner = DisplayInner::new(&vulkan)?;
+        let data =  DisplayData::new(vulkan.device())?;
+        let inner = DisplayInner::new(&vulkan, &data)?;
         Ok(Self{
             inner,
-            vulkan
+            vulkan,
+            data
         })
     }
 

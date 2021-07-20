@@ -9,10 +9,15 @@ use ash::vk::DebugUtilsMessengerCreateInfoEXT;
 use crate::device::{pick_physical_device, Device};
 use crate::surface::Surface;
 use crate::swap_chain::SwapChain;
+use std::rc::Rc;
 
-pub struct Instance {
+struct InstanceInner{
     raw: ash::Instance,
     debug: Option<(ash::extensions::ext::DebugUtils, ash::vk::DebugUtilsMessengerEXT)>,
+}
+#[derive(Clone)]
+pub struct Instance {
+    inner:Rc<Box<InstanceInner>>
 }
 
 impl Instance {
@@ -35,28 +40,30 @@ impl Instance {
         } else {
             None
         };
-        Ok(Self { raw: instance, debug: debug_utils })
+        Ok(Self { inner:Rc::new(Box::new(InstanceInner{raw: instance, debug: debug_utils }))})
     }
 
     pub fn create_swapchain(&self, device: &Device, surface: &Surface) -> Result<SwapChain, failure::Error> {
-        SwapChain::new(&self.raw,device,surface)
+        SwapChain::new(self,device,surface)
+    }
+    pub fn raw(&self) -> &ash::Instance{
+        &self.inner.raw
     }
 
-
     pub fn pick_physical_device(&self,surface:&Surface) -> Result<ash::vk::PhysicalDevice, failure::Error> {
-        pick_physical_device(&self.raw,surface)
+        pick_physical_device(self.raw(),surface)
     }
 
     pub fn create_device(&self,entry:&ash::Entry, physical_device:ash::vk::PhysicalDevice) -> Result<Device, failure::Error> {
-        Device::new(entry, &self.raw,physical_device)
+        Device::new(entry, &self,physical_device)
     }
 
     pub fn create_surface(&self,entry:&ash::Entry, window: &winit::window::Window) -> Result<Surface, failure::Error> {
-        Surface::new(entry,&self.raw,window)
+        Surface::new(entry,self.raw(),window)
     }
 }
 
-impl Drop for Instance {
+impl Drop for InstanceInner {
     fn drop(&mut self) {
         unsafe {
             if let Some((debug, messanger)) = self.debug.take() {

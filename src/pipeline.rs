@@ -7,6 +7,7 @@ use failure::err_msg;
 use crate::render_pass::{RenderPassBuilder, RenderPass};
 use std::rc::Rc;
 use ash::vk::PipelineLayout;
+use crate::data::VertexSource;
 
 
 pub struct Pipeline {
@@ -47,6 +48,9 @@ pub struct PipelineBuilder {
     depth_state_create_info: vk::PipelineDepthStencilStateCreateInfo,
     color_blend_attachment_states: Vec<vk::PipelineColorBlendAttachmentState>,
     color_blend_state: vk::PipelineColorBlendStateCreateInfo,
+    topology: vk::PrimitiveTopology,
+    vertex_input_attribute:Vec<vk::VertexInputAttributeDescription>,
+    vertex_input_binding:Vec<vk::VertexInputBindingDescription>,
 }
 
 impl PipelineBuilder {
@@ -78,6 +82,9 @@ impl PipelineBuilder {
                 .logic_op(vk::LogicOp::COPY)
                 .blend_constants([0.0, 0.0, 0.0, 0.0])
                 .build(),
+            topology: vk::PrimitiveTopology::TRIANGLE_LIST,
+            vertex_input_attribute: vec![],
+            vertex_input_binding: vec![]
         }
     }
 
@@ -120,6 +127,28 @@ impl PipelineBuilder {
         self
     }
 
+    pub fn topology(mut self,topology:vk::PrimitiveTopology)->Self{
+        self.topology = topology;
+        self
+    }
+    pub fn vertex_input<V:VertexSource>(self, binding:u32)->Self{
+        self.input_buffer::<V>(binding,vk::VertexInputRate::VERTEX)
+    }
+    pub fn instance_input<V:VertexSource>(self, binding:u32)->Self{
+        self.input_buffer::<V>(binding,vk::VertexInputRate::INSTANCE)
+    }
+    pub fn input_buffer<V:VertexSource>(mut self, binding:u32, input_rate:vk::VertexInputRate)->Self{
+        self.vertex_input_binding.push(vk::VertexInputBindingDescription {
+            binding,
+            stride: std::mem::size_of::<V>() as u32,
+            input_rate,
+        });
+        for attr in V::get_attribute_descriptions(binding){
+            self.vertex_input_attribute.push(attr);
+        }
+        self
+    }
+
     pub fn build(&mut self, render_pass: &RenderPass) -> Result<Pipeline, failure::Error> {
         let Self {
             viewport,
@@ -129,15 +158,20 @@ impl PipelineBuilder {
             multisample_state_create_info,
             depth_state_create_info,
             color_blend_attachment_states,
-            color_blend_state
+            color_blend_state,
+            topology,
+            vertex_input_attribute,
+            vertex_input_binding,
         } = self;
         let vp = vk::PipelineViewportStateCreateInfo::builder()
             .viewports(viewport)
             .scissors(scissors);
         let shader_names: Vec<CString> = shaders.iter().map(|(name, _)| CString::new(name.as_bytes()).expect("Name of shader's main function contains illegal null \\0 symbol")).collect();
         let shader_stages: Vec<vk::PipelineShaderStageCreateInfo> = shader_names.iter().zip(shaders).map(|(c_name, (_, shader))| shader.to_stage_info(c_name).build()).collect();
-        let vertex_input_state_create_info = vk::PipelineVertexInputStateCreateInfo::builder();
-        let vertex_input_assembly_state_info = vk::PipelineInputAssemblyStateCreateInfo::builder().topology(vk::PrimitiveTopology::TRIANGLE_LIST);
+        let vertex_input_state_create_info = vk::PipelineVertexInputStateCreateInfo::builder()
+            .vertex_attribute_descriptions(&vertex_input_attribute)
+            .vertex_binding_descriptions(&vertex_input_binding);
+        let vertex_input_assembly_state_info = vk::PipelineInputAssemblyStateCreateInfo::builder().topology(*topology);
         color_blend_state.attachment_count = color_blend_attachment_states.len() as u32;
         color_blend_state.p_attachments = color_blend_attachment_states.as_ptr();
         let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo::builder();

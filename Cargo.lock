@@ -446,6 +446,7 @@ dependencies = [
  "ash",
  "cocoa 0.18.5",
  "failure",
+ "memoffset",
  "metal",
  "nalgebra-glm",
  "objc",
