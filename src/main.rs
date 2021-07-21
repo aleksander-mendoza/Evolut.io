@@ -31,6 +31,7 @@ mod vulkan_context;
 mod display;
 mod data;
 mod buffer;
+mod gpu_future;
 
 
 fn main() -> Result<(), failure::Error> {

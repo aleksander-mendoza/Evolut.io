@@ -9,9 +9,10 @@ use crate::pipeline::Pipeline;
 use crate::semaphore::Semaphore;
 use ash::prelude::VkResult;
 use crate::fence::Fence;
-use crate::buffer::{Buffer, Usage, SharingMode};
+use crate::buffer::{Buffer, Type};
 use crate::data::VertexSource;
 
+pub trait OptionalRenderPass{}
 
 pub struct StateClear {}
 
@@ -20,6 +21,9 @@ pub struct StateBegan {}
 pub struct StateRenderPassBegan {}
 
 pub struct StateFinished {}
+
+impl OptionalRenderPass for StateBegan{}
+impl OptionalRenderPass for StateRenderPassBegan{}
 
 pub struct CommandBuffer<State> {
     raw: vk::CommandBuffer,
@@ -32,6 +36,43 @@ impl<X> CommandBuffer<X> {
     fn state_transition<Y>(self) -> CommandBuffer<Y> {
         let Self{raw, device, ..} = self;
         CommandBuffer{raw, device, _state:PhantomData}
+    }
+    fn unsafe_copy<V:VertexSource, T1:Type, T2:Type>(self, src: &Buffer<V,T1>, dst: &Buffer<V,T2>) -> Self {
+        assert_eq!(src.len(),dst.len());
+        unsafe {
+            self.device.inner().cmd_copy_buffer(
+                self.raw,
+                src.raw(),
+                dst.raw(),
+                &[vk::BufferCopy{
+                    src_offset: 0,
+                    dst_offset: 0,
+                    size: src.len() as u64
+                }]
+            );
+        }
+        self
+    }
+}
+
+
+impl<X:OptionalRenderPass> CommandBuffer<X> {
+
+    pub fn copy<V:VertexSource, T1:Type, T2:Type>(self, src: &Buffer<V,T1>, dst: &Buffer<V,T2>) -> Self {
+        assert_eq!(src.len(),dst.len());
+        unsafe {
+            self.device.inner().cmd_copy_buffer(
+                self.raw,
+                src.raw(),
+                dst.raw(),
+                &[vk::BufferCopy{
+                    src_offset: 0,
+                    dst_offset: 0,
+                    size: src.len() as u64
+                }]
+            );
+        }
+        self
     }
 }
 
@@ -60,24 +101,24 @@ impl CommandBuffer<StateClear> {
             .bind_pipeline(pipeline)
             .draw(vertex_count, instance_count, first_vertex, first_instance)
             .end_render_pass()
-            .finish()
+            .end()
     }
 
-    pub fn single_pass_vertex_input<V:VertexSource, U:Usage, S:SharingMode>(self,
+    pub fn single_pass_vertex_input<V:VertexSource, T:Type>(self,
                        usage: vk::CommandBufferUsageFlags,
                        render_pass: &RenderPass,
                        framebuffer: &Framebuffer,
                        render_area: vk::Rect2D,
                        clear: &[ClearValue],
                        pipeline: &Pipeline,
-                       buffer:&Buffer<V,U,S>) -> Result<CommandBuffer<StateFinished>, vk::Result> {
+                       buffer:&Buffer<V,T>) -> Result<CommandBuffer<StateFinished>, vk::Result> {
         self.begin(usage)?
             .render_pass(render_pass, framebuffer, render_area, clear)
             .bind_pipeline(pipeline)
             .vertex_input(buffer)
             .draw(buffer.len() as u32, 1, 0, 0)
             .end_render_pass()
-            .finish()
+            .end()
     }
 }
 
@@ -98,7 +139,7 @@ impl CommandBuffer<StateBegan> {
         }
         self.state_transition()
     }
-    pub fn finish(self) -> Result<CommandBuffer<StateFinished>, vk::Result> {
+    pub fn end(self) -> Result<CommandBuffer<StateFinished>, vk::Result> {
         let result = unsafe {
             self.device.inner().end_command_buffer(
                 self.raw,
@@ -109,6 +150,7 @@ impl CommandBuffer<StateBegan> {
 }
 
 impl CommandBuffer<StateRenderPassBegan> {
+
     pub fn bind_pipeline(self, pipeline: &Pipeline) -> Self {
         unsafe {
             self.device.inner().cmd_bind_pipeline(
@@ -119,7 +161,7 @@ impl CommandBuffer<StateRenderPassBegan> {
         }
         self
     }
-    pub fn vertex_input<V:VertexSource, U:Usage, S:SharingMode>(self, buffer: &Buffer<V,U,S>) -> Self {
+    pub fn vertex_input<V:VertexSource, T:Type>(self, buffer: &Buffer<V,T>) -> Self {
         unsafe {
             self.device.inner().cmd_bind_vertex_buffers(
                 self.raw,
@@ -130,6 +172,7 @@ impl CommandBuffer<StateRenderPassBegan> {
         }
         self
     }
+
     pub fn draw(self, vertex_count: u32, instance_count: u32, first_vertex: u32, first_instance: u32) -> Self {
         unsafe {
             self.device.inner().cmd_draw(
@@ -185,7 +228,9 @@ impl CommandPool {
             device.inner().create_command_pool(&command_pool_create_info, None)
         }.map(|raw| Self { raw, device: device.clone() })
     }
-
+    pub fn clear(&mut self) -> VkResult<()> {
+        unsafe { self.device.inner().reset_command_pool(self.raw,vk::CommandPoolResetFlags::RELEASE_RESOURCES) }
+    }
     pub fn create_command_buffer(&self) -> Result<CommandBuffer<StateClear>, vk::Result> {
         self.create_command_buffers(1).map(|v| v.into_iter().next().unwrap())
     }
@@ -199,6 +244,11 @@ impl CommandPool {
             self.device.inner()
                 .allocate_command_buffers(&command_buffer_allocate_info)
         }.map(|vec| vec.into_iter().map(|raw| CommandBuffer { raw, device: self.device.clone(), _state: PhantomData }).collect())
+    }
+    pub fn free(&self,cmd:CommandBuffer<StateFinished>) {
+        unsafe {
+            self.device.inner().free_command_buffers(self.raw, &[cmd.raw])
+        }
     }
 }
 

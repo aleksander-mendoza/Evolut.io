@@ -17,7 +17,8 @@ use crate::vulkan_context::VulkanContext;
 use failure::Error;
 use ash::vk;
 use crate::data::Vertex;
-use crate::buffer::{Buffer, VertexBuffer, Exclusive};
+use crate::buffer::{Buffer, PairedBuffers};
+use crate::fence::Fence;
 
 struct DisplayInner{
     // The order of all fields
@@ -35,11 +36,12 @@ struct DisplayInner{
 }
 
 struct DisplayData{
-    data:Buffer<Vertex,VertexBuffer,Exclusive>
+    data:PairedBuffers<Vertex>,
+    cmd_pool:CommandPool
 }
 
 impl DisplayData{
-    pub fn new(device:&Device) -> Result<DisplayData, ash::vk::Result> {
+    pub fn new(vulkan:&VulkanContext) -> Result<DisplayData, ash::vk::Result> {
         let data: [Vertex; 3] = [
             Vertex {
                 pos: glm::vec2(0.0, -0.5),
@@ -54,7 +56,13 @@ impl DisplayData{
                 color: glm::vec3(0.0, 0.0, 1.0),
             },
         ];
-        Buffer::new(device, data).map(|data|Self{data})
+        let mut cmd_pool = CommandPool::new(vulkan.device())?;
+        let fence = Fence::new(vulkan.device(), false)?;
+        let future = PairedBuffers::new(vulkan.device(),&cmd_pool, fence,&data)?;
+        let (_, data) = future.get()?;
+        cmd_pool.clear();
+        Ok(Self{data,cmd_pool})
+
     }
 }
 
@@ -109,7 +117,7 @@ impl DisplayInner{
         }];
         let command_buffers:Result<Vec<CommandBuffer<StateFinished>>,vk::Result> = cmd_pool.create_command_buffers(framebuffers.len() as u32)?
             .into_iter().zip(framebuffers.iter()).map(|(cmd,fb)|
-            cmd.single_pass_vertex_input(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE,&render_pass,fb,swapchain.render_area(),&clear_values,&pipeline,&data.data)
+            cmd.single_pass_vertex_input(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE,&render_pass,fb,swapchain.render_area(),&clear_values,&pipeline,&data.data.gpu())
         ).collect();
         let command_buffers = command_buffers?;
         Ok(Self {
@@ -146,7 +154,7 @@ impl Display {
     }
 
     pub fn new(vulkan:VulkanContext) -> Result<Display, failure::Error> {
-        let data =  DisplayData::new(vulkan.device())?;
+        let data =  DisplayData::new(&vulkan)?;
         let inner = DisplayInner::new(&vulkan, &data)?;
         Ok(Self{
             inner,
