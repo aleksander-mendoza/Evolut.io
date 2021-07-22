@@ -17,6 +17,10 @@ impl Attribute for glm::Vec3{
     const FORMAT: Format = vk::Format::R32G32B32_SFLOAT;
 }
 
+impl Attribute for glm::Vec4{
+    const FORMAT: Format = vk::Format::R32G32B32A32_SFLOAT;
+}
+
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct Vertex {
@@ -40,5 +44,17 @@ impl VertexSource for Vertex {
                 offset: offset_of!(Self, color) as u32,
             },
         ]
+    }
+}
+
+
+impl VertexSource for glm::Mat4 {
+    fn get_attribute_descriptions(binding:u32) -> Vec<vk::VertexInputAttributeDescription>{
+        (0..4).into_iter().map(|location|vk::VertexInputAttributeDescription {
+            binding,
+            location,
+            format:  glm::Vec4::FORMAT,
+            offset: location*std::mem::size_of::<glm::Vec4>() as u32,
+        }).collect()
     }
 }

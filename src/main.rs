@@ -32,6 +32,9 @@ mod display;
 mod data;
 mod buffer;
 mod gpu_future;
+mod descriptor_pool;
+mod descriptor_layout;
+mod uniform_buffer;
 
 
 fn main() -> Result<(), failure::Error> {

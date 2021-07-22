@@ -17,7 +17,7 @@ struct InstanceInner{
 }
 #[derive(Clone)]
 pub struct Instance {
-    inner:Rc<Box<InstanceInner>>
+    inner:Rc<InstanceInner>
 }
 
 impl Instance {
@@ -40,7 +40,7 @@ impl Instance {
         } else {
             None
         };
-        Ok(Self { inner:Rc::new(Box::new(InstanceInner{raw: instance, debug: debug_utils }))})
+        Ok(Self { inner:Rc::new(InstanceInner{raw: instance, debug: debug_utils })})
     }
 
     pub fn create_swapchain(&self, device: &Device, surface: &Surface) -> Result<SwapChain, failure::Error> {

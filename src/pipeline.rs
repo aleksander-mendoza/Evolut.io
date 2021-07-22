@@ -8,6 +8,7 @@ use crate::render_pass::{RenderPassBuilder, RenderPass};
 use std::rc::Rc;
 use ash::vk::PipelineLayout;
 use crate::data::VertexSource;
+use crate::descriptor_layout::DescriptorLayout;
 
 
 pub struct Pipeline {
@@ -17,6 +18,7 @@ pub struct Pipeline {
     // before pipeline. While the specification says that it's not necessary and in principle RenderPass
     // could outlive pipeline, some vendors may have bugs in their implementations. It's a lot
     // safer to keep this reference just in case.
+    descriptor_layout: Vec<DescriptorLayout>, // Just keeping reference
 }
 
 impl Pipeline {
@@ -25,6 +27,9 @@ impl Pipeline {
     }
     pub fn raw(&self) -> vk::Pipeline {
         self.raw
+    }
+    pub fn layout(&self) -> vk::PipelineLayout{
+        self.layout
     }
 }
 
@@ -51,6 +56,8 @@ pub struct PipelineBuilder {
     topology: vk::PrimitiveTopology,
     vertex_input_attribute:Vec<vk::VertexInputAttributeDescription>,
     vertex_input_binding:Vec<vk::VertexInputBindingDescription>,
+    descriptor_layout: Vec<DescriptorLayout>
+
 }
 
 impl PipelineBuilder {
@@ -84,8 +91,14 @@ impl PipelineBuilder {
                 .build(),
             topology: vk::PrimitiveTopology::TRIANGLE_LIST,
             vertex_input_attribute: vec![],
-            vertex_input_binding: vec![]
+            vertex_input_binding: vec![],
+            descriptor_layout: vec![]
         }
+    }
+
+    pub fn descriptor_layout(mut self, layout:DescriptorLayout)->Self{
+        self.descriptor_layout.push(layout);
+        self
     }
 
     pub fn color_blend_attachment_states(mut self, blend_state: vk::PipelineColorBlendAttachmentState) -> Self {
@@ -162,6 +175,7 @@ impl PipelineBuilder {
             topology,
             vertex_input_attribute,
             vertex_input_binding,
+            descriptor_layout,
         } = self;
         let vp = vk::PipelineViewportStateCreateInfo::builder()
             .viewports(viewport)
@@ -174,8 +188,11 @@ impl PipelineBuilder {
         let vertex_input_assembly_state_info = vk::PipelineInputAssemblyStateCreateInfo::builder().topology(*topology);
         color_blend_state.attachment_count = color_blend_attachment_states.len() as u32;
         color_blend_state.p_attachments = color_blend_attachment_states.as_ptr();
-        let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo::builder();
-        let pipeline_layout = unsafe { render_pass.device().inner().create_pipeline_layout(&pipeline_layout_create_info, None) }?;
+        let set_layouts:Vec<vk::DescriptorSetLayout> = descriptor_layout.iter().map(|s|s.raw()).collect();
+        let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo::builder()
+            .set_layouts(&set_layouts);
+        let pipeline_layout = unsafe { render_pass.device().inner()
+            .create_pipeline_layout(&pipeline_layout_create_info, None) }?;
         let p = vk::GraphicsPipelineCreateInfo::builder()
             .viewport_state(&vp)
             .stages(shader_stages.as_slice())
@@ -196,17 +213,18 @@ impl PipelineBuilder {
                 None,
             )
         };
-        fn new(pipeline: Vec<vk::Pipeline>, pipeline_layout: PipelineLayout, render_pass: &RenderPass) -> Pipeline {
+        fn new(pipeline: Vec<vk::Pipeline>, pipeline_layout: PipelineLayout, render_pass: &RenderPass, descriptor_layout:&Vec<DescriptorLayout>) -> Pipeline {
             Pipeline {
                 raw: pipeline.into_iter().next().unwrap(),
                 layout: pipeline_layout,
                 render_pass: render_pass.clone(),
+                descriptor_layout: descriptor_layout.clone()
             }
         }
         match result {
-            Ok(pipeline) => Ok(new(pipeline, pipeline_layout, render_pass)),
+            Ok(pipeline) => Ok(new(pipeline, pipeline_layout, render_pass, descriptor_layout)),
             Err((pipeline, err)) => {
-                new(pipeline, pipeline_layout, render_pass);
+                new(pipeline, pipeline_layout, render_pass, descriptor_layout);
                 Err(err_msg(err))
             }
         }

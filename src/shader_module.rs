@@ -12,13 +12,13 @@ pub struct ShaderModuleInner{
 }
 #[derive(Clone)]
 pub struct ShaderModule{
-   inner:Rc<Box<ShaderModuleInner>>
+   inner:Rc<ShaderModuleInner>
 }
 impl ShaderModule {
     pub fn new(src: &[u32], stage:vk::ShaderStageFlags, device: &Device) -> VkResult<Self> {
         let shader_module_create_info = vk::ShaderModuleCreateInfo::builder().code(src.into());
         unsafe { device.inner().create_shader_module(&shader_module_create_info, None) }
-            .map(|m| Self { inner:Rc::new(Box::new(ShaderModuleInner{m,device:device.clone(),stage }))})
+            .map(|m| Self { inner:Rc::new(ShaderModuleInner{m,device:device.clone(),stage })})
     }
 
     pub fn to_stage_info<'a>(&'a self, main_function:&'a CStr)->vk::PipelineShaderStageCreateInfoBuilder<'a>{

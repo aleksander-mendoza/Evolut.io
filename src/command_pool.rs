@@ -11,6 +11,7 @@ use ash::prelude::VkResult;
 use crate::fence::Fence;
 use crate::buffer::{Buffer, Type};
 use crate::data::VertexSource;
+use crate::descriptor_pool::DescriptorSet;
 
 pub trait OptionalRenderPass{}
 
@@ -104,6 +105,25 @@ impl CommandBuffer<StateClear> {
             .end_render_pass()
             .end()
     }
+
+    pub fn single_pass_vertex_input_uniform<V:VertexSource, T:Type>(self,
+                                                            usage: vk::CommandBufferUsageFlags,
+                                                            render_pass: &RenderPass,
+                                                            framebuffer: &Framebuffer,
+                                                            uniform: &DescriptorSet,
+                                                            render_area: vk::Rect2D,
+                                                            clear: &[ClearValue],
+                                                            pipeline: &Pipeline,
+                                                            buffer:&Buffer<V,T>) -> Result<CommandBuffer<StateFinished>, vk::Result> {
+        self.begin(usage)?
+            .render_pass(render_pass, framebuffer, render_area, clear)
+            .bind_pipeline(pipeline)
+            .vertex_input(buffer)
+            .uniform(pipeline, uniform)
+            .draw(buffer.capacity() as u32, 1, 0, 0)
+            .end_render_pass()
+            .end()
+    }
 }
 
 impl CommandBuffer<StateBegan> {
@@ -156,7 +176,19 @@ impl CommandBuffer<StateRenderPassBegan> {
         }
         self
     }
-
+    pub fn uniform(self, pipeline: &Pipeline, uniform: &DescriptorSet) -> Self {
+        unsafe {
+            self.device.inner().cmd_bind_descriptor_sets(
+                self.raw,
+                vk::PipelineBindPoint::GRAPHICS,
+                pipeline.layout(),
+                0,
+                &[uniform.raw()],
+                &[],
+            );
+        }
+        self
+    }
     pub fn draw(self, vertex_count: u32, instance_count: u32, first_vertex: u32, first_instance: u32) -> Self {
         unsafe {
             self.device.inner().cmd_draw(

@@ -107,7 +107,9 @@ impl SwapChain {
     pub fn create_image_views(&self) -> Result<Vec<ImageView>, vk::Result> {
         self.images.iter().map(|&image| ImageView::new(image, self.format, self.device())).collect()
     }
-
+    pub fn len(&self) -> usize {
+        self.images.len()
+    }
     pub fn format(&self) -> vk::Format {
         self.format
     }

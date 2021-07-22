@@ -10,12 +10,24 @@ use crate::fence::Fence;
 use crate::gpu_future::GpuFuture;
 
 
+
 pub trait Type {
     const SHARING_MODE: vk::SharingMode;
     const REQUIRED_MEMORY_FLAGS: vk::MemoryPropertyFlags;
     const USAGE: vk::BufferUsageFlags;
 }
 
+pub trait CpuWriteable:Type{}
+
+pub struct Uniform {}
+
+impl Type for Uniform {
+    const SHARING_MODE: vk::SharingMode = vk::SharingMode::EXCLUSIVE;
+    const REQUIRED_MEMORY_FLAGS: vk::MemoryPropertyFlags = vk::MemoryPropertyFlags::from_raw(vk::MemoryPropertyFlags::HOST_VISIBLE.as_raw() | vk::MemoryPropertyFlags::HOST_COHERENT.as_raw());
+    const USAGE: vk::BufferUsageFlags = vk::BufferUsageFlags::UNIFORM_BUFFER;
+}
+
+impl CpuWriteable for Uniform{}
 
 pub struct Gpu {}
 
@@ -33,6 +45,8 @@ impl Type for Cpu {
     const REQUIRED_MEMORY_FLAGS: vk::MemoryPropertyFlags = vk::MemoryPropertyFlags::from_raw(vk::MemoryPropertyFlags::HOST_VISIBLE.as_raw() | vk::MemoryPropertyFlags::HOST_COHERENT.as_raw());
     const USAGE: vk::BufferUsageFlags = vk::BufferUsageFlags::TRANSFER_SRC;
 }
+
+impl CpuWriteable for Cpu{}
 
 pub struct Buffer<V: VertexSource, T:Type> {
     capacity: usize,
@@ -53,6 +67,9 @@ impl<V: VertexSource, T:Type> Drop for Buffer<V, T> {
 }
 
 impl<V: VertexSource, T: Type> Buffer<V, T> {
+    pub fn device(&self)->&Device{
+        &self.device
+    }
     pub fn raw(&self) -> vk::Buffer {
         self.raw
     }
@@ -112,7 +129,16 @@ impl<V: VertexSource, T: Type> Buffer<V, T> {
     }
 }
 
-impl<V: VertexSource> Buffer<V, Cpu> {
+impl<V: VertexSource> Buffer<V, Uniform> {
+    pub fn descriptor_info(&self)->vk::DescriptorBufferInfo{
+        vk::DescriptorBufferInfo {
+            buffer: self.raw(),
+            offset: 0,
+            range: self.mem_capacity(),
+        }
+    }
+}
+impl<V: VertexSource, T:CpuWriteable> Buffer<V, T> {
     pub fn new(device: &Device, data:&[V]) -> Result<Self, vk::Result> {
         let mut slf = Self::with_capacity(device, data.len())?;
         slf.map_copy_unmap(0,data);

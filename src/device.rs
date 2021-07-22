@@ -99,7 +99,7 @@ struct DeviceInner {
 
 #[derive(Clone)]
 pub struct Device {
-    inner: Rc<Box<DeviceInner>>,
+    inner: Rc<DeviceInner>,
 }
 
 impl Device {
@@ -124,7 +124,7 @@ impl Device {
 
         let queue = unsafe { device.get_device_queue(family_index, 0) };
 
-        Ok(Self { inner: Rc::new(Box::new(DeviceInner { device, instance:instance.clone(), queue, family_index, physical_device })) })
+        Ok(Self { inner: Rc::new(DeviceInner { device, instance:instance.clone(), queue, family_index, physical_device }) })
     }
     pub fn family_index(&self) -> u32 {
         self.inner.family_index

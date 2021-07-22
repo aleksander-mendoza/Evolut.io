@@ -19,25 +19,32 @@ use ash::vk;
 use crate::data::Vertex;
 use crate::buffer::{Buffer, PairedBuffers};
 use crate::fence::Fence;
+use crate::uniform_buffer::UniformBuffer;
+use crate::descriptor_pool::{DescriptorPool, DescriptorSet};
+use crate::descriptor_layout::DescriptorLayout;
 
 struct DisplayInner{
     // The order of all fields
     // is very important, because
     // they will be dropped
     // in the exact same order
+
     command_buffers: Vec<CommandBuffer<StateFinished>>,
+    descriptor_sets: Vec<DescriptorSet>,
+    descriptor_pool: DescriptorPool,
     framebuffers: Vec<Framebuffer>,
     pipeline: Pipeline,
     clear_values: [ClearValue; 1],
     render_pass: RenderPass,
     cmd_pool: CommandPool,
     image_views: Vec<ImageView>,
+    uniforms:Vec<UniformBuffer<glm::Mat4,1>>,
     swapchain: SwapChain,
 }
 
 struct DisplayData{
     data:PairedBuffers<Vertex>,
-    cmd_pool:CommandPool
+    cmd_pool:CommandPool,
 }
 
 impl DisplayData{
@@ -59,9 +66,9 @@ impl DisplayData{
         let mut cmd_pool = CommandPool::new(vulkan.device())?;
         let fence = Fence::new(vulkan.device(), false)?;
         let future = PairedBuffers::new(vulkan.device(),&cmd_pool, fence,&data)?;
-        vulkan.device().queue_wait_idle()?;
         let (_, data) = future.get()?;
         cmd_pool.clear();
+
         Ok(Self{data,cmd_pool})
 
     }
@@ -72,7 +79,9 @@ impl DisplayInner{
     pub fn new(vulkan: &VulkanContext, data:&DisplayData) -> Result<Self, failure::Error> {
         let swapchain = vulkan.instance().create_swapchain(vulkan.device(), vulkan.surface())?;
         let image_views = swapchain.create_image_views()?;
-
+        let uniforms:Result<Vec<UniformBuffer<glm::Mat4,1>>,vk::Result> = (0..swapchain.len()).into_iter().map(|_|UniformBuffer::new(vulkan.device(),glm::translation(&glm::vec3(0.,0.2, 0.2)))).collect();
+        let uniforms = uniforms?;
+        let descriptor_layout = uniforms[0].create_descriptor_layout(0)?;
         let cmd_pool = CommandPool::new(vulkan.device())?;
         let render_pass = RenderPassBuilder::new()
             .color_attachment(swapchain.format())
@@ -93,6 +102,7 @@ impl DisplayInner{
         let frag = ShaderModule::new(include_glsl!("assets/shaders/blocks.frag", kind: frag) as &[u32], ShaderStageFlags::FRAGMENT, vulkan.device())?;
         let vert = ShaderModule::new(include_glsl!("assets/shaders/blocks.vert") as &[u32], ShaderStageFlags::VERTEX, vulkan.device())?;
         let pipeline = PipelineBuilder::new()
+            .descriptor_layout(descriptor_layout.clone())
             .shader("main", frag)
             .shader("main", vert)
             .scissors(swapchain.render_area())
@@ -116,9 +126,14 @@ impl DisplayInner{
                 float32: [0.0, 0.0, 0.0, 1.0],
             },
         }];
+        let descriptor_pool = DescriptorPool::new(vulkan.device(),&swapchain)?;
+        let descriptor_sets = descriptor_pool.create_sets(&std::iter::repeat(descriptor_layout).take(swapchain.len()).collect::<Vec<DescriptorLayout>>())?;
+        for (ds,u) in descriptor_sets.iter().zip(uniforms.iter()){
+            ds.update(u.buffer());
+        }
         let command_buffers:Result<Vec<CommandBuffer<StateFinished>>,vk::Result> = cmd_pool.create_command_buffers(framebuffers.len() as u32)?
-            .into_iter().zip(framebuffers.iter()).map(|(cmd,fb)|
-            cmd.single_pass_vertex_input(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE,&render_pass,fb,swapchain.render_area(),&clear_values,&pipeline,&data.data.gpu())
+            .into_iter().zip(framebuffers.iter().zip(descriptor_sets.iter())).map(|(cmd,(fb,ds))|
+            cmd.single_pass_vertex_input_uniform(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE,&render_pass,fb,ds,swapchain.render_area(),&clear_values,&pipeline,&data.data.gpu())
         ).collect();
         let command_buffers = command_buffers?;
         Ok(Self {
@@ -129,7 +144,10 @@ impl DisplayInner{
             cmd_pool,
             render_pass,
             pipeline,
+            uniforms,
             clear_values,
+            descriptor_pool,
+            descriptor_sets
         })
     }
 }

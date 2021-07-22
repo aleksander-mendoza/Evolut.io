@@ -10,7 +10,7 @@ struct RenderPassInner {
 
 #[derive(Clone)]
 pub struct RenderPass {
-    inner: Rc<Box<RenderPassInner>>,
+    inner: Rc<RenderPassInner>,
 }
 
 impl RenderPass {
@@ -98,6 +98,6 @@ impl RenderPassBuilder {
 
         unsafe {
             device.inner().create_render_pass(&renderpass_create_info, None)
-        }.map(|raw| RenderPass { inner: Rc::new(Box::new(RenderPassInner { raw, device: device.clone() })) })
+        }.map(|raw| RenderPass { inner: Rc::new(RenderPassInner { raw, device: device.clone() }) })
     }
 }
