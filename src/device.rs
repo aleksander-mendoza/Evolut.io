@@ -147,6 +147,9 @@ impl Device {
     pub fn device_wait_idle(&self) -> VkResult<()> {
         unsafe { self.inner().device_wait_idle() }
     }
+    pub fn queue_wait_idle(&self) -> VkResult<()> {
+        unsafe { self.inner().queue_wait_idle(self.inner.queue) }
+    }
     pub fn get_physical_device_memory_properties(&self) -> PhysicalDeviceMemoryProperties {
         unsafe { self.instance().raw().get_physical_device_memory_properties(self.physical_device()) }
     }

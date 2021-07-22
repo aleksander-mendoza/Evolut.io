@@ -56,8 +56,11 @@ impl<V: VertexSource, T: Type> Buffer<V, T> {
     pub fn raw(&self) -> vk::Buffer {
         self.raw
     }
-    pub fn len(&self) -> usize {
+    pub fn capacity(&self) -> usize {
         self.capacity
+    }
+    pub fn mem_capacity(&self) -> vk::DeviceSize{
+        (std::mem::size_of::<V>() * self.capacity) as u64
     }
     pub fn with_capacity(device: &Device, capacity: usize) -> Result<Self, vk::Result> {
         let vertex_buffer_create_info = vk::BufferCreateInfo::builder()
@@ -80,7 +83,9 @@ impl<V: VertexSource, T: Type> Buffer<V, T> {
             .allocation_size(mem_requirements.size);
 
         let vertex_buffer_memory = unsafe { device.inner().allocate_memory(&allocate_info, None) }?;
-
+        unsafe{
+            device.inner().bind_buffer_memory(vertex_buffer, vertex_buffer_memory, 0)?;
+        }
         Ok(Self {
             capacity,
             raw: vertex_buffer,
@@ -117,8 +122,6 @@ impl<V: VertexSource> Buffer<V, Cpu> {
     pub fn map_copy_unmap(&mut self, offset: usize, data: &[V]) -> Result<(), vk::Result> {
         assert!(offset+data.len()<=self.capacity);
         unsafe {
-            self.device.inner().bind_buffer_memory(self.raw, self.mem, 0)?;
-
             let data_ptr = self.device.inner().map_memory(
                 self.mem,
                 offset as u64,

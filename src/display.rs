@@ -59,6 +59,7 @@ impl DisplayData{
         let mut cmd_pool = CommandPool::new(vulkan.device())?;
         let fence = Fence::new(vulkan.device(), false)?;
         let future = PairedBuffers::new(vulkan.device(),&cmd_pool, fence,&data)?;
+        vulkan.device().queue_wait_idle()?;
         let (_, data) = future.get()?;
         cmd_pool.clear();
         Ok(Self{data,cmd_pool})

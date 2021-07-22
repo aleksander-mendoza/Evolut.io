@@ -37,29 +37,13 @@ impl<X> CommandBuffer<X> {
         let Self{raw, device, ..} = self;
         CommandBuffer{raw, device, _state:PhantomData}
     }
-    fn unsafe_copy<V:VertexSource, T1:Type, T2:Type>(self, src: &Buffer<V,T1>, dst: &Buffer<V,T2>) -> Self {
-        assert_eq!(src.len(),dst.len());
-        unsafe {
-            self.device.inner().cmd_copy_buffer(
-                self.raw,
-                src.raw(),
-                dst.raw(),
-                &[vk::BufferCopy{
-                    src_offset: 0,
-                    dst_offset: 0,
-                    size: src.len() as u64
-                }]
-            );
-        }
-        self
-    }
 }
 
 
 impl<X:OptionalRenderPass> CommandBuffer<X> {
 
     pub fn copy<V:VertexSource, T1:Type, T2:Type>(self, src: &Buffer<V,T1>, dst: &Buffer<V,T2>) -> Self {
-        assert_eq!(src.len(),dst.len());
+        assert_eq!(src.capacity(),dst.capacity());
         unsafe {
             self.device.inner().cmd_copy_buffer(
                 self.raw,
@@ -68,7 +52,7 @@ impl<X:OptionalRenderPass> CommandBuffer<X> {
                 &[vk::BufferCopy{
                     src_offset: 0,
                     dst_offset: 0,
-                    size: src.len() as u64
+                    size: src.mem_capacity()
                 }]
             );
         }
@@ -116,7 +100,7 @@ impl CommandBuffer<StateClear> {
             .render_pass(render_pass, framebuffer, render_area, clear)
             .bind_pipeline(pipeline)
             .vertex_input(buffer)
-            .draw(buffer.len() as u32, 1, 0, 0)
+            .draw(buffer.capacity() as u32, 1, 0, 0)
             .end_render_pass()
             .end()
     }
