@@ -35,6 +35,9 @@ mod gpu_future;
 mod descriptor_pool;
 mod descriptor_layout;
 mod uniform_buffer;
+mod texture;
+mod sampler;
+mod descriptor_binding;
 
 
 fn main() -> Result<(), failure::Error> {

@@ -1,7 +1,7 @@
 use ash::version::{InstanceV1_0, DeviceV1_0};
 use ash::vk;
 use failure::err_msg;
-use ash::vk::{QueueFamilyProperties, ExtensionProperties, PhysicalDeviceMemoryProperties};
+use ash::vk::{QueueFamilyProperties, ExtensionProperties, PhysicalDeviceMemoryProperties, MemoryRequirements, ImageFormatProperties};
 use crate::instance::Instance;
 use crate::validation_layer::get_validation_layer_support;
 use crate::surface::Surface;
@@ -13,6 +13,7 @@ use ash::prelude::VkResult;
 fn device_extensions() -> [*const i8; 1] {
     [ash::extensions::khr::Swapchain::name().as_ptr()]
 }
+
 #[cfg(target_os = "macos")]
 fn device_extensions() -> [*const i8; 2] {
     [ash::extensions::khr::Swapchain::name().as_ptr(),
@@ -103,6 +104,21 @@ pub struct Device {
 }
 
 impl Device {
+    pub fn find_memory_type(&self,
+                            memory_requirement: MemoryRequirements,
+                            required_properties: vk::MemoryPropertyFlags,
+    ) -> u32 {
+        let mem_properties = self.get_physical_device_memory_properties();
+        for (i, memory_type) in mem_properties.memory_types.iter().enumerate() {
+            // same implementation
+            if (memory_requirement.memory_type_bits & (1 << i)) > 0 && memory_type.property_flags.contains(required_properties) {
+                return i as u32;
+            }
+        }
+
+        panic!("Failed to find suitable memory type!")
+    }
+
     pub fn new(entry: &ash::Entry, instance: &Instance, physical_device: vk::PhysicalDevice) -> Result<Self, failure::Error> {
         let family_index = pick_queue_family(instance.raw(), physical_device);
 
@@ -124,7 +140,7 @@ impl Device {
 
         let queue = unsafe { device.get_device_queue(family_index, 0) };
 
-        Ok(Self { inner: Rc::new(DeviceInner { device, instance:instance.clone(), queue, family_index, physical_device }) })
+        Ok(Self { inner: Rc::new(DeviceInner { device, instance: instance.clone(), queue, family_index, physical_device }) })
     }
     pub fn family_index(&self) -> u32 {
         self.inner.family_index
@@ -135,7 +151,7 @@ impl Device {
     pub fn raw(&self) -> ash::vk::Device {
         self.inner.device.handle()
     }
-    pub fn raw_queue(&self) -> vk::Queue{
+    pub fn raw_queue(&self) -> vk::Queue {
         self.inner.queue
     }
     pub fn inner(&self) -> &ash::Device {
@@ -153,6 +169,9 @@ impl Device {
     pub fn get_physical_device_memory_properties(&self) -> PhysicalDeviceMemoryProperties {
         unsafe { self.instance().raw().get_physical_device_memory_properties(self.physical_device()) }
     }
+    // pub fn get_physical_device_image_format_properties(&self, format:vk::Format, img_type:vk::ImageType) -> VkResult<ImageFormatProperties> {
+    //     unsafe { self.instance().raw().get_physical_device_image_format_properties(self.physical_device(),format,img_type,tiling) }
+    // }
 }
 
 impl Drop for DeviceInner {

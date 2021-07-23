@@ -9,6 +9,7 @@ use std::rc::Rc;
 use ash::vk::PipelineLayout;
 use crate::data::VertexSource;
 use crate::descriptor_layout::DescriptorLayout;
+use crate::buffer::{Buffer, Type};
 
 
 pub struct Pipeline {
@@ -144,13 +145,13 @@ impl PipelineBuilder {
         self.topology = topology;
         self
     }
-    pub fn vertex_input<V:VertexSource>(self, binding:u32)->Self{
-        self.input_buffer::<V>(binding,vk::VertexInputRate::VERTEX)
+    pub fn vertex_input<V:VertexSource>(self, binding:u32, _buffer:&Buffer<V,impl Type>)->Self{
+        self.input_buffer(binding,_buffer,vk::VertexInputRate::VERTEX)
     }
-    pub fn instance_input<V:VertexSource>(self, binding:u32)->Self{
-        self.input_buffer::<V>(binding,vk::VertexInputRate::INSTANCE)
+    pub fn instance_input<V:VertexSource>(self, binding:u32, _buffer:&Buffer<V,impl Type>)->Self{
+        self.input_buffer(binding,_buffer,vk::VertexInputRate::INSTANCE)
     }
-    pub fn input_buffer<V:VertexSource>(mut self, binding:u32, input_rate:vk::VertexInputRate)->Self{
+    pub fn input_buffer<V:VertexSource>(mut self, binding:u32, _buffer:&Buffer<V,impl Type>, input_rate:vk::VertexInputRate)->Self{
         self.vertex_input_binding.push(vk::VertexInputBindingDescription {
             binding,
             stride: std::mem::size_of::<V>() as u32,

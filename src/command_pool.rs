@@ -12,6 +12,7 @@ use crate::fence::Fence;
 use crate::buffer::{Buffer, Type};
 use crate::data::VertexSource;
 use crate::descriptor_pool::DescriptorSet;
+use crate::texture::{Dim, Texture};
 
 pub trait OptionalRenderPass{}
 
@@ -55,6 +56,79 @@ impl<X:OptionalRenderPass> CommandBuffer<X> {
                     dst_offset: 0,
                     size: src.mem_capacity()
                 }]
+            );
+        }
+        self
+    }
+
+    pub fn copy_to_image<V:VertexSource, T:Type, D:Dim>(self, src: &Buffer<V,T>, dst: &Texture<D>, img_layout:vk::ImageLayout) -> Self {
+        // assert_eq!(src.capacity(),dst.capacity());
+        unsafe {
+            self.device.inner().cmd_copy_buffer_to_image(
+                self.raw,
+                src.raw(),
+                dst.raw(),
+                img_layout,
+                &[vk::BufferImageCopy{
+                    buffer_offset: 0,
+                    buffer_row_length: 0,
+                    buffer_image_height: 0,
+                    image_subresource: vk::ImageSubresourceLayers {
+                        aspect_mask: vk::ImageAspectFlags::COLOR,
+                        mip_level: 0,
+                        base_array_layer: 0,
+                        layer_count: 1,
+                    },
+                    image_offset: vk::Offset3D { x: 0, y: 0, z: 0 },
+                    image_extent: dst.extent()
+                }]
+            );
+        }
+        self
+    }
+
+    pub fn layout_barrier<D:Dim>(self, image: &Texture<D>, old_layout:vk::ImageLayout, new_layout:vk::ImageLayout) -> Self {
+        let src_access_mask;
+        let dst_access_mask;
+        let source_stage;
+        let destination_stage;
+        if old_layout == vk::ImageLayout::UNDEFINED && new_layout == vk::ImageLayout::TRANSFER_DST_OPTIMAL {
+            src_access_mask = vk::AccessFlags::empty();
+            dst_access_mask = vk::AccessFlags::TRANSFER_WRITE;
+            source_stage = vk::PipelineStageFlags::TOP_OF_PIPE;
+            destination_stage = vk::PipelineStageFlags::TRANSFER;
+        } else if old_layout == vk::ImageLayout::TRANSFER_DST_OPTIMAL && new_layout == vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL {
+            src_access_mask = vk::AccessFlags::TRANSFER_WRITE;
+            dst_access_mask = vk::AccessFlags::SHADER_READ;
+            source_stage = vk::PipelineStageFlags::TRANSFER;
+            destination_stage = vk::PipelineStageFlags::FRAGMENT_SHADER;
+        } else {
+            panic!("Unsupported layout transition!")
+        }
+        let image_barriers = vk::ImageMemoryBarrier::builder()
+            .src_access_mask(src_access_mask)
+            .dst_access_mask(dst_access_mask)
+            .old_layout(old_layout)
+            .new_layout(new_layout)
+            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .image(image.raw())
+            .subresource_range(vk::ImageSubresourceRange {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                base_mip_level: 0,
+                level_count: 1,
+                base_array_layer: 0,
+                layer_count: 1,
+            });
+        unsafe {
+            self.device.inner().cmd_pipeline_barrier(
+                self.raw,
+                source_stage,
+                destination_stage,
+                vk::DependencyFlags::empty(),
+                &[],
+                &[],
+                std::slice::from_ref(&image_barriers),
             );
         }
         self

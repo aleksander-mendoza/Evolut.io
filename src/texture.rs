@@ -1,0 +1,162 @@
+use image::{ColorType, GenericImageView, EncodableLayout};
+use crate::buffer::{Buffer, Cpu};
+use crate::device::Device;
+use ash::vk;
+use std::marker::PhantomData;
+use ash::vk::{Extent3D, DeviceMemory, Image, DeviceSize};
+use ash::version::{DeviceV1_0, InstanceV1_0};
+use failure::err_msg;
+use std::path::Path;
+use crate::command_pool::{CommandPool, CommandBuffer, OptionalRenderPass};
+use crate::imageview::ImageView;
+use crate::fence::Fence;
+use crate::gpu_future::GpuFuture;
+
+pub trait Dim {
+    const DIM: vk::ImageType;
+    fn as_extent(&self) -> vk::Extent3D;
+}
+
+pub struct Dim2D {
+    extent: vk::Extent3D,
+}
+
+impl Dim2D {
+    pub fn new(width: u32, height: u32) -> Self {
+        Self {
+            extent: vk::Extent3D {
+                width,
+                height,
+                depth: 1,
+            }
+        }
+    }
+}
+
+impl Dim for Dim2D {
+    const DIM: vk::ImageType = vk::ImageType::TYPE_2D;
+
+    fn as_extent(&self) -> Extent3D {
+        self.extent
+    }
+}
+
+pub struct Texture<D: Dim> {
+    texture_image: Image,
+    texture_image_memory: DeviceMemory,
+    extent: vk::Extent3D,
+    format: vk::Format,
+    device: Device,
+    _d: PhantomData<D>,
+}
+
+impl<D: Dim> Drop for Texture<D> {
+    fn drop(&mut self) {
+        unsafe {
+            self.device.inner().destroy_image(self.texture_image, None);
+            self.device.inner().free_memory(self.texture_image_memory, None);
+        }
+    }
+}
+
+impl<D: Dim> Texture<D> {
+
+    pub fn format(&self) -> vk::Format{
+        self.format
+    }
+    // pub fn mem_capacity(&self) -> DeviceSize {
+    //     unsafe { self.device.inner().get_image_memory_requirements(self.raw()) }.size
+    // }
+    pub fn device(&self) -> &Device {
+        &self.device
+    }
+    pub fn raw(&self) -> Image {
+        self.texture_image
+    }
+    pub fn extent(&self) -> vk::Extent3D {
+        self.extent
+    }
+    pub fn create_view(&self) -> Result<ImageView, ash::vk::Result> {
+        ImageView::new(self.raw(),self.format(),self.device())
+    }
+    pub fn new(device: &Device, format: vk::Format, dim: D) -> Result<Self, vk::Result> {
+        let layout = vk::ImageLayout::UNDEFINED;
+        let extent = dim.as_extent();
+        let image_create_info = vk::ImageCreateInfo::builder()
+            .image_type(D::DIM)
+            .extent(extent)
+            .format(format)
+            .mip_levels(1)
+            .array_layers(1)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .tiling(vk::ImageTiling::OPTIMAL)
+            .usage(vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE)
+            .initial_layout(layout);
+
+        let texture_image = unsafe { device.inner().create_image(&image_create_info, None) }?;
+
+        let image_memory_requirement = unsafe { device.inner().get_image_memory_requirements(texture_image) };
+        let memory_type = device.find_memory_type(image_memory_requirement,vk::MemoryPropertyFlags::DEVICE_LOCAL);
+        let memory_allocate_info = vk::MemoryAllocateInfo::builder()
+            .allocation_size(image_memory_requirement.size)
+            .memory_type_index(memory_type);
+
+        let texture_image_memory = unsafe { device.inner().allocate_memory(&memory_allocate_info, None) }?;
+        unsafe {
+            device.inner().bind_image_memory(texture_image, texture_image_memory, 0)?
+        }
+        Ok(Self { texture_image, texture_image_memory, format, device: device.clone(), extent, _d: PhantomData })
+    }
+}
+
+
+pub struct StageTexture<D: Dim> {
+    texture: Texture<D>,
+    staging_buffer: Buffer<u8, Cpu>,
+    imageview:ImageView
+}
+impl <D: Dim> StageTexture<D>{
+    pub fn imageview(&self) -> &ImageView{
+        &self.imageview
+    }
+    pub fn texture(&self) -> &Texture<D> {
+        &self.texture
+    }
+    pub fn staging_buffer(&self) -> &Buffer<u8, Cpu> {
+        &self.staging_buffer
+    }
+}
+impl StageTexture<Dim2D> {
+
+    pub fn new(device: &Device, file: &Path, cmd: &CommandPool, flip: bool) -> Result<GpuFuture<Self>, failure::Error> {
+        let img = image::open(file).map_err(err_msg)?;
+        let img = if flip { img.flipv() } else { img };
+        let img = img.into_rgba8();
+        let format = vk::Format::R8G8B8A8_SRGB;
+        // let format: vk::Format = match img.color() {
+        //     ColorType::Rgb8 => vk::Format::R8G8B8_UINT,
+        //     ColorType::Rgba8 => vk::Format::R8G8B8A8_UINT,
+        //     ColorType::Rgb16 => vk::Format::R16G16B16_UINT,
+        //     ColorType::Rgba16 => vk::Format::R16G16B16A16_UINT,
+        //     ColorType::Bgr8 => vk::Format::B8G8R8_UINT,
+        //     ColorType::Bgra8 => vk::Format::B8G8R8A8_UINT,
+        //     x => panic!("Invalid color scheme {:?} for image {:?}", x, file)
+        // };
+        let data = img.as_bytes();
+        let staging_buffer = Buffer::<u8, Cpu>::new(device, data)?;
+        let texture = Texture::new(device, format, Dim2D::new(img.width(), img.height()))?;
+        let imageview = texture.create_view()?;
+        let slf = Self { staging_buffer, texture, imageview };
+        let fence = Fence::new(device,false)?;
+        cmd.create_command_buffer()?
+            .begin(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)?
+            .layout_barrier(slf.texture(), vk::ImageLayout::UNDEFINED, vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+            .copy_to_image(slf.staging_buffer(), slf.texture(), vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+            .layout_barrier(slf.texture(), vk::ImageLayout::TRANSFER_DST_OPTIMAL, vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .end()?
+            .submit(&[],&[], Some(&fence))?;
+        Ok(GpuFuture::new(slf,fence))
+    }
+
+}

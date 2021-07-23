@@ -16,12 +16,14 @@ use crate::swap_chain::SwapChain;
 use crate::vulkan_context::VulkanContext;
 use failure::Error;
 use ash::vk;
-use crate::data::Vertex;
-use crate::buffer::{Buffer, PairedBuffers};
+use crate::data::{VertexClr, VertexClrTex};
+use crate::buffer::{Buffer, StageBuffer};
 use crate::fence::Fence;
 use crate::uniform_buffer::UniformBuffer;
 use crate::descriptor_pool::{DescriptorPool, DescriptorSet};
 use crate::descriptor_layout::DescriptorLayout;
+use crate::texture::{StageTexture, Dim2D};
+use crate::sampler::Sampler;
 
 struct DisplayInner{
     // The order of all fields
@@ -43,33 +45,37 @@ struct DisplayInner{
 }
 
 struct DisplayData{
-    data:PairedBuffers<Vertex>,
-    cmd_pool:CommandPool,
+    data: StageBuffer<VertexClrTex>,
+    texture: StageTexture<Dim2D>,
+    sampler: Sampler
 }
 
 impl DisplayData{
-    pub fn new(vulkan:&VulkanContext) -> Result<DisplayData, ash::vk::Result> {
-        let data: [Vertex; 3] = [
-            Vertex {
+    pub fn new(vulkan:&VulkanContext) -> Result<DisplayData, failure::Error> {
+        let data: [VertexClrTex; 3] = [
+            VertexClrTex {
                 pos: glm::vec2(0.0, -0.5),
-                color: glm::vec3(1.0, 0.0, 0.0),
+                clr: glm::vec3(1.0, 0.0, 0.0),
+                tex: glm::vec2(0.5, 1.0),
             },
-            Vertex {
+            VertexClrTex {
                 pos: glm::vec2(0.5, 0.5),
-                color: glm::vec3(0.0, 1.0, 0.0),
+                clr: glm::vec3(0.0, 1.0, 0.0),
+                tex: glm::vec2(1.0, 0.0),
             },
-            Vertex {
+            VertexClrTex {
                 pos: glm::vec2(-0.5, 0.5),
-                color: glm::vec3(0.0, 0.0, 1.0),
+                clr: glm::vec3(0.0, 0.0, 1.0),
+                tex: glm::vec2(0.0, 0.0),
             },
         ];
         let mut cmd_pool = CommandPool::new(vulkan.device())?;
-        let fence = Fence::new(vulkan.device(), false)?;
-        let future = PairedBuffers::new(vulkan.device(),&cmd_pool, fence,&data)?;
-        let (_, data) = future.get()?;
-        cmd_pool.clear();
-
-        Ok(Self{data,cmd_pool})
+        let data = StageBuffer::new(vulkan.device(), &cmd_pool, &data)?;
+        let texture = StageTexture::new(vulkan.device(), "assets/img/wall.jpg".as_ref(),&cmd_pool, true)?;
+        let (_, data) = data.get()?;
+        let (_, texture) = texture.get()?;
+        let sampler = Sampler::new(vulkan.device(),vk::Filter::NEAREST, true)?;
+        Ok(Self{texture, data, sampler})
 
     }
 }
@@ -81,7 +87,7 @@ impl DisplayInner{
         let image_views = swapchain.create_image_views()?;
         let uniforms:Result<Vec<UniformBuffer<glm::Mat4,1>>,vk::Result> = (0..swapchain.len()).into_iter().map(|_|UniformBuffer::new(vulkan.device(),glm::translation(&glm::vec3(0.,0.2, 0.2)))).collect();
         let uniforms = uniforms?;
-        let descriptor_layout = uniforms[0].create_descriptor_layout(0)?;
+        let descriptor_layout = DescriptorLayout::new_sampler_uniform(&data.sampler,uniforms[0].buffer())?;
         let cmd_pool = CommandPool::new(vulkan.device())?;
         let render_pass = RenderPassBuilder::new()
             .color_attachment(swapchain.format())
@@ -107,7 +113,7 @@ impl DisplayInner{
             .shader("main", vert)
             .scissors(swapchain.render_area())
             .viewports(swapchain.viewport())
-            .vertex_input::<Vertex>(0)
+            .vertex_input(0, data.data.gpu())
             .color_blend_attachment_states(vk::PipelineColorBlendAttachmentState {
                 blend_enable: vk::FALSE,
                 color_write_mask: vk::ColorComponentFlags::all(),
@@ -126,10 +132,11 @@ impl DisplayInner{
                 float32: [0.0, 0.0, 0.0, 1.0],
             },
         }];
-        let descriptor_pool = DescriptorPool::new(vulkan.device(),&swapchain)?;
+        let descriptor_pool = DescriptorPool::new(vulkan.device(),&descriptor_layout,&swapchain)?;
         let descriptor_sets = descriptor_pool.create_sets(&std::iter::repeat(descriptor_layout).take(swapchain.len()).collect::<Vec<DescriptorLayout>>())?;
         for (ds,u) in descriptor_sets.iter().zip(uniforms.iter()){
-            ds.update(u.buffer());
+            ds.update_sampler(0,&data.sampler, data.texture.imageview());
+            ds.update_buffer(1,u.buffer());
         }
         let command_buffers:Result<Vec<CommandBuffer<StateFinished>>,vk::Result> = cmd_pool.create_command_buffers(framebuffers.len() as u32)?
             .into_iter().zip(framebuffers.iter().zip(descriptor_sets.iter())).map(|(cmd,(fb,ds))|

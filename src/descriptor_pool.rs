@@ -5,6 +5,8 @@ use ash::version::DeviceV1_0;
 use crate::descriptor_layout::DescriptorLayout;
 use crate::buffer::{Buffer, Uniform};
 use crate::data::VertexSource;
+use crate::sampler::Sampler;
+use crate::imageview::ImageView;
 
 pub struct DescriptorPool{
     raw:vk::DescriptorPool,
@@ -20,11 +22,8 @@ impl DescriptorPool{
     pub fn device(&self)->&Device{
         &self.device
     }
-    pub fn new(device: &Device, swapchain: &SwapChain) -> Result<Self, ash::vk::Result> {
-        let pool_sizes = [vk::DescriptorPoolSize {
-            ty: vk::DescriptorType::UNIFORM_BUFFER,
-            descriptor_count: swapchain.len() as u32,
-        }];
+    pub fn new(device: &Device, descriptor_layout:&DescriptorLayout, swapchain: &SwapChain) -> Result<Self, ash::vk::Result> {
+        let pool_sizes = descriptor_layout.pool_sizes(swapchain.len());
 
         let descriptor_pool_create_info = vk::DescriptorPoolCreateInfo::builder()
             .max_sets(swapchain.len() as u32)
@@ -58,15 +57,32 @@ impl DescriptorSet{
         self.raw
     }
 
-    pub fn update<T:VertexSource>(&self,buffer:&Buffer<T,Uniform>){
-        let descriptor_buffer_info = buffer.descriptor_info();
+    pub fn update_buffer<T:VertexSource>(&self,binding:u32,buffer:&Buffer<T,Uniform>){
+        assert_eq!(self.layout.layout(binding).descriptor_type, vk::DescriptorType::UNIFORM_BUFFER, "Tried to bind buffer to {} ",binding);
+        let descriptor_info = buffer.descriptor_info();
 
         let descriptor_write_sets = vk::WriteDescriptorSet::builder()
             .dst_set(self.raw)
-            .dst_binding(self.layout.binding())
+            .dst_binding(binding)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-            .buffer_info(std::slice::from_ref(&descriptor_buffer_info));
+            .buffer_info(std::slice::from_ref(&descriptor_info));
+
+        unsafe {
+            self.device.inner().update_descriptor_sets(std::slice::from_ref(&descriptor_write_sets), &[]);
+        }
+    }
+
+    pub fn update_sampler(&self,binding:u32,sampler:&Sampler, image_view:&ImageView){
+        assert_eq!(self.layout.layout(binding).descriptor_type, vk::DescriptorType::COMBINED_IMAGE_SAMPLER);
+        let descriptor_info = sampler.descriptor_info(image_view);
+
+        let descriptor_write_sets = vk::WriteDescriptorSet::builder()
+            .dst_set(self.raw)
+            .dst_binding(binding)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .image_info(std::slice::from_ref(&descriptor_info));
 
         unsafe {
             self.device.inner().update_descriptor_sets(std::slice::from_ref(&descriptor_write_sets), &[]);

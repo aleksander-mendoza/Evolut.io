@@ -18,8 +18,8 @@ impl<T:VertexSource, const size: usize> UniformBuffer<T, size> {
     pub fn device(&self)->&Device{
         self.device()
     }
-    pub fn create_descriptor_layout(&self, binding:u32) -> Result<DescriptorLayout, ash::vk::Result> {
-        DescriptorLayout::from_uniform(binding,&self.buff)
+    pub fn create_descriptor_layout(&self) -> Result<DescriptorLayout, ash::vk::Result> {
+        DescriptorLayout::new_uniform(&self.buff)
     }
     pub fn buffer(&self) -> & Buffer<T, Uniform>{
         &self.buff

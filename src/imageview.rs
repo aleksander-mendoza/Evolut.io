@@ -27,13 +27,16 @@ impl Drop for Framebuffer {
 
 
 pub struct ImageView {
-    img: vk::ImageView,
+    raw: vk::ImageView,
     device: Device,
 }
 
 impl ImageView {
     pub fn device(&self) -> &Device {
         &self.device
+    }
+    pub fn raw(&self) -> vk::ImageView {
+        self.raw
     }
     pub fn new(raw: vk::Image, format: vk::Format, device: &Device) -> Result<Self, ash::vk::Result> {
         let imageview_create_info = vk::ImageViewCreateInfo::builder()
@@ -47,11 +50,10 @@ impl ImageView {
                 layer_count: 1,
             })
             .image(raw);
-        unsafe { device.inner().create_image_view(&imageview_create_info, None) }.map(|img| Self { img, device: device.clone() })
+        unsafe { device.inner().create_image_view(&imageview_create_info, None) }.map(|img| Self { raw: img, device: device.clone() })
     }
-    pub fn create_framebuffer(&self, render_pass: &RenderPass,
-                              swapchain: &SwapChain) -> Result<Framebuffer, ash::vk::Result> {
-        let attachments = [self.img];
+    pub fn create_framebuffer(&self, render_pass: &RenderPass, swapchain: &SwapChain) -> Result<Framebuffer, ash::vk::Result> {
+        let attachments = [self.raw];
         let framebuffer_create_info = vk::FramebufferCreateInfo::builder()
             .render_pass(render_pass.raw())
             .attachments(&attachments)
@@ -67,6 +69,6 @@ impl ImageView {
 
 impl Drop for ImageView {
     fn drop(&mut self) {
-        unsafe { self.device.inner().destroy_image_view(self.img, None); }
+        unsafe { self.device.inner().destroy_image_view(self.raw, None); }
     }
 }

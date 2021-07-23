@@ -9,8 +9,6 @@ use crate::command_pool::CommandPool;
 use crate::fence::Fence;
 use crate::gpu_future::GpuFuture;
 
-
-
 pub trait Type {
     const SHARING_MODE: vk::SharingMode;
     const REQUIRED_MEMORY_FLAGS: vk::MemoryPropertyFlags;
@@ -88,12 +86,7 @@ impl<V: VertexSource, T: Type> Buffer<V, T> {
         let vertex_buffer = unsafe { device.inner().create_buffer(&vertex_buffer_create_info, None) }?;
 
         let mem_requirements = unsafe { device.inner().get_buffer_memory_requirements(vertex_buffer) };
-        let mem_properties = device.get_physical_device_memory_properties();
-        let memory_type = Self::find_memory_type(
-            mem_requirements.memory_type_bits,
-            T::REQUIRED_MEMORY_FLAGS,
-            mem_properties,
-        );
+        let memory_type = device.find_memory_type(mem_requirements,T::REQUIRED_MEMORY_FLAGS);
 
         let allocate_info = vk::MemoryAllocateInfo::builder()
             .memory_type_index(memory_type)
@@ -113,20 +106,7 @@ impl<V: VertexSource, T: Type> Buffer<V, T> {
         })
     }
 
-    fn find_memory_type(
-        type_filter: u32,
-        required_properties: vk::MemoryPropertyFlags,
-        mem_properties: vk::PhysicalDeviceMemoryProperties,
-    ) -> u32 {
-        for (i, memory_type) in mem_properties.memory_types.iter().enumerate() {
-            // same implementation
-            if (type_filter & (1 << i)) > 0 && memory_type.property_flags.contains(required_properties) {
-                return i as u32;
-            }
-        }
 
-        panic!("Failed to find suitable memory type!")
-    }
 }
 
 impl<V: VertexSource> Buffer<V, Uniform> {
@@ -137,6 +117,7 @@ impl<V: VertexSource> Buffer<V, Uniform> {
             range: self.mem_capacity(),
         }
     }
+
 }
 impl<V: VertexSource, T:CpuWriteable> Buffer<V, T> {
     pub fn new(device: &Device, data:&[V]) -> Result<Self, vk::Result> {
@@ -166,12 +147,12 @@ impl<V: VertexSource, T:CpuWriteable> Buffer<V, T> {
 }
 
 
-pub struct PairedBuffers<V: VertexSource>{
+pub struct StageBuffer<V: VertexSource>{
     cpu:Buffer<V,Cpu>,
     gpu:Buffer<V,Gpu>
 }
 
-impl <V: VertexSource> PairedBuffers<V>{
+impl <V: VertexSource> StageBuffer<V>{
     pub fn cpu(&self)->&Buffer<V,Cpu>{
         &self.cpu
     }
@@ -184,9 +165,10 @@ impl <V: VertexSource> PairedBuffers<V>{
         Ok(Self{cpu,gpu})
     }
 
-    pub fn new(device: &Device, cmd:&CommandPool, fence:Fence, data:&[V]) -> Result<GpuFuture<Self>,vk::Result>{
+    pub fn new(device: &Device, cmd:&CommandPool, data:&[V]) -> Result<GpuFuture<Self>,vk::Result>{
         let mut slf = Self::with_capacity(device,data.len())?;
         slf.cpu.map_copy_unmap(0,data)?;
+        let fence = Fence::new(device,false)?;
         cmd.create_command_buffer()?
             .begin(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)?
             .copy(&slf.cpu, &slf.gpu)

@@ -4,11 +4,15 @@ use ash::version::DeviceV1_0;
 use crate::buffer::{Uniform, Buffer};
 use std::rc::Rc;
 use crate::data::VertexSource;
+use crate::descriptor_binding::DescriptorBinding;
+use std::ops::Deref;
+use crate::sampler::Sampler;
+use ash::vk::DescriptorPoolSize;
 
 struct DescriptorLayoutInner{
     raw:vk::DescriptorSetLayout,
     device: Device,
-    binding: u32
+    bindings_to_layout: Vec<Option<vk::DescriptorSetLayoutBinding>>
 }
 impl Drop for DescriptorLayoutInner{
     fn drop(&mut self) {
@@ -20,32 +24,46 @@ impl Drop for DescriptorLayoutInner{
 pub struct DescriptorLayout{
     inner:Rc<DescriptorLayoutInner>
 }
-
 impl DescriptorLayout{
+    pub fn pool_sizes(&self, swapchain_images:usize) -> Vec<DescriptorPoolSize> {
+        let mut sizes = Vec::new();
+        for layout in &self.inner.bindings_to_layout{
+            if let Some(layout) = layout{
+                sizes.push(vk::DescriptorPoolSize {
+                    ty: layout.descriptor_type,
+                    descriptor_count: swapchain_images as u32,
+                });
+            }
+        }
+        sizes
+    }
+    pub fn layout(&self, binding:u32)->&vk::DescriptorSetLayoutBinding{
+        self.inner.bindings_to_layout[binding as usize].as_ref().unwrap()
+    }
+
     pub fn raw(&self)->vk::DescriptorSetLayout{
         self.inner.raw
     }
-    pub fn binding(&self) -> u32 {
-        self.inner.binding
+    pub fn new_uniform<T:VertexSource>(buffer:&Buffer<T,Uniform>) -> Result<DescriptorLayout, ash::vk::Result> {
+        DescriptorLayout::new(buffer.device(),&[buffer.create_binding(0)])
     }
-    pub fn from_uniform<T:VertexSource>(binding:u32, buffer:&Buffer<T,Uniform>) -> Result<DescriptorLayout, ash::vk::Result> {
-        Self::new(buffer.device(),vk::DescriptorSetLayoutBinding {
-            binding,
-            descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
-            descriptor_count: buffer.capacity() as u32,
-            stage_flags: vk::ShaderStageFlags::VERTEX,
-            p_immutable_samplers: std::ptr::null(),
-        })
+    pub fn new_sampler_uniform<T:VertexSource>(sampler:&Sampler, buffer:&Buffer<T,Uniform>) -> Result<DescriptorLayout, ash::vk::Result> {
+        DescriptorLayout::new(buffer.device(),&[sampler.create_binding(0),buffer.create_binding(1)])
     }
-
-    pub fn new(device: &Device, layout:vk::DescriptorSetLayoutBinding) -> Result<Self, ash::vk::Result> {
-        let ubo_layout_bindings = [layout];
-
+    pub fn new(device: &Device, layouts:&[vk::DescriptorSetLayoutBinding]) -> Result<Self, ash::vk::Result> {
+        let max_binding = layouts.iter().map(|l|l.binding).max().expect("No descriptor set layout bindings provided!") as usize;
+        let mut bindings_to_layout = vec![None;max_binding+1];
+        for layout in layouts{
+            let  prev = &mut bindings_to_layout[layout.binding as usize];
+            assert!(prev.is_none());
+            prev.insert(layout.clone());
+        }
         let ubo_layout_create_info = vk::DescriptorSetLayoutCreateInfo::builder()
-            .bindings(&ubo_layout_bindings);
+            .bindings(&layouts);
         unsafe {
             device.inner().create_descriptor_set_layout(&ubo_layout_create_info, None)
-        }.map(|raw|Self{inner:Rc::new(DescriptorLayoutInner{raw,binding:layout.binding, device:device.clone()})})
+        }.map(|raw|Self{inner:Rc::new(DescriptorLayoutInner{raw,bindings_to_layout, device:device.clone()})})
     }
 }
+
 
