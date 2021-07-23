@@ -38,6 +38,7 @@ mod uniform_buffer;
 mod texture;
 mod sampler;
 mod descriptor_binding;
+mod framebuffer;
 
 
 fn main() -> Result<(), failure::Error> {

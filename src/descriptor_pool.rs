@@ -6,7 +6,7 @@ use crate::descriptor_layout::DescriptorLayout;
 use crate::buffer::{Buffer, Uniform};
 use crate::data::VertexSource;
 use crate::sampler::Sampler;
-use crate::imageview::ImageView;
+use crate::imageview::{ImageView, Color};
 
 pub struct DescriptorPool{
     raw:vk::DescriptorPool,
@@ -73,7 +73,7 @@ impl DescriptorSet{
         }
     }
 
-    pub fn update_sampler(&self,binding:u32,sampler:&Sampler, image_view:&ImageView){
+    pub fn update_sampler(&self,binding:u32,sampler:&Sampler, image_view:&ImageView<Color>){
         assert_eq!(self.layout.layout(binding).descriptor_type, vk::DescriptorType::COMBINED_IMAGE_SAMPLER);
         let descriptor_info = sampler.descriptor_info(image_view);
 

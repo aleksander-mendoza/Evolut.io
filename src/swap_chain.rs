@@ -3,11 +3,12 @@ use crate::surface::Surface;
 use crate::window::{WINDOW_WIDTH, WINDOW_HEIGHT};
 use crate::device::Device;
 use ash::version::DeviceV1_0;
-use crate::imageview::ImageView;
+use crate::imageview::{ImageView, Color};
 use ash::prelude::VkResult;
 use crate::semaphore::Semaphore;
 use crate::fence::Fence;
 use crate::instance::Instance;
+use crate::render_pass::RenderPass;
 
 pub struct SwapChain {
     swapchain_loader: ash::extensions::khr::Swapchain,
@@ -104,7 +105,7 @@ impl SwapChain {
         })
     }
 
-    pub fn create_image_views(&self) -> Result<Vec<ImageView>, vk::Result> {
+    pub fn create_image_views(&self) -> Result<Vec<ImageView<Color>>, vk::Result> {
         self.images.iter().map(|&image| ImageView::new(image, self.format, self.device())).collect()
     }
     pub fn len(&self) -> usize {
@@ -158,6 +159,8 @@ impl SwapChain {
             self.swapchain_loader.queue_present(self.device.raw_queue(), &present_info)
         }
     }
+
+
 }
 
 impl Drop for SwapChain {

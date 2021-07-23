@@ -2,6 +2,8 @@ use ash::vk;
 use crate::device::Device;
 use ash::version::DeviceV1_0;
 use std::rc::Rc;
+use crate::texture::{TextureView, Dim2D};
+use crate::imageview::Depth;
 
 struct RenderPassInner {
     raw: vk::RenderPass,
@@ -51,12 +53,27 @@ impl RenderPassBuilder {
         self.attachment(color_attachment)
     }
 
+    pub fn depth_attachment(self, depth_texture: &TextureView<Dim2D,Depth>) -> Self {
+        let depth_attachment = vk::AttachmentDescription {
+            flags: vk::AttachmentDescriptionFlags::empty(),
+            format: depth_texture.format(),
+            samples: vk::SampleCountFlags::TYPE_1,
+            load_op: vk::AttachmentLoadOp::CLEAR,
+            store_op: vk::AttachmentStoreOp::DONT_CARE,
+            stencil_load_op: vk::AttachmentLoadOp::DONT_CARE,
+            stencil_store_op: vk::AttachmentStoreOp::DONT_CARE,
+            initial_layout: vk::ImageLayout::UNDEFINED,
+            final_layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        };
+        self.attachment(depth_attachment)
+    }
+
     pub fn attachment(mut self, att: vk::AttachmentDescription) -> Self {
         self.attachments.push(att);
         self
     }
-    pub fn subpass_with_depth(mut self, bind_point: vk::PipelineBindPoint, inputs: impl Into<Vec<vk::AttachmentReference>>, colors: impl Into<Vec<vk::AttachmentReference>>, depth: vk::AttachmentReference) -> Self {
-        self.subpasses.push((bind_point, inputs.into(), colors.into(), Some(depth)));
+    pub fn graphics_subpass_with_depth(mut self, inputs: impl Into<Vec<vk::AttachmentReference>>, colors: impl Into<Vec<vk::AttachmentReference>>, depth: vk::AttachmentReference) -> Self {
+        self.subpasses.push((vk::PipelineBindPoint::GRAPHICS, inputs.into(), colors.into(), Some(depth)));
         self
     }
     pub fn graphics_subpass(mut self, inputs: impl Into<Vec<vk::AttachmentReference>>, colors: impl Into<Vec<vk::AttachmentReference>>) -> Self {

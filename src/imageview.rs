@@ -3,35 +3,34 @@ use crate::device::Device;
 use ash::version::DeviceV1_0;
 use crate::render_pass::RenderPass;
 use crate::swap_chain::SwapChain;
+use std::marker::PhantomData;
+use crate::framebuffer::Framebuffer;
+use ash::vk::ImageUsageFlags;
 
-pub struct Framebuffer {
-    raw: vk::Framebuffer,
-    device: Device,
-    render_pass: RenderPass,
+
+pub trait Aspect{
+    const ASPECT:vk::ImageAspectFlags;
+    const USAGE:vk::ImageUsageFlags;
 }
 
-impl Framebuffer {
-    pub fn raw(&self) -> vk::Framebuffer {
-        self.raw
-    }
-    pub fn device(&self) -> &Device {
-        &self.device
-    }
+pub struct Color{}
+pub struct Depth{}
+impl Aspect for Color{
+    const ASPECT:vk::ImageAspectFlags=vk::ImageAspectFlags::COLOR;
+    const USAGE: ImageUsageFlags = vk::ImageUsageFlags::from_raw(vk::ImageUsageFlags::TRANSFER_DST.as_raw() | vk::ImageUsageFlags::SAMPLED.as_raw());
+}
+impl Aspect for Depth{
+    const ASPECT:vk::ImageAspectFlags=vk::ImageAspectFlags::DEPTH;
+    const USAGE: ImageUsageFlags = vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT;
 }
 
-impl Drop for Framebuffer {
-    fn drop(&mut self) {
-        unsafe { self.device.inner().destroy_framebuffer(self.raw, None); }
-    }
-}
-
-
-pub struct ImageView {
+pub struct ImageView<A:Aspect> {
     raw: vk::ImageView,
     device: Device,
+    _a:PhantomData<A>
 }
 
-impl ImageView {
+impl <A:Aspect> ImageView<A> {
     pub fn device(&self) -> &Device {
         &self.device
     }
@@ -43,31 +42,24 @@ impl ImageView {
             .view_type(vk::ImageViewType::TYPE_2D)
             .format(format)
             .subresource_range(vk::ImageSubresourceRange {
-                aspect_mask: vk::ImageAspectFlags::COLOR,
+                aspect_mask: A::ASPECT,
                 base_mip_level: 0,
                 level_count: 1,
                 base_array_layer: 0,
                 layer_count: 1,
             })
             .image(raw);
-        unsafe { device.inner().create_image_view(&imageview_create_info, None) }.map(|img| Self { raw: img, device: device.clone() })
-    }
-    pub fn create_framebuffer(&self, render_pass: &RenderPass, swapchain: &SwapChain) -> Result<Framebuffer, ash::vk::Result> {
-        let attachments = [self.raw];
-        let framebuffer_create_info = vk::FramebufferCreateInfo::builder()
-            .render_pass(render_pass.raw())
-            .attachments(&attachments)
-            .width(swapchain.extent().width)
-            .height(swapchain.extent().height)
-            .layers(1);
-
-        unsafe {
-            self.device.inner().create_framebuffer(&framebuffer_create_info, None)
-        }.map(|raw| Framebuffer { raw, device: self.device.clone(), render_pass: render_pass.clone() })
+        unsafe { device.inner().create_image_view(&imageview_create_info, None) }.map(|img| Self { raw: img, device: device.clone(), _a: PhantomData })
     }
 }
+impl ImageView<Color>{
+    pub fn create_framebuffer(&self, render_pass: &RenderPass, swapchain: &SwapChain) -> Result<Framebuffer, ash::vk::Result> {
+        Framebuffer::new(render_pass,swapchain,&[self.raw()])
+    }
 
-impl Drop for ImageView {
+}
+
+impl <A:Aspect> Drop for ImageView<A> {
     fn drop(&mut self) {
         unsafe { self.device.inner().destroy_image_view(self.raw, None); }
     }

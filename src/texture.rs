@@ -3,14 +3,15 @@ use crate::buffer::{Buffer, Cpu};
 use crate::device::Device;
 use ash::vk;
 use std::marker::PhantomData;
-use ash::vk::{Extent3D, DeviceMemory, Image, DeviceSize};
+use ash::vk::{Extent3D, DeviceMemory, Image, DeviceSize, Extent2D};
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use failure::err_msg;
 use std::path::Path;
 use crate::command_pool::{CommandPool, CommandBuffer, OptionalRenderPass};
-use crate::imageview::ImageView;
+use crate::imageview::{ImageView, Aspect, Color, Depth};
 use crate::fence::Fence;
 use crate::gpu_future::GpuFuture;
+use crate::swap_chain::SwapChain;
 
 pub trait Dim {
     const DIM: vk::ImageType;
@@ -33,6 +34,12 @@ impl Dim2D {
     }
 }
 
+impl From<Extent2D> for Dim2D {
+    fn from(e: Extent2D) -> Self {
+        Dim2D::new(e.width, e.height)
+    }
+}
+
 impl Dim for Dim2D {
     const DIM: vk::ImageType = vk::ImageType::TYPE_2D;
 
@@ -41,16 +48,17 @@ impl Dim for Dim2D {
     }
 }
 
-pub struct Texture<D: Dim> {
+pub struct Texture<D: Dim, A:Aspect> {
     texture_image: Image,
     texture_image_memory: DeviceMemory,
     extent: vk::Extent3D,
     format: vk::Format,
     device: Device,
     _d: PhantomData<D>,
+    _a:PhantomData<A>,
 }
 
-impl<D: Dim> Drop for Texture<D> {
+impl<D: Dim, A:Aspect> Drop for Texture<D, A> {
     fn drop(&mut self) {
         unsafe {
             self.device.inner().destroy_image(self.texture_image, None);
@@ -59,9 +67,8 @@ impl<D: Dim> Drop for Texture<D> {
     }
 }
 
-impl<D: Dim> Texture<D> {
-
-    pub fn format(&self) -> vk::Format{
+impl<D: Dim, A:Aspect> Texture<D, A> {
+    pub fn format(&self) -> vk::Format {
         self.format
     }
     // pub fn mem_capacity(&self) -> DeviceSize {
@@ -76,8 +83,8 @@ impl<D: Dim> Texture<D> {
     pub fn extent(&self) -> vk::Extent3D {
         self.extent
     }
-    pub fn create_view(&self) -> Result<ImageView, ash::vk::Result> {
-        ImageView::new(self.raw(),self.format(),self.device())
+    pub fn create_view(&self) -> Result<ImageView<A>, ash::vk::Result> {
+        ImageView::new(self.raw(), self.format(), self.device())
     }
     pub fn new(device: &Device, format: vk::Format, dim: D) -> Result<Self, vk::Result> {
         let layout = vk::ImageLayout::UNDEFINED;
@@ -90,14 +97,14 @@ impl<D: Dim> Texture<D> {
             .array_layers(1)
             .samples(vk::SampleCountFlags::TYPE_1)
             .tiling(vk::ImageTiling::OPTIMAL)
-            .usage(vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED)
+            .usage(A::USAGE)
             .sharing_mode(vk::SharingMode::EXCLUSIVE)
             .initial_layout(layout);
 
         let texture_image = unsafe { device.inner().create_image(&image_create_info, None) }?;
 
         let image_memory_requirement = unsafe { device.inner().get_image_memory_requirements(texture_image) };
-        let memory_type = device.find_memory_type(image_memory_requirement,vk::MemoryPropertyFlags::DEVICE_LOCAL);
+        let memory_type = device.find_memory_type(image_memory_requirement, vk::MemoryPropertyFlags::DEVICE_LOCAL);
         let memory_allocate_info = vk::MemoryAllocateInfo::builder()
             .allocation_size(image_memory_requirement.size)
             .memory_type_index(memory_type);
@@ -106,29 +113,64 @@ impl<D: Dim> Texture<D> {
         unsafe {
             device.inner().bind_image_memory(texture_image, texture_image_memory, 0)?
         }
-        Ok(Self { texture_image, texture_image_memory, format, device: device.clone(), extent, _d: PhantomData })
+        Ok(Self { texture_image, texture_image_memory, format, device: device.clone(), extent, _d: PhantomData , _a: PhantomData })
+    }
+}
+
+
+pub struct TextureView<D: Dim, A:Aspect> {
+    texture: Texture<D, A>,
+    imageview: ImageView<A>,
+}
+
+impl<D: Dim, A:Aspect> TextureView<D, A> {
+    pub fn format(&self) -> vk::Format {
+        self.texture().format()
+    }
+    pub fn imageview(&self) -> &ImageView<A> {
+        &self.imageview
+    }
+    pub fn texture(&self) -> &Texture<D, A> {
+        &self.texture
+    }
+    pub fn new(device: &Device, format: vk::Format, dim: D) -> Result<Self, failure::Error> {
+        let texture = Texture::new(device, format, dim)?;
+        let imageview = texture.create_view()?;
+        Ok(Self { texture, imageview })
+    }
+}
+
+impl <D:Dim> TextureView<D,Color>{
+    pub fn empty_image(device: &Device, format: vk::Format, dim: D) -> Result<Self, failure::Error> {
+        Self::new(device, format, dim)
+    }
+}
+
+impl TextureView<Dim2D,Depth> {
+    pub fn depth_buffer_for(swapchain: &SwapChain) -> Result<Self, failure::Error> {
+        Self::new(swapchain.device(), vk::Format::D32_SFLOAT, Dim2D::from(swapchain.extent()))
     }
 }
 
 
 pub struct StageTexture<D: Dim> {
-    texture: Texture<D>,
+    texture: TextureView<D, Color>,
     staging_buffer: Buffer<u8, Cpu>,
-    imageview:ImageView
 }
-impl <D: Dim> StageTexture<D>{
-    pub fn imageview(&self) -> &ImageView{
-        &self.imageview
+
+impl<D: Dim> StageTexture<D> {
+    pub fn imageview(&self) -> &ImageView<Color> {
+        self.texture.imageview()
     }
-    pub fn texture(&self) -> &Texture<D> {
-        &self.texture
+    pub fn texture(&self) -> &Texture<D, Color> {
+        self.texture.texture()
     }
     pub fn staging_buffer(&self) -> &Buffer<u8, Cpu> {
         &self.staging_buffer
     }
 }
-impl StageTexture<Dim2D> {
 
+impl StageTexture<Dim2D> {
     pub fn new(device: &Device, file: &Path, cmd: &CommandPool, flip: bool) -> Result<GpuFuture<Self>, failure::Error> {
         let img = image::open(file).map_err(err_msg)?;
         let img = if flip { img.flipv() } else { img };
@@ -145,18 +187,19 @@ impl StageTexture<Dim2D> {
         // };
         let data = img.as_bytes();
         let staging_buffer = Buffer::<u8, Cpu>::new(device, data)?;
-        let texture = Texture::new(device, format, Dim2D::new(img.width(), img.height()))?;
-        let imageview = texture.create_view()?;
-        let slf = Self { staging_buffer, texture, imageview };
-        let fence = Fence::new(device,false)?;
+        let texture = TextureView::new(device, format, Dim2D::new(img.width(), img.height()))?;
+        let slf = Self { staging_buffer, texture };
+        let fence = Fence::new(device, false)?;
         cmd.create_command_buffer()?
             .begin(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)?
             .layout_barrier(slf.texture(), vk::ImageLayout::UNDEFINED, vk::ImageLayout::TRANSFER_DST_OPTIMAL)
             .copy_to_image(slf.staging_buffer(), slf.texture(), vk::ImageLayout::TRANSFER_DST_OPTIMAL)
             .layout_barrier(slf.texture(), vk::ImageLayout::TRANSFER_DST_OPTIMAL, vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
             .end()?
-            .submit(&[],&[], Some(&fence))?;
-        Ok(GpuFuture::new(slf,fence))
+            .submit(&[], &[], Some(&fence))?;
+        Ok(GpuFuture::new(slf, fence))
     }
-
 }
+
+
+

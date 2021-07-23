@@ -1,4 +1,3 @@
-
 use winit::window::Window;
 use winit::error::OsError;
 use crate::window::init_window;
@@ -9,7 +8,7 @@ use crate::render_pass::{RenderPassBuilder, RenderPass};
 use crate::shader_module::ShaderModule;
 use ash::vk::{ShaderStageFlags, PhysicalDevice, ClearValue};
 use crate::command_pool::{CommandPool, CommandBuffer, StateFinished};
-use crate::imageview::{Framebuffer, ImageView};
+use crate::imageview::{ImageView, Color, Depth};
 use crate::frames_in_flight::FramesInFlight;
 use crate::surface::Surface;
 use crate::swap_chain::SwapChain;
@@ -22,36 +21,37 @@ use crate::fence::Fence;
 use crate::uniform_buffer::UniformBuffer;
 use crate::descriptor_pool::{DescriptorPool, DescriptorSet};
 use crate::descriptor_layout::DescriptorLayout;
-use crate::texture::{StageTexture, Dim2D};
+use crate::texture::{StageTexture, Dim2D, TextureView};
 use crate::sampler::Sampler;
+use crate::framebuffer::Framebuffer;
 
-struct DisplayInner{
+struct DisplayInner {
     // The order of all fields
     // is very important, because
     // they will be dropped
     // in the exact same order
-
     command_buffers: Vec<CommandBuffer<StateFinished>>,
     descriptor_sets: Vec<DescriptorSet>,
     descriptor_pool: DescriptorPool,
     framebuffers: Vec<Framebuffer>,
     pipeline: Pipeline,
-    clear_values: [ClearValue; 1],
+    clear_values: Vec<ClearValue>,
     render_pass: RenderPass,
+    depth_attachment: TextureView<Dim2D,Depth>,
     cmd_pool: CommandPool,
-    image_views: Vec<ImageView>,
-    uniforms:Vec<UniformBuffer<glm::Mat4,1>>,
+    image_views: Vec<ImageView<Color>>,
+    uniforms: Vec<UniformBuffer<glm::Mat4, 1>>,
     swapchain: SwapChain,
 }
 
-struct DisplayData{
+struct DisplayData {
     data: StageBuffer<VertexClrTex>,
     texture: StageTexture<Dim2D>,
-    sampler: Sampler
+    sampler: Sampler,
 }
 
-impl DisplayData{
-    pub fn new(vulkan:&VulkanContext) -> Result<DisplayData, failure::Error> {
+impl DisplayData {
+    pub fn new(vulkan: &VulkanContext) -> Result<DisplayData, failure::Error> {
         let data: [VertexClrTex; 3] = [
             VertexClrTex {
                 pos: glm::vec2(0.0, -0.5),
@@ -71,37 +71,41 @@ impl DisplayData{
         ];
         let mut cmd_pool = CommandPool::new(vulkan.device())?;
         let data = StageBuffer::new(vulkan.device(), &cmd_pool, &data)?;
-        let texture = StageTexture::new(vulkan.device(), "assets/img/wall.jpg".as_ref(),&cmd_pool, true)?;
+        let texture = StageTexture::new(vulkan.device(), "assets/img/wall.jpg".as_ref(), &cmd_pool, true)?;
         let (_, data) = data.get()?;
         let (_, texture) = texture.get()?;
-        let sampler = Sampler::new(vulkan.device(),vk::Filter::NEAREST, true)?;
-        Ok(Self{texture, data, sampler})
-
+        let sampler = Sampler::new(vulkan.device(), vk::Filter::NEAREST, true)?;
+        Ok(Self { texture, data, sampler })
     }
 }
 
 
-impl DisplayInner{
-    pub fn new(vulkan: &VulkanContext, data:&DisplayData) -> Result<Self, failure::Error> {
+impl DisplayInner {
+    pub fn new(vulkan: &VulkanContext, data: &DisplayData) -> Result<Self, failure::Error> {
         let swapchain = vulkan.instance().create_swapchain(vulkan.device(), vulkan.surface())?;
         let image_views = swapchain.create_image_views()?;
-        let uniforms:Result<Vec<UniformBuffer<glm::Mat4,1>>,vk::Result> = (0..swapchain.len()).into_iter().map(|_|UniformBuffer::new(vulkan.device(),glm::translation(&glm::vec3(0.,0.2, 0.2)))).collect();
+        let uniforms: Result<Vec<UniformBuffer<glm::Mat4, 1>>, vk::Result> = (0..swapchain.len()).into_iter().map(|_| UniformBuffer::new(vulkan.device(), glm::translation(&glm::vec3(0., 0.2, 0.2)))).collect();
         let uniforms = uniforms?;
-        let descriptor_layout = DescriptorLayout::new_sampler_uniform(&data.sampler,uniforms[0].buffer())?;
+        let descriptor_layout = DescriptorLayout::new_sampler_uniform(&data.sampler, uniforms[0].buffer())?;
         let cmd_pool = CommandPool::new(vulkan.device())?;
+        let depth_attachment = TextureView::depth_buffer_for(&swapchain)?;
         let render_pass = RenderPassBuilder::new()
             .color_attachment(swapchain.format())
-            .graphics_subpass([], [vk::AttachmentReference::builder()
+            .depth_attachment(&depth_attachment)
+            .graphics_subpass_with_depth([], [vk::AttachmentReference::builder()
                 .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
                 .attachment(0)
-                .build()])
+                .build()], vk::AttachmentReference::builder()
+                .layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+                .attachment(1)
+                .build())
             .dependency(vk::SubpassDependency {
                 src_subpass: vk::SUBPASS_EXTERNAL,
                 dst_subpass: 0,
-                src_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
-                dst_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+                src_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS,
+                dst_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS,
                 src_access_mask: vk::AccessFlags::empty(),
-                dst_access_mask: vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+                dst_access_mask: vk::AccessFlags::COLOR_ATTACHMENT_WRITE | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
                 dependency_flags: vk::DependencyFlags::empty(),
             })
             .build(&vulkan.device())?;
@@ -125,25 +129,31 @@ impl DisplayInner{
                 alpha_blend_op: vk::BlendOp::ADD,
             })
             .build(&render_pass)?;
-        let framebuffers: Result<Vec<Framebuffer>, vk::Result> = image_views.iter().map(|v| v.create_framebuffer(&render_pass, &swapchain)).collect();
+        let framebuffers: Result<Vec<Framebuffer>, vk::Result> = image_views.iter().map(|v| Framebuffer::new_color_and_depth(&render_pass, &swapchain, v, depth_attachment.imageview())).collect();
         let framebuffers = framebuffers?;
-        let clear_values = [vk::ClearValue {
+        let clear_values = vec![vk::ClearValue {
             color: vk::ClearColorValue {
                 float32: [0.0, 0.0, 0.0, 1.0],
             },
+        }, vk::ClearValue {
+            depth_stencil: vk::ClearDepthStencilValue {
+                depth: 1.,
+                stencil: 0
+            },
         }];
-        let descriptor_pool = DescriptorPool::new(vulkan.device(),&descriptor_layout,&swapchain)?;
+        let descriptor_pool = DescriptorPool::new(vulkan.device(), &descriptor_layout, &swapchain)?;
         let descriptor_sets = descriptor_pool.create_sets(&std::iter::repeat(descriptor_layout).take(swapchain.len()).collect::<Vec<DescriptorLayout>>())?;
-        for (ds,u) in descriptor_sets.iter().zip(uniforms.iter()){
-            ds.update_sampler(0,&data.sampler, data.texture.imageview());
-            ds.update_buffer(1,u.buffer());
+        for (ds, u) in descriptor_sets.iter().zip(uniforms.iter()) {
+            ds.update_sampler(0, &data.sampler, data.texture.imageview());
+            ds.update_buffer(1, u.buffer());
         }
-        let command_buffers:Result<Vec<CommandBuffer<StateFinished>>,vk::Result> = cmd_pool.create_command_buffers(framebuffers.len() as u32)?
-            .into_iter().zip(framebuffers.iter().zip(descriptor_sets.iter())).map(|(cmd,(fb,ds))|
-            cmd.single_pass_vertex_input_uniform(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE,&render_pass,fb,ds,swapchain.render_area(),&clear_values,&pipeline,&data.data.gpu())
+        let command_buffers: Result<Vec<CommandBuffer<StateFinished>>, vk::Result> = cmd_pool.create_command_buffers(framebuffers.len() as u32)?
+            .into_iter().zip(framebuffers.iter().zip(descriptor_sets.iter())).map(|(cmd, (fb, ds))|
+            cmd.single_pass_vertex_input_uniform(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE, &render_pass, fb, ds, swapchain.render_area(), &clear_values, &pipeline, &data.data.gpu())
         ).collect();
         let command_buffers = command_buffers?;
         Ok(Self {
+            depth_attachment,
             command_buffers,
             swapchain,
             image_views,
@@ -154,7 +164,7 @@ impl DisplayInner{
             uniforms,
             clear_values,
             descriptor_pool,
-            descriptor_sets
+            descriptor_sets,
         })
     }
 }
@@ -162,7 +172,7 @@ impl DisplayInner{
 pub struct Display {
     inner: DisplayInner,
     vulkan: VulkanContext,
-    data: DisplayData
+    data: DisplayData,
 }
 
 impl Display {
@@ -175,17 +185,17 @@ impl Display {
     }
 
     pub fn recreate(&mut self) -> Result<(), failure::Error> {
-        self.inner = DisplayInner::new(&self.vulkan,&self.data)?;
+        self.inner = DisplayInner::new(&self.vulkan, &self.data)?;
         Ok(())
     }
 
-    pub fn new(vulkan:VulkanContext) -> Result<Display, failure::Error> {
-        let data =  DisplayData::new(&vulkan)?;
+    pub fn new(vulkan: VulkanContext) -> Result<Display, failure::Error> {
+        let data = DisplayData::new(&vulkan)?;
         let inner = DisplayInner::new(&vulkan, &data)?;
-        Ok(Self{
+        Ok(Self {
             inner,
             vulkan,
-            data
+            data,
         })
     }
 
@@ -199,8 +209,8 @@ impl Display {
         fence.reset()?;
         let command_buffer = &self.inner.command_buffers[image_idx as usize];
         command_buffer.submit(&[(image_available, vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)],
-                               std::slice::from_ref(render_finished),
-                               Some(fence))?;
+                              std::slice::from_ref(render_finished),
+                              Some(fence))?;
         let result = self.inner.swapchain.present(std::slice::from_ref(render_finished), image_idx);
         let is_resized = match result {
             Ok(is_suboptimal) => is_suboptimal,
@@ -209,6 +219,6 @@ impl Display {
             err => err?
         };
         self.vulkan.frames_in_flight_mut().rotate();
-        Ok(is_suboptimal||is_resized)
+        Ok(is_suboptimal || is_resized)
     }
 }

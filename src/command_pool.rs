@@ -3,7 +3,6 @@ use crate::device::Device;
 use ash::version::DeviceV1_0;
 use std::marker::PhantomData;
 use crate::render_pass::RenderPass;
-use crate::imageview::Framebuffer;
 use ash::vk::ClearValue;
 use crate::pipeline::Pipeline;
 use crate::semaphore::Semaphore;
@@ -13,6 +12,8 @@ use crate::buffer::{Buffer, Type};
 use crate::data::VertexSource;
 use crate::descriptor_pool::DescriptorSet;
 use crate::texture::{Dim, Texture};
+use crate::framebuffer::Framebuffer;
+use crate::imageview::{Color, Aspect};
 
 pub trait OptionalRenderPass{}
 
@@ -61,7 +62,7 @@ impl<X:OptionalRenderPass> CommandBuffer<X> {
         self
     }
 
-    pub fn copy_to_image<V:VertexSource, T:Type, D:Dim>(self, src: &Buffer<V,T>, dst: &Texture<D>, img_layout:vk::ImageLayout) -> Self {
+    pub fn copy_to_image<V:VertexSource, T:Type, D:Dim>(self, src: &Buffer<V,T>, dst: &Texture<D, Color>, img_layout:vk::ImageLayout) -> Self {
         // assert_eq!(src.capacity(),dst.capacity());
         unsafe {
             self.device.inner().cmd_copy_buffer_to_image(
@@ -87,7 +88,7 @@ impl<X:OptionalRenderPass> CommandBuffer<X> {
         self
     }
 
-    pub fn layout_barrier<D:Dim>(self, image: &Texture<D>, old_layout:vk::ImageLayout, new_layout:vk::ImageLayout) -> Self {
+    pub fn layout_barrier<D:Dim, A:Aspect>(self, image: &Texture<D, A>, old_layout:vk::ImageLayout, new_layout:vk::ImageLayout) -> Self {
         let src_access_mask;
         let dst_access_mask;
         let source_stage;

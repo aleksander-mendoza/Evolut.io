@@ -2,7 +2,7 @@ use ash::vk;
 use crate::device::Device;
 use ash::version::DeviceV1_0;
 use crate::texture::Texture;
-use crate::imageview::ImageView;
+use crate::imageview::{ImageView, Color};
 
 pub struct Sampler {
     device: Device,
@@ -36,7 +36,7 @@ impl Sampler {
         }.map(|raw|Self{raw,device:device.clone()})
     }
 
-    pub fn descriptor_info(&self, imageview:&ImageView)->vk::DescriptorImageInfo{
+    pub fn descriptor_info(&self, imageview:&ImageView<Color>)->vk::DescriptorImageInfo{
         vk::DescriptorImageInfo {
             sampler: self.raw(),
             image_view: imageview.raw(),
