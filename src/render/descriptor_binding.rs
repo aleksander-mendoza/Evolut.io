@@ -1,8 +1,8 @@
 use ash::vk;
-use crate::buffer::{Buffer, Uniform};
-use crate::data::VertexSource;
+use crate::render::buffer::{Buffer, Uniform};
+use crate::render::data::VertexSource;
 use ash::vk::DescriptorSetLayoutBinding;
-use crate::sampler::Sampler;
+use crate::render::sampler::Sampler;
 
 pub trait DescriptorBinding{
     fn create_binding(&self, binding:u32)->vk::DescriptorSetLayoutBinding;

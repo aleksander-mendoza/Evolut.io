@@ -4,42 +4,15 @@ extern crate nalgebra_glm as glm;
 #[macro_use]
 extern crate memoffset;
 
-use crate::vulkan_context::VulkanContext;
+use crate::render::vulkan_context::VulkanContext;
 use crate::display::Display;
 use winit::event::{Event, VirtualKeyCode, ElementState, KeyboardInput, WindowEvent};
 use winit::event_loop::{EventLoop, ControlFlow};
 use std::ops::{Deref, DerefMut};
 
-mod window;
-mod instance;
-mod constants;
-mod platforms;
-mod validation_layer;
-mod device;
-mod surface;
-mod swap_chain;
 mod block_world;
-mod shader_module;
-mod imageview;
-mod pipeline;
-mod render_pass;
-mod command_pool;
-mod semaphore;
-mod fence;
-mod frames_in_flight;
-mod vulkan_context;
 mod display;
-mod data;
-mod buffer;
-mod gpu_future;
-mod descriptor_pool;
-mod descriptor_layout;
-mod uniform_buffer;
-mod texture;
-mod sampler;
-mod descriptor_binding;
-mod framebuffer;
-
+mod render;
 
 fn main() -> Result<(), failure::Error> {
     let event_loop = EventLoop::new();
@@ -57,7 +30,7 @@ fn main() -> Result<(), failure::Error> {
                 }
             }
             Event::MainEventsCleared => {
-                if display.render().expect("Rendering failed"){
+                if display.render().expect("Rendering failed") {
                     display.device().device_wait_idle().expect("Failed to wait device idle!");
                     display.recreate().expect("Swapchain recreation failed");
                 }

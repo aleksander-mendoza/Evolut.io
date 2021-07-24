@@ -1,10 +1,10 @@
-use crate::frames_in_flight::FramesInFlight;
-use crate::device::Device;
+use crate::render::frames_in_flight::FramesInFlight;
+use crate::render::device::Device;
 use ash::vk::{PhysicalDevice};
-use crate::surface::Surface;
-use crate::instance::Instance;
+use crate::render::surface::Surface;
+use crate::render::instance::Instance;
 use winit::event_loop::EventLoop;
-use crate::window::init_window;
+use crate::render::window::init_window;
 use winit::window::Window;
 
 pub struct VulkanContext {

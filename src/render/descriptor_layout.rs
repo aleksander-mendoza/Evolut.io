@@ -1,12 +1,12 @@
 use ash::vk;
-use crate::device::Device;
+use crate::render::device::Device;
 use ash::version::DeviceV1_0;
-use crate::buffer::{Uniform, Buffer};
+use crate::render::buffer::{Uniform, Buffer};
 use std::rc::Rc;
-use crate::data::VertexSource;
-use crate::descriptor_binding::DescriptorBinding;
+use crate::render::data::VertexSource;
+use crate::render::descriptor_binding::DescriptorBinding;
 use std::ops::Deref;
-use crate::sampler::Sampler;
+use crate::render::sampler::Sampler;
 use ash::vk::DescriptorPoolSize;
 
 struct DescriptorLayoutInner{

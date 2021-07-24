@@ -2,7 +2,7 @@ use winit::event::{Event, VirtualKeyCode, ElementState, KeyboardInput, WindowEve
 use winit::event_loop::{EventLoop, ControlFlow};
 use winit::window::Window;
 use winit::error::OsError;
-use crate::constants::APP_TITLE;
+use crate::render::constants::APP_TITLE;
 
 pub const WINDOW_WIDTH: u32 = 800;
 pub const WINDOW_HEIGHT: u32 = 600;

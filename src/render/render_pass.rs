@@ -1,9 +1,9 @@
 use ash::vk;
-use crate::device::Device;
+use crate::render::device::Device;
 use ash::version::DeviceV1_0;
 use std::rc::Rc;
-use crate::texture::{TextureView, Dim2D};
-use crate::imageview::Depth;
+use crate::render::texture::{TextureView, Dim2D};
+use crate::render::imageview::Depth;
 
 struct RenderPassInner {
     raw: vk::RenderPass,

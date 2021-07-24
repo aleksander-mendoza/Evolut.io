@@ -1,5 +1,5 @@
 use ash::vk;
-use crate::device::Device;
+use crate::render::device::Device;
 use ash::version::DeviceV1_0;
 
 pub struct Semaphore{

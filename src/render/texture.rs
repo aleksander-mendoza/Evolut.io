@@ -1,17 +1,17 @@
 use image::{ColorType, GenericImageView, EncodableLayout};
-use crate::buffer::{Buffer, Cpu};
-use crate::device::Device;
+use crate::render::buffer::{Buffer, Cpu};
+use crate::render::device::Device;
 use ash::vk;
 use std::marker::PhantomData;
 use ash::vk::{Extent3D, DeviceMemory, Image, DeviceSize, Extent2D};
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use failure::err_msg;
 use std::path::Path;
-use crate::command_pool::{CommandPool, CommandBuffer, OptionalRenderPass};
-use crate::imageview::{ImageView, Aspect, Color, Depth};
-use crate::fence::Fence;
-use crate::gpu_future::GpuFuture;
-use crate::swap_chain::SwapChain;
+use crate::render::command_pool::{CommandPool, CommandBuffer, OptionalRenderPass};
+use crate::render::imageview::{ImageView, Aspect, Color, Depth};
+use crate::render::fence::Fence;
+use crate::render::gpu_future::GpuFuture;
+use crate::render::swap_chain::SwapChain;
 
 pub trait Dim {
     const DIM: vk::ImageType;

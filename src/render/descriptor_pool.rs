@@ -1,12 +1,12 @@
 use ash::vk;
-use crate::swap_chain::SwapChain;
-use crate::device::Device;
+use crate::render::swap_chain::SwapChain;
+use crate::render::device::Device;
 use ash::version::DeviceV1_0;
-use crate::descriptor_layout::DescriptorLayout;
-use crate::buffer::{Buffer, Uniform};
-use crate::data::VertexSource;
-use crate::sampler::Sampler;
-use crate::imageview::{ImageView, Color};
+use crate::render::descriptor_layout::DescriptorLayout;
+use crate::render::buffer::{Buffer, Uniform};
+use crate::render::data::VertexSource;
+use crate::render::sampler::Sampler;
+use crate::render::imageview::{ImageView, Color};
 
 pub struct DescriptorPool{
     raw:vk::DescriptorPool,

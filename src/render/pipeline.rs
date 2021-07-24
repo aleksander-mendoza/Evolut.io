@@ -1,15 +1,15 @@
-use crate::shader_module::ShaderModule;
+use crate::render::shader_module::ShaderModule;
 use ash::vk;
-use crate::device::Device;
+use crate::render::device::Device;
 use ash::version::DeviceV1_0;
 use std::ffi::{CStr, CString};
 use failure::err_msg;
-use crate::render_pass::{RenderPassBuilder, RenderPass};
+use crate::render::render_pass::{RenderPassBuilder, RenderPass};
 use std::rc::Rc;
 use ash::vk::PipelineLayout;
-use crate::data::VertexSource;
-use crate::descriptor_layout::DescriptorLayout;
-use crate::buffer::{Buffer, Type};
+use crate::render::data::VertexSource;
+use crate::render::descriptor_layout::DescriptorLayout;
+use crate::render::buffer::{Buffer, Type};
 
 
 pub struct Pipeline {

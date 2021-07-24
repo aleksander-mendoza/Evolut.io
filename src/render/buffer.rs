@@ -1,13 +1,13 @@
 use ash::vk;
-use crate::data::VertexSource;
-use crate::device::Device;
+use crate::render::data::VertexSource;
+use crate::render::device::Device;
 use ash::version::{DeviceV1_0, InstanceV1_0};
-use crate::instance::Instance;
+use crate::render::instance::Instance;
 use std::ops::{Deref, DerefMut};
 use std::marker::PhantomData;
-use crate::command_pool::CommandPool;
-use crate::fence::Fence;
-use crate::gpu_future::GpuFuture;
+use crate::render::command_pool::CommandPool;
+use crate::render::fence::Fence;
+use crate::render::gpu_future::GpuFuture;
 
 pub trait Type {
     const SHARING_MODE: vk::SharingMode;

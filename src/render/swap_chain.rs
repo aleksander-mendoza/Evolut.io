@@ -1,14 +1,14 @@
 use ash::vk;
-use crate::surface::Surface;
-use crate::window::{WINDOW_WIDTH, WINDOW_HEIGHT};
-use crate::device::Device;
+use crate::render::surface::Surface;
+use crate::render::window::{WINDOW_WIDTH, WINDOW_HEIGHT};
+use crate::render::device::Device;
 use ash::version::DeviceV1_0;
-use crate::imageview::{ImageView, Color};
+use crate::render::imageview::{ImageView, Color};
 use ash::prelude::VkResult;
-use crate::semaphore::Semaphore;
-use crate::fence::Fence;
-use crate::instance::Instance;
-use crate::render_pass::RenderPass;
+use crate::render::semaphore::Semaphore;
+use crate::render::fence::Fence;
+use crate::render::instance::Instance;
+use crate::render::render_pass::RenderPass;
 
 pub struct SwapChain {
     swapchain_loader: ash::extensions::khr::Swapchain,

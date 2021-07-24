@@ -1,7 +1,7 @@
-use crate::buffer::{Buffer, Uniform};
-use crate::device::Device;
-use crate::data::VertexSource;
-use crate::descriptor_layout::DescriptorLayout;
+use crate::render::buffer::{Buffer, Uniform};
+use crate::render::device::Device;
+use crate::render::data::VertexSource;
+use crate::render::descriptor_layout::DescriptorLayout;
 
 pub struct UniformBuffer<T:VertexSource, const size: usize> {
     data: [T; size],

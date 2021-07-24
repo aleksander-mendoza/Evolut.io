@@ -1,8 +1,8 @@
 use ash::vk;
-use crate::device::Device;
+use crate::render::device::Device;
 use ash::version::DeviceV1_0;
-use crate::texture::Texture;
-use crate::imageview::{ImageView, Color};
+use crate::render::texture::Texture;
+use crate::render::imageview::{ImageView, Color};
 
 pub struct Sampler {
     device: Device,

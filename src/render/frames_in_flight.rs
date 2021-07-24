@@ -1,8 +1,8 @@
-use crate::semaphore::Semaphore;
-use crate::fence::Fence;
-use crate::device::Device;
+use crate::render::semaphore::Semaphore;
+use crate::render::fence::Fence;
+use crate::render::device::Device;
 use ash::vk;
-use crate::swap_chain::SwapChain;
+use crate::render::swap_chain::SwapChain;
 
 pub struct FramesInFlight{
     image_available_semaphores:Vec<Semaphore>,

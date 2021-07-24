@@ -1,4 +1,4 @@
-use crate::fence::Fence;
+use crate::render::fence::Fence;
 use ash::vk;
 
 pub struct GpuFuture<T>{

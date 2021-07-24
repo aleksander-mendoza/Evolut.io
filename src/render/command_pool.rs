@@ -1,19 +1,19 @@
 use ash::vk;
-use crate::device::Device;
+use crate::render::device::Device;
 use ash::version::DeviceV1_0;
 use std::marker::PhantomData;
-use crate::render_pass::RenderPass;
+use crate::render::render_pass::RenderPass;
 use ash::vk::ClearValue;
-use crate::pipeline::Pipeline;
-use crate::semaphore::Semaphore;
+use crate::render::pipeline::Pipeline;
+use crate::render::semaphore::Semaphore;
 use ash::prelude::VkResult;
-use crate::fence::Fence;
-use crate::buffer::{Buffer, Type};
-use crate::data::VertexSource;
-use crate::descriptor_pool::DescriptorSet;
-use crate::texture::{Dim, Texture};
-use crate::framebuffer::Framebuffer;
-use crate::imageview::{Color, Aspect};
+use crate::render::fence::Fence;
+use crate::render::buffer::{Buffer, Type};
+use crate::render::data::VertexSource;
+use crate::render::descriptor_pool::DescriptorSet;
+use crate::render::texture::{Dim, Texture};
+use crate::render::framebuffer::Framebuffer;
+use crate::render::imageview::{Color, Aspect};
 
 pub trait OptionalRenderPass{}
 

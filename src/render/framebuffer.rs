@@ -1,10 +1,10 @@
 use ash::vk;
-use crate::device::Device;
-use crate::render_pass::RenderPass;
+use crate::render::device::Device;
+use crate::render::render_pass::RenderPass;
 use ash::version::DeviceV1_0;
-use crate::swap_chain::SwapChain;
-use crate::imageview::{ImageView, Depth, Color};
-use crate::texture::Dim2D;
+use crate::render::swap_chain::SwapChain;
+use crate::render::imageview::{ImageView, Depth, Color};
+use crate::render::texture::Dim2D;
 
 pub struct Framebuffer {
     raw: vk::Framebuffer,
