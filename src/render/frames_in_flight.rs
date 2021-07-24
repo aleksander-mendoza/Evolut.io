@@ -35,6 +35,10 @@ impl FramesInFlight{
         self.current_frame = (self.current_frame+1)%self.len();
     }
 
+    pub fn current(&self)->usize{
+        self.current_frame
+    }
+
     pub fn current_fence(&self)->&Fence{
         &self.in_flight_fences[self.current_frame]
     }

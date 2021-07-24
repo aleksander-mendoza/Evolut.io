@@ -3,17 +3,18 @@ use crate::render::buffer::{Buffer, Uniform};
 use crate::render::data::VertexSource;
 use ash::vk::DescriptorSetLayoutBinding;
 use crate::render::sampler::Sampler;
+use crate::render::uniform_buffer::UniformBuffers;
 
 pub trait DescriptorBinding{
     fn create_binding(&self, binding:u32)->vk::DescriptorSetLayoutBinding;
 }
 
-impl <V:VertexSource> DescriptorBinding for Buffer<V,Uniform>{
+impl <V,const size:usize> DescriptorBinding for UniformBuffers<V,size>{
     fn create_binding(&self, binding: u32) -> DescriptorSetLayoutBinding {
         vk::DescriptorSetLayoutBinding {
             binding,
             descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
-            descriptor_count: self.capacity() as u32,
+            descriptor_count: size as u32,
             stage_flags: vk::ShaderStageFlags::VERTEX,
             p_immutable_samplers: std::ptr::null(),
         }

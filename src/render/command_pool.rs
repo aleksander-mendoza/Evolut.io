@@ -8,14 +8,14 @@ use crate::render::pipeline::Pipeline;
 use crate::render::semaphore::Semaphore;
 use ash::prelude::VkResult;
 use crate::render::fence::Fence;
-use crate::render::buffer::{Buffer, Type};
+use crate::render::buffer::{Buffer, Type, Gpu, Cpu, GpuIndirect};
 use crate::render::data::VertexSource;
 use crate::render::descriptor_pool::DescriptorSet;
 use crate::render::texture::{Dim, Texture};
 use crate::render::framebuffer::Framebuffer;
 use crate::render::imageview::{Color, Aspect};
 
-pub trait OptionalRenderPass{}
+pub trait OptionalRenderPass {}
 
 pub struct StateClear {}
 
@@ -25,8 +25,9 @@ pub struct StateRenderPassBegan {}
 
 pub struct StateFinished {}
 
-impl OptionalRenderPass for StateBegan{}
-impl OptionalRenderPass for StateRenderPassBegan{}
+impl OptionalRenderPass for StateBegan {}
+
+impl OptionalRenderPass for StateRenderPassBegan {}
 
 pub struct CommandBuffer<State> {
     raw: vk::CommandBuffer,
@@ -35,34 +36,32 @@ pub struct CommandBuffer<State> {
 }
 
 impl<X> CommandBuffer<X> {
-
     fn state_transition<Y>(self) -> CommandBuffer<Y> {
-        let Self{raw, device, ..} = self;
-        CommandBuffer{raw, device, _state:PhantomData}
+        let Self { raw, device, .. } = self;
+        CommandBuffer { raw, device, _state: PhantomData }
     }
 }
 
 
-impl<X:OptionalRenderPass> CommandBuffer<X> {
-
-    pub fn copy<V:VertexSource, T1:Type, T2:Type>(self, src: &Buffer<V,T1>, dst: &Buffer<V,T2>) -> Self {
-        assert_eq!(src.capacity(),dst.capacity());
+impl<X: OptionalRenderPass> CommandBuffer<X> {
+    pub fn copy<V, T1: Type, T2: Type>(self, src: &Buffer<V, T1>, dst: &Buffer<V, T2>) -> Self {
+        assert_eq!(src.capacity(), dst.capacity());
         unsafe {
             self.device.inner().cmd_copy_buffer(
                 self.raw,
                 src.raw(),
                 dst.raw(),
-                &[vk::BufferCopy{
+                &[vk::BufferCopy {
                     src_offset: 0,
                     dst_offset: 0,
-                    size: src.mem_capacity()
-                }]
+                    size: src.mem_capacity(),
+                }],
             );
         }
         self
     }
 
-    pub fn copy_to_image<V:VertexSource, T:Type, D:Dim>(self, src: &Buffer<V,T>, dst: &Texture<D, Color>, img_layout:vk::ImageLayout) -> Self {
+    pub fn copy_to_image<V, T: Type, D: Dim>(self, src: &Buffer<V, T>, dst: &Texture<D, Color>, img_layout: vk::ImageLayout) -> Self {
         // assert_eq!(src.capacity(),dst.capacity());
         unsafe {
             self.device.inner().cmd_copy_buffer_to_image(
@@ -70,7 +69,7 @@ impl<X:OptionalRenderPass> CommandBuffer<X> {
                 src.raw(),
                 dst.raw(),
                 img_layout,
-                &[vk::BufferImageCopy{
+                &[vk::BufferImageCopy {
                     buffer_offset: 0,
                     buffer_row_length: 0,
                     buffer_image_height: 0,
@@ -81,14 +80,14 @@ impl<X:OptionalRenderPass> CommandBuffer<X> {
                         layer_count: 1,
                     },
                     image_offset: vk::Offset3D { x: 0, y: 0, z: 0 },
-                    image_extent: dst.extent()
-                }]
+                    image_extent: dst.extent(),
+                }],
             );
         }
         self
     }
 
-    pub fn layout_barrier<D:Dim, A:Aspect>(self, image: &Texture<D, A>, old_layout:vk::ImageLayout, new_layout:vk::ImageLayout) -> Self {
+    pub fn layout_barrier<D: Dim, A: Aspect>(self, image: &Texture<D, A>, old_layout: vk::ImageLayout, new_layout: vk::ImageLayout) -> Self {
         let src_access_mask;
         let dst_access_mask;
         let source_stage;
@@ -164,14 +163,14 @@ impl CommandBuffer<StateClear> {
             .end()
     }
 
-    pub fn single_pass_vertex_input<V:VertexSource, T:Type>(self,
-                       usage: vk::CommandBufferUsageFlags,
-                       render_pass: &RenderPass,
-                       framebuffer: &Framebuffer,
-                       render_area: vk::Rect2D,
-                       clear: &[ClearValue],
-                       pipeline: &Pipeline,
-                       buffer:&Buffer<V,T>) -> Result<CommandBuffer<StateFinished>, vk::Result> {
+    pub fn single_pass_vertex_input<V: VertexSource, T: Type>(self,
+                                                              usage: vk::CommandBufferUsageFlags,
+                                                              render_pass: &RenderPass,
+                                                              framebuffer: &Framebuffer,
+                                                              render_area: vk::Rect2D,
+                                                              clear: &[ClearValue],
+                                                              pipeline: &Pipeline,
+                                                              buffer: &Buffer<V, T>) -> Result<CommandBuffer<StateFinished>, vk::Result> {
         self.begin(usage)?
             .render_pass(render_pass, framebuffer, render_area, clear)
             .bind_pipeline(pipeline)
@@ -181,21 +180,41 @@ impl CommandBuffer<StateClear> {
             .end()
     }
 
-    pub fn single_pass_vertex_input_uniform<V:VertexSource, T:Type>(self,
-                                                            usage: vk::CommandBufferUsageFlags,
-                                                            render_pass: &RenderPass,
-                                                            framebuffer: &Framebuffer,
-                                                            uniform: &DescriptorSet,
-                                                            render_area: vk::Rect2D,
-                                                            clear: &[ClearValue],
-                                                            pipeline: &Pipeline,
-                                                            buffer:&Buffer<V,T>) -> Result<CommandBuffer<StateFinished>, vk::Result> {
+    pub fn single_pass_vertex_input_uniform<V: VertexSource, T: Type>(self,
+                                                                      usage: vk::CommandBufferUsageFlags,
+                                                                      render_pass: &RenderPass,
+                                                                      framebuffer: &Framebuffer,
+                                                                      uniform: &DescriptorSet,
+                                                                      render_area: vk::Rect2D,
+                                                                      clear: &[ClearValue],
+                                                                      pipeline: &Pipeline,
+                                                                      buffer: &Buffer<V, T>) -> Result<CommandBuffer<StateFinished>, vk::Result> {
         self.begin(usage)?
             .render_pass(render_pass, framebuffer, render_area, clear)
             .bind_pipeline(pipeline)
             .vertex_input(buffer)
             .uniform(pipeline, uniform)
             .draw(buffer.capacity() as u32, 1, 0, 0)
+            .end_render_pass()
+            .end()
+    }
+
+    pub fn single_pass_indirect_input_uniform<V: VertexSource, T: Type>(self,
+                                                                        usage: vk::CommandBufferUsageFlags,
+                                                                        render_pass: &RenderPass,
+                                                                        framebuffer: &Framebuffer,
+                                                                        uniform: &DescriptorSet,
+                                                                        render_area: vk::Rect2D,
+                                                                        clear: &[ClearValue],
+                                                                        pipeline: &Pipeline,
+                                                                        buffer: &Buffer<V, T>,
+                                                                        indirect_buffer:&Buffer<vk::DrawIndirectCommand,GpuIndirect>) -> Result<CommandBuffer<StateFinished>, vk::Result> {
+        self.begin(usage)?
+            .render_pass(render_pass, framebuffer, render_area, clear)
+            .bind_pipeline(pipeline)
+            .vertex_input(buffer)
+            .uniform(pipeline, uniform)
+            .draw_indirect(indirect_buffer)
             .end_render_pass()
             .end()
     }
@@ -229,7 +248,6 @@ impl CommandBuffer<StateBegan> {
 }
 
 impl CommandBuffer<StateRenderPassBegan> {
-
     pub fn bind_pipeline(self, pipeline: &Pipeline) -> Self {
         unsafe {
             self.device.inner().cmd_bind_pipeline(
@@ -240,13 +258,13 @@ impl CommandBuffer<StateRenderPassBegan> {
         }
         self
     }
-    pub fn vertex_input<V:VertexSource, T:Type>(self, buffer: &Buffer<V,T>) -> Self {
+    pub fn vertex_input<V: VertexSource, T: Type>(self, buffer: &Buffer<V, T>) -> Self {
         unsafe {
             self.device.inner().cmd_bind_vertex_buffers(
                 self.raw,
                 0,
                 &[buffer.raw()],
-                &[0]
+                &[0],
             );
         }
         self
@@ -272,6 +290,18 @@ impl CommandBuffer<StateRenderPassBegan> {
                 instance_count,
                 first_vertex,
                 first_instance,
+            );
+        }
+        self
+    }
+    pub fn draw_indirect(self, buffer: &Buffer<vk::DrawIndirectCommand, GpuIndirect>) -> Self {
+        unsafe {
+            self.device.inner().cmd_draw_indirect(
+                self.raw,
+                buffer.raw(),
+                buffer.offset() as u64,
+                buffer.len() as u32,
+                std::mem::size_of::<vk::DrawIndirectCommand>() as u32,
             );
         }
         self
@@ -320,7 +350,7 @@ impl CommandPool {
         }.map(|raw| Self { raw, device: device.clone() })
     }
     pub fn clear(&mut self) -> VkResult<()> {
-        unsafe { self.device.inner().reset_command_pool(self.raw,vk::CommandPoolResetFlags::RELEASE_RESOURCES) }
+        unsafe { self.device.inner().reset_command_pool(self.raw, vk::CommandPoolResetFlags::RELEASE_RESOURCES) }
     }
     pub fn create_command_buffer(&self) -> Result<CommandBuffer<StateClear>, vk::Result> {
         self.create_command_buffers(1).map(|v| v.into_iter().next().unwrap())
@@ -336,7 +366,7 @@ impl CommandPool {
                 .allocate_command_buffers(&command_buffer_allocate_info)
         }.map(|vec| vec.into_iter().map(|raw| CommandBuffer { raw, device: self.device.clone(), _state: PhantomData }).collect())
     }
-    pub fn free(&self,cmd:CommandBuffer<StateFinished>) {
+    pub fn free(&self, cmd: CommandBuffer<StateFinished>) {
         unsafe {
             self.device.inner().free_command_buffers(self.raw, &[cmd.raw])
         }

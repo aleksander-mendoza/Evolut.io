@@ -74,7 +74,6 @@ impl SwapChain {
         } else {
             image_count
         };
-
         let swapchain_create_info = vk::SwapchainCreateInfoKHR::builder()
             .surface(surface.raw())
             .min_image_count(image_count)

@@ -10,6 +10,9 @@ pub struct Sampler {
 }
 
 impl Sampler {
+    pub fn  device(&self) -> &Device{
+        &self.device
+    }
     pub fn raw(&self)->vk::Sampler{
         self.raw
     }

@@ -6,7 +6,7 @@ use crate::render::device::{pick_physical_device, Device};
 use crate::render::pipeline::{PipelineBuilder, Pipeline};
 use crate::render::render_pass::{RenderPassBuilder, RenderPass};
 use crate::render::shader_module::ShaderModule;
-use ash::vk::{ShaderStageFlags, PhysicalDevice, ClearValue};
+use ash::vk::{ShaderStageFlags, PhysicalDevice, ClearValue, VertexInputAttributeDescription};
 use crate::render::command_pool::{CommandPool, CommandBuffer, StateFinished};
 use crate::render::imageview::{ImageView, Color, Depth};
 use crate::render::frames_in_flight::FramesInFlight;
@@ -15,15 +15,32 @@ use crate::render::swap_chain::SwapChain;
 use crate::render::vulkan_context::VulkanContext;
 use failure::Error;
 use ash::vk;
-use crate::render::data::{VertexClr, VertexClrTex};
-use crate::render::buffer::{Buffer, StageBuffer};
+use crate::render::data::{VertexClr, VertexClrTex, VertexSource};
+use crate::render::buffer::{Buffer, StageBuffer, VertexBuffer, IndirectBuffer};
 use crate::render::fence::Fence;
-use crate::render::uniform_buffer::UniformBuffer;
+use crate::render::uniform_buffer::{ UniformBuffers};
 use crate::render::descriptor_pool::{DescriptorPool, DescriptorSet};
 use crate::render::descriptor_layout::DescriptorLayout;
 use crate::render::texture::{StageTexture, Dim2D, TextureView};
 use crate::render::sampler::Sampler;
 use crate::render::framebuffer::Framebuffer;
+
+#[derive(Debug)]
+pub struct UniformData{
+    pub mvp:glm::Mat4
+}
+
+impl UniformData{
+    fn new()->Self{
+        Self{mvp:glm::translation(&glm::vec3(0., 0.2, 0.2)) }
+    }
+}
+
+impl VertexSource for UniformData{
+    fn get_attribute_descriptions(binding: u32) -> Vec<VertexInputAttributeDescription> {
+        glm::Mat4::get_attribute_descriptions(binding)
+    }
+}
 
 struct DisplayInner {
     // The order of all fields
@@ -37,15 +54,16 @@ struct DisplayInner {
     pipeline: Pipeline,
     clear_values: Vec<ClearValue>,
     render_pass: RenderPass,
-    depth_attachment: TextureView<Dim2D,Depth>,
+    depth_attachment: TextureView<Dim2D, Depth>,
     cmd_pool: CommandPool,
     image_views: Vec<ImageView<Color>>,
-    uniforms: Vec<UniformBuffer<glm::Mat4, 1>>,
+    uniforms: UniformBuffers<UniformData, 1>,
     swapchain: SwapChain,
 }
 
 struct DisplayData {
-    data: StageBuffer<VertexClrTex>,
+    data: VertexBuffer<VertexClrTex>,
+    indirect: IndirectBuffer,
     texture: StageTexture<Dim2D>,
     sampler: Sampler,
 }
@@ -70,12 +88,19 @@ impl DisplayData {
             },
         ];
         let mut cmd_pool = CommandPool::new(vulkan.device())?;
-        let data = StageBuffer::new(vulkan.device(), &cmd_pool, &data)?;
+        let data = StageBuffer::new_vertex_buffer(vulkan.device(), &cmd_pool, &data)?;
+        let indirect = StageBuffer::new_indirect_buffer(vulkan.device(), &cmd_pool, &[vk::DrawIndirectCommand{
+            vertex_count: 3,
+            instance_count: 4,
+            first_vertex: 0,
+            first_instance: 0
+        }])?;
         let texture = StageTexture::new(vulkan.device(), "assets/img/wall.jpg".as_ref(), &cmd_pool, true)?;
         let (_, data) = data.get()?;
         let (_, texture) = texture.get()?;
+        let (_, indirect) = indirect.get()?;
         let sampler = Sampler::new(vulkan.device(), vk::Filter::NEAREST, true)?;
-        Ok(Self { texture, data, sampler })
+        Ok(Self { texture, data, sampler ,indirect})
     }
 }
 
@@ -84,9 +109,8 @@ impl DisplayInner {
     pub fn new(vulkan: &VulkanContext, data: &DisplayData) -> Result<Self, failure::Error> {
         let swapchain = vulkan.instance().create_swapchain(vulkan.device(), vulkan.surface())?;
         let image_views = swapchain.create_image_views()?;
-        let uniforms: Result<Vec<UniformBuffer<glm::Mat4, 1>>, vk::Result> = (0..swapchain.len()).into_iter().map(|_| UniformBuffer::new(vulkan.device(), glm::translation(&glm::vec3(0., 0.2, 0.2)))).collect();
-        let uniforms = uniforms?;
-        let descriptor_layout = DescriptorLayout::new_sampler_uniform(&data.sampler, uniforms[0].buffer())?;
+        let uniforms = UniformBuffers::new(vulkan.device(),&swapchain, UniformData::new())?;
+        let descriptor_layout = DescriptorLayout::new_sampler_uniform(&data.sampler, &uniforms)?;
         let cmd_pool = CommandPool::new(vulkan.device())?;
         let depth_attachment = TextureView::depth_buffer_for(&swapchain)?;
         let render_pass = RenderPassBuilder::new()
@@ -96,9 +120,9 @@ impl DisplayInner {
                 .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
                 .attachment(0)
                 .build()], vk::AttachmentReference::builder()
-                .layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-                .attachment(1)
-                .build())
+                                             .layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+                                             .attachment(1)
+                                             .build())
             .dependency(vk::SubpassDependency {
                 src_subpass: vk::SUBPASS_EXTERNAL,
                 dst_subpass: 0,
@@ -138,18 +162,26 @@ impl DisplayInner {
         }, vk::ClearValue {
             depth_stencil: vk::ClearDepthStencilValue {
                 depth: 1.,
-                stencil: 0
+                stencil: 0,
             },
         }];
         let descriptor_pool = DescriptorPool::new(vulkan.device(), &descriptor_layout, &swapchain)?;
         let descriptor_sets = descriptor_pool.create_sets(&std::iter::repeat(descriptor_layout).take(swapchain.len()).collect::<Vec<DescriptorLayout>>())?;
-        for (ds, u) in descriptor_sets.iter().zip(uniforms.iter()) {
+        for (ds, u) in descriptor_sets.iter().zip(uniforms.buffers()) {
             ds.update_sampler(0, &data.sampler, data.texture.imageview());
-            ds.update_buffer(1, u.buffer());
+            ds.update_buffer(1, u);
         }
         let command_buffers: Result<Vec<CommandBuffer<StateFinished>>, vk::Result> = cmd_pool.create_command_buffers(framebuffers.len() as u32)?
             .into_iter().zip(framebuffers.iter().zip(descriptor_sets.iter())).map(|(cmd, (fb, ds))|
-            cmd.single_pass_vertex_input_uniform(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE, &render_pass, fb, ds, swapchain.render_area(), &clear_values, &pipeline, &data.data.gpu())
+            cmd.single_pass_indirect_input_uniform(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE,
+                                                   &render_pass,
+                                                   fb,
+                                                   ds,
+                                                   swapchain.render_area(),
+                                                   &clear_values,
+                                                   &pipeline,
+                                                   data.data.gpu(),
+                                                   data.indirect.gpu())
         ).collect();
         let command_buffers = command_buffers?;
         Ok(Self {
@@ -183,7 +215,15 @@ impl Display {
         let Self { vulkan, .. } = self;
         vulkan
     }
-
+    pub fn swapchain(&self) -> &SwapChain {
+        &self.inner.swapchain
+    }
+    pub fn extent(&self) -> vk::Extent2D {
+        self.swapchain().extent()
+    }
+    pub fn uniforms_mut(&mut self)->&mut UniformData{
+        &mut self.inner.uniforms.data[0]
+    }
     pub fn recreate(&mut self) -> Result<(), failure::Error> {
         self.inner = DisplayInner::new(&self.vulkan, &self.data)?;
         Ok(())
@@ -207,6 +247,7 @@ impl Display {
         let (image_idx, is_suboptimal) = self.inner.swapchain.acquire_next_image(None, Some(image_available), None)?;
         let render_finished = self.vulkan.frames_in_flight().current_rendering();
         fence.reset()?;
+        self.inner.uniforms.flush(image_idx as usize)?;
         let command_buffer = &self.inner.command_buffers[image_idx as usize];
         command_buffer.submit(&[(image_available, vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)],
                               std::slice::from_ref(render_finished),

@@ -8,6 +8,7 @@ use crate::render::descriptor_binding::DescriptorBinding;
 use std::ops::Deref;
 use crate::render::sampler::Sampler;
 use ash::vk::DescriptorPoolSize;
+use crate::render::uniform_buffer::UniformBuffers;
 
 struct DescriptorLayoutInner{
     raw:vk::DescriptorSetLayout,
@@ -44,11 +45,11 @@ impl DescriptorLayout{
     pub fn raw(&self)->vk::DescriptorSetLayout{
         self.inner.raw
     }
-    pub fn new_uniform<T:VertexSource>(buffer:&Buffer<T,Uniform>) -> Result<DescriptorLayout, ash::vk::Result> {
+    pub fn new_uniform<T,const size:usize>(buffer:&UniformBuffers<T,size>) -> Result<DescriptorLayout, ash::vk::Result> {
         DescriptorLayout::new(buffer.device(),&[buffer.create_binding(0)])
     }
-    pub fn new_sampler_uniform<T:VertexSource>(sampler:&Sampler, buffer:&Buffer<T,Uniform>) -> Result<DescriptorLayout, ash::vk::Result> {
-        DescriptorLayout::new(buffer.device(),&[sampler.create_binding(0),buffer.create_binding(1)])
+    pub fn new_sampler_uniform<T,const size:usize>(sampler:&Sampler, buffer:&UniformBuffers<T,size>) -> Result<DescriptorLayout, ash::vk::Result> {
+        DescriptorLayout::new(sampler.device(),&[sampler.create_binding(0),buffer.create_binding(1)])
     }
     pub fn new(device: &Device, layouts:&[vk::DescriptorSetLayoutBinding]) -> Result<Self, ash::vk::Result> {
         let max_binding = layouts.iter().map(|l|l.binding).max().expect("No descriptor set layout bindings provided!") as usize;
