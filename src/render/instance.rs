@@ -58,8 +58,8 @@ impl Instance {
         Device::new(entry, &self,physical_device)
     }
 
-    pub fn create_surface(&self,entry:&ash::Entry, window: &winit::window::Window) -> Result<Surface, failure::Error> {
-        Surface::new(entry,self.raw(),window)
+    pub fn create_surface(&self,entry:&ash::Entry, window: sdl2::video::Window) -> Result<Surface, failure::Error> {
+        Surface::new(entry,self,window)
     }
 }
 

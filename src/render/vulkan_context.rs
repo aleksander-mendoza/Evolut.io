@@ -3,9 +3,6 @@ use crate::render::device::Device;
 use ash::vk::{PhysicalDevice};
 use crate::render::surface::Surface;
 use crate::render::instance::Instance;
-use winit::event_loop::EventLoop;
-use crate::render::window::init_window;
-use winit::window::Window;
 
 pub struct VulkanContext {
     // The order of all fields
@@ -17,22 +14,19 @@ pub struct VulkanContext {
     physical_device: PhysicalDevice,
     surface: Surface,
     instance: Instance,
-    window: Window,
     entry: ash::Entry,
 }
 
 impl VulkanContext {
-    pub fn new(event_loop: &EventLoop<()>) -> Result<Self, failure::Error> {
+    pub fn new(window: sdl2::video::Window) -> Result<Self, failure::Error> {
         let entry = unsafe { ash::Entry::new() }?;
-        let window = init_window(event_loop)?;
         let instance = Instance::new(&entry, true)?;
-        let surface = instance.create_surface(&entry, &window)?;
+        let surface = instance.create_surface(&entry, window)?;
         let physical_device = instance.pick_physical_device(&surface)?;
         let device = instance.create_device(&entry, physical_device)?;
         let mut frames_in_flight = FramesInFlight::new(&device, 2)?;
         Ok(Self {
             entry,
-            window,
             instance,
             surface,
             physical_device,
@@ -40,7 +34,6 @@ impl VulkanContext {
             frames_in_flight,
         })
     }
-
     pub fn device(&self) -> &Device {
         &self.device
     }
@@ -59,8 +52,8 @@ impl VulkanContext {
     pub fn instance(&self) -> &Instance {
         &self.instance
     }
-    pub fn window(&self) -> &Window {
-        &self.window
+    pub fn window(&self) -> &sdl2::video::Window {
+        &self.surface.window()
     }
     pub fn entry(&self) -> &ash::Entry {
         &self.entry

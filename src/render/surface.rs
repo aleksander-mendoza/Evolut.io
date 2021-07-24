@@ -1,29 +1,38 @@
-use crate::render::platforms::create_surface;
 use ash::vk;
 use ash::prelude::VkResult;
-use ash::vk::{SurfaceCapabilitiesKHR, SurfaceFormatKHR, PresentModeKHR};
+use ash::vk::{SurfaceCapabilitiesKHR, SurfaceFormatKHR, PresentModeKHR, SurfaceKHR, Handle};
+use crate::render::instance::Instance;
+use ash::version::InstanceV1_0;
+use failure::err_msg;
 
 pub struct Surface {
     surface_loader: ash::extensions::khr::Surface,
     raw: vk::SurfaceKHR,
+    window: sdl2::video::Window
 }
 
 impl Surface {
+    pub fn window(&self)->&sdl2::video::Window{
+        &self.window
+    }
     pub fn raw(&self) -> vk::SurfaceKHR {
         self.raw
     }
     pub fn new(entry: &ash::Entry,
-               instance: &ash::Instance,
-               window: &winit::window::Window) -> Result<Self, failure::Error> {
-        let surface = unsafe { create_surface(entry, instance, window) }?;
-        let surface_loader = ash::extensions::khr::Surface::new(entry, instance);
-
+               instance: &Instance,
+               window: sdl2::video::Window) -> Result<Self, failure::Error> {
+        let surface = window.vulkan_create_surface( instance.raw().handle().as_raw() as usize).map_err(err_msg)?;
+        let surface_loader = ash::extensions::khr::Surface::new(entry, instance.raw());
+        let surface = SurfaceKHR::from_raw(surface);
         Ok(Self {
             surface_loader,
             raw: surface,
+            window,
         })
     }
-
+    pub fn size(&self) -> (u32, u32) {
+        self.window.size()
+    }
     pub fn supported_by(&self, device: vk::PhysicalDevice, family_idx: u32) -> VkResult<bool> {
         unsafe {
             self.surface_loader.get_physical_device_surface_support(device, family_idx, self.raw)

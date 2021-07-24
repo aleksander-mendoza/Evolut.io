@@ -1,6 +1,5 @@
 use ash::vk;
 use crate::render::surface::Surface;
-use crate::render::window::{WINDOW_WIDTH, WINDOW_HEIGHT};
 use crate::render::device::Device;
 use ash::version::DeviceV1_0;
 use crate::render::imageview::{ImageView, Color};
@@ -40,16 +39,16 @@ fn choose_swapchain_present_mode(available_present_modes: &Vec<vk::PresentModeKH
     vk::PresentModeKHR::FIFO
 }
 
-fn choose_swapchain_extent(capabilities: &vk::SurfaceCapabilitiesKHR) -> vk::Extent2D {
+fn choose_swapchain_extent(capabilities: &vk::SurfaceCapabilitiesKHR, window_width:u32,window_height:u32) -> vk::Extent2D {
     if capabilities.current_extent.width != u32::MAX {
         capabilities.current_extent
     } else {
         vk::Extent2D {
-            width: WINDOW_WIDTH.clamp(
+            width: window_width.clamp(
                 capabilities.min_image_extent.width,
                 capabilities.max_image_extent.width,
             ),
-            height: WINDOW_HEIGHT.clamp(
+            height: window_height.clamp(
                 capabilities.min_image_extent.height,
                 capabilities.max_image_extent.height,
             ),
@@ -66,7 +65,8 @@ impl SwapChain {
 
         let surface_format = choose_swapchain_format(&formats);
         let present_mode = choose_swapchain_present_mode(&present_modes);
-        let extent = choose_swapchain_extent(&capabilities);
+        let (w,h) = surface.size();
+        let extent = choose_swapchain_extent(&capabilities, w, h);
 
         let image_count = capabilities.min_image_count + 1;
         let image_count = if capabilities.max_image_count > 0 {

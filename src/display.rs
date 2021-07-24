@@ -1,6 +1,3 @@
-use winit::window::Window;
-use winit::error::OsError;
-use crate::render::window::init_window;
 use crate::render::instance::Instance;
 use crate::render::device::{pick_physical_device, Device};
 use crate::render::pipeline::{PipelineBuilder, Pipeline};
@@ -238,8 +235,6 @@ impl Display {
             data,
         })
     }
-
-
     pub fn render(&mut self) -> Result<bool, vk::Result> {
         let fence = self.vulkan.frames_in_flight().current_fence();
         fence.wait(None)?;

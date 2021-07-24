@@ -11,7 +11,7 @@ layout(binding = 1) uniform UniformBufferObject {
 } ubo;
 
 void main() {
-    gl_Position = ubo.mvp * vec4(inPosition-gl_InstanceIndex*0.1, gl_InstanceIndex*0.1, 1.0);
+    gl_Position = ubo.mvp * vec4(inPosition-gl_InstanceIndex*0.1, -gl_InstanceIndex*0.1, 1.0);
     fragColor = inColor;
     fragTex = inTexCoord;
 }
