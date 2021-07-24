@@ -139,6 +139,7 @@ impl DisplayInner {
             .scissors(swapchain.render_area())
             .viewports(swapchain.viewport())
             .vertex_input(0, data.data.gpu())
+            .depth_test(true)
             .color_blend_attachment_states(vk::PipelineColorBlendAttachmentState {
                 blend_enable: vk::FALSE,
                 color_write_mask: vk::ColorComponentFlags::all(),

@@ -82,8 +82,11 @@ impl PipelineBuilder {
             depth_state_create_info: vk::PipelineDepthStencilStateCreateInfo::builder()
                 .front(stencil_state)
                 .back(stencil_state)
+                .min_depth_bounds(0.0)
                 .max_depth_bounds(1.0)
-                .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL)
+                .depth_bounds_test_enable(false)
+                .stencil_test_enable(false)
+                .depth_compare_op(vk::CompareOp::LESS)
                 .build(),
             color_blend_attachment_states: vec![],
             color_blend_state: vk::PipelineColorBlendStateCreateInfo::builder()
@@ -96,7 +99,21 @@ impl PipelineBuilder {
             descriptor_layout: vec![]
         }
     }
-
+    pub fn depth_bounds(mut self, min:f32,max:f32)->Self{
+        self.depth_state_create_info.depth_bounds_test_enable = vk::TRUE;
+        self.depth_state_create_info.max_depth_bounds = max;
+        self.depth_state_create_info.min_depth_bounds = min;
+        self
+    }
+    pub fn stencil_test(mut self, enable:bool)->Self{
+        self.depth_state_create_info.stencil_test_enable = enable.into();
+        self
+    }
+    pub fn depth_test(mut self, enable:bool)->Self{
+        self.depth_state_create_info.depth_test_enable = enable.into();
+        self.depth_state_create_info.depth_write_enable = enable.into();
+        self
+    }
     pub fn descriptor_layout(mut self, layout:DescriptorLayout)->Self{
         self.descriptor_layout.push(layout);
         self
