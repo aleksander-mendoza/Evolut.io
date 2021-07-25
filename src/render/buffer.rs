@@ -3,12 +3,14 @@ use crate::render::data::VertexSource;
 use crate::render::device::Device;
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use crate::render::instance::Instance;
-use std::ops::{Deref, DerefMut};
+use std::ops::{Deref, DerefMut, Index, IndexMut};
 use std::marker::PhantomData;
 use crate::render::command_pool::CommandPool;
 use crate::render::fence::Fence;
 use crate::render::gpu_future::GpuFuture;
 use std::fmt::Debug;
+use std::ptr::NonNull;
+use std::slice::{Iter, IterMut};
 
 pub trait Type {
     const SHARING_MODE: vk::SharingMode;
@@ -75,7 +77,7 @@ impl CpuWriteable for Cpu {}
 //     }
 // }
 
-pub struct Buffer<V, T: Type> {
+pub struct Buffer<V: Copy, T: Type> {
     capacity: usize,
     raw: vk::Buffer,
     mem: vk::DeviceMemory,
@@ -84,7 +86,7 @@ pub struct Buffer<V, T: Type> {
     _v: PhantomData<V>,
 }
 
-impl<V, T: Type> Drop for Buffer<V, T> {
+impl<V: Copy, T: Type> Drop for Buffer<V, T> {
     fn drop(&mut self) {
         unsafe {
             self.device.inner().destroy_buffer(self.raw, None);
@@ -93,7 +95,7 @@ impl<V, T: Type> Drop for Buffer<V, T> {
     }
 }
 
-impl<V, T: Type> Buffer<V, T> {
+impl<V: Copy, T: Type> Buffer<V, T> {
     pub fn device(&self) -> &Device {
         &self.device
     }
@@ -142,7 +144,7 @@ impl<V, T: Type> Buffer<V, T> {
     }
 }
 
-impl<V> Buffer<V, Uniform> {
+impl<V: Copy> Buffer<V, Uniform> {
     pub fn descriptor_info(&self) -> vk::DescriptorBufferInfo {
         vk::DescriptorBufferInfo {
             buffer: self.raw(),
@@ -152,7 +154,7 @@ impl<V> Buffer<V, Uniform> {
     }
 }
 
-impl<V, T: CpuWriteable> Buffer<V, T> {
+impl<V: Copy, T: CpuWriteable> Buffer<V, T> {
     pub fn new(device: &Device, data: &[V]) -> Result<Self, vk::Result> {
         let mut slf = Self::with_capacity(device, data.len())?;
         slf.map_copy_unmap(0, data);
@@ -161,7 +163,7 @@ impl<V, T: CpuWriteable> Buffer<V, T> {
 
     pub fn map_copy_unmap(&mut self, offset: usize, data: &[V]) -> Result<(), vk::Result> {
         unsafe {
-            self.unsafe_map_unmap(offset, data.len(), |ptr|  ptr.copy_from_nonoverlapping(data.as_ptr(), data.len()))
+            self.unsafe_map_unmap(offset, data.len(), |ptr| ptr.copy_from_nonoverlapping(data.as_ptr(), data.len()))
         }
     }
     pub fn map_unmap(&mut self, offset: usize, len: usize, f: impl FnOnce(&mut [V])) -> Result<(), vk::Result> {
@@ -169,55 +171,235 @@ impl<V, T: CpuWriteable> Buffer<V, T> {
             self.unsafe_map_unmap(offset, len, |ptr| f(std::slice::from_raw_parts_mut(ptr, len)))
         }
     }
-    unsafe fn unsafe_map_unmap(&mut self, offset: usize, len: usize, f: impl FnOnce(*mut V)) -> Result<(), vk::Result> {
+    unsafe fn map(&mut self, offset: usize, len: usize) -> Result<*mut V, vk::Result> {
         assert!(offset + len <= self.capacity);
-        let data_ptr = self.device.inner().map_memory(
+        self.device.inner().map_memory(
             self.mem,
             offset as u64,
             len as u64,
             vk::MemoryMapFlags::empty(),
-        )? as *mut V;
-        f(data_ptr);
-        self.device.inner().unmap_memory(self.mem);
+        ).map(|v| v as *mut V)
+    }
+    unsafe fn unmap(&mut self) {
+        self.device.inner().unmap_memory(self.mem)
+    }
+    unsafe fn unsafe_map_unmap(&mut self, offset: usize, len: usize, f: impl FnOnce(*mut V)) -> Result<(), vk::Result> {
+        f(self.map(offset, len)?);
+        self.unmap();
         Ok(())
     }
 }
 
-
-pub struct StageBuffer<V, C: CpuWriteable, G: GpuWriteable> {
+pub struct Vector<V: Copy, C: CpuWriteable> {
     cpu: Buffer<V, C>,
-    gpu: Buffer<V, G>,
+    len: usize,
+    data_ptr: NonNull<V>,
 }
 
-impl<V: Debug, C: CpuWriteable, G: GpuWriteable> StageBuffer<V, C, G> {
-    pub fn cpu(&self) -> &Buffer<V, C> {
+impl<V: Copy, C: CpuWriteable> Vector<V, C> {
+    pub fn buffer(&self) -> &Buffer<V, C> {
         &self.cpu
+    }
+    pub fn capacity(&self) -> usize {
+        self.cpu.capacity()
+    }
+    pub fn device(&self) -> &Device {
+        self.cpu.device()
+    }
+    pub fn with_capacity(device: &Device, capacity: usize) -> Result<Self, vk::Result> {
+        let mut cpu = Buffer::with_capacity(device, capacity)?;
+        let data_ptr = unsafe { NonNull::new_unchecked(cpu.map(0, capacity)?) };
+        Ok(Self { cpu, data_ptr, len: 0 })
+    }
+    pub unsafe fn set_len(&mut self, len: usize) {
+        assert!(len <= self.capacity());
+        self.len = len;
+    }
+    pub fn as_slice_mut(&mut self) -> &mut [V] {
+        unsafe { std::slice::from_raw_parts_mut(self.data_ptr.as_ptr(), self.len) }
+    }
+    pub fn as_slice(&self) -> &[V] {
+        unsafe { std::slice::from_raw_parts(self.data_ptr.as_ptr(), self.len) }
+    }
+    pub fn new(device: &Device, data: &[V]) -> Result<Self, vk::Result> {
+        let mut slf = Self::with_capacity(device, data.len())?;
+        unsafe { slf.set_len(data.len()) }
+        slf.as_slice_mut().copy_from_slice(data);
+        Ok(slf)
+    }
+    pub fn reallocate(&mut self, new_capacity: usize) -> Result<(), vk::Result> {
+        let mut cpu = Buffer::<V, C>::with_capacity(self.device(), new_capacity)?;
+        let data_ptr = unsafe { NonNull::new_unchecked(cpu.map(0, new_capacity)?) };
+        self.len = self.len.min(new_capacity);
+        unsafe {
+            data_ptr.as_ptr().copy_from_nonoverlapping(self.data_ptr.as_ptr(), self.len)
+        }
+        self.cpu = cpu;
+        self.data_ptr = data_ptr;
+        Ok(())
+    }
+    unsafe fn unsafe_push(&mut self, v: V) {
+        self.data_ptr.as_ptr().offset(self.len() as isize).write(v)
+    }
+    pub fn swap_remove(&mut self, idx:usize) -> V{
+        let last = self.len()-1;
+        self.swap(idx,last);
+        unsafe{self.set_len(last)}
+        unsafe{self.data_ptr.as_ptr().offset(last as isize).read()}
+    }
+    pub fn push(&mut self, v: V) -> Result<bool, vk::Result> {
+        Ok(if self.len() == self.capacity() {
+            self.reallocate(16.max(self.capacity() * 2))?;
+            unsafe { self.unsafe_push(v) }
+            true
+        } else {
+            unsafe { self.unsafe_push(v) }
+            false
+        })
+    }
+    pub fn pop(&mut self) -> V {
+        let v = *self.as_slice().last().unwrap();
+        self.len -= 1;
+        v
+    }
+}
+
+impl<V: Copy, C: CpuWriteable> Deref for Vector<V, C> {
+    type Target = [V];
+
+    fn deref(&self) -> &Self::Target {
+        self.as_slice()
+    }
+}
+
+impl<V: Copy, C: CpuWriteable> DerefMut for Vector<V, C> {
+
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.as_slice_mut()
+    }
+}
+pub struct StageBuffer<V: Copy, C: CpuWriteable, G: GpuWriteable> {
+    gpu: Buffer<V, G>,
+    cpu: Vector<V, C>,
+    has_unflushed_changes:bool
+}
+
+impl<V: Copy, C: CpuWriteable, G: GpuWriteable> StageBuffer<V, C, G> {
+    pub fn len(&self) -> usize {
+        self.cpu.len()
+    }
+    pub fn capacity(&self) -> usize {
+        self.cpu.capacity()
+    }
+    pub fn device(&self) -> &Device {
+        self.cpu.device()
+    }
+    pub fn cpu(&self) -> &Buffer<V, C> {
+        self.cpu.buffer()
+    }
+    /**Returns true if the backing buffer need to be reallocated. In such cases the GPU memory becomes invalidated, and you need to re-record all command buffers that make use of it.
+    Whether any reallocation occurred or not, the GPU is never flushed automatically. You need to decide when the most optimal time for flush is*/
+    pub fn push(&mut self, v: V) -> Result<bool, vk::Result> {
+        let out = Ok(if self.len() == self.capacity() {
+            self.reallocate(16.max(self.capacity() * 2))?;
+            unsafe { self.cpu.unsafe_push(v) }
+            true
+        } else {
+            unsafe { self.cpu.unsafe_push(v) }
+            false
+        });
+        self.has_unflushed_changes = true;
+        out
+    }
+    pub fn is_empty(&self) -> bool {
+        self.cpu.is_empty()
+    }
+    pub fn has_unflushed_changes(&self) -> bool {
+        self.has_unflushed_changes
+    }
+    pub fn mark_with_unflushed_changes(&mut self) {
+        self.has_unflushed_changes = true
+    }
+    pub fn pop(&mut self) -> V {
+        self.has_unflushed_changes = true;
+        self.cpu.pop()
+    }
+    pub unsafe fn set_len(&mut self, len: usize) {
+        if len != self.len(){
+            self.cpu.set_len(len);
+            self.has_unflushed_changes = true;
+        }
+    }
+    pub fn swap(&mut self, idx1:usize, idx2:usize) {
+        self.cpu.swap(idx1,idx2);
+        self.has_unflushed_changes = true;
+    }
+    pub fn swap_remove(&mut self, idx:usize) -> V {
+        self.has_unflushed_changes = true;
+        self.cpu.swap_remove(idx)
+    }
+    pub fn as_slice_mut(&mut self) -> &mut [V] {
+        self.cpu.as_slice_mut()
+    }
+    pub fn as_slice(&self) -> &[V] {
+        self.cpu.as_slice()
+    }
+    pub fn iter(&self) -> Iter<'_, V> {
+        self.cpu.iter()
+    }
+    pub fn iter_mut(&mut self) -> IterMut<'_, V> {
+        self.cpu.iter_mut()
+    }
+    /**The GPU memory becomes invalidated and needs to be flushed again manually. You also need to re-record all command buffers that make use of it.*/
+    pub fn reallocate(&mut self, new_capacity: usize) -> Result<(), vk::Result> {
+        self.cpu.reallocate(new_capacity)?;
+        self.gpu = Buffer::with_capacity(self.device(), new_capacity)?;
+        self.has_unflushed_changes = true;
+        Ok(())
     }
     pub fn gpu(&self) -> &Buffer<V, G> {
         &self.gpu
     }
     pub fn with_capacity(device: &Device, capacity: usize) -> Result<Self, vk::Result> {
-        let cpu = Buffer::with_capacity(device, capacity)?;
+        let cpu = Vector::with_capacity(device, capacity)?;
         let gpu = Buffer::with_capacity(device, capacity)?;
-        Ok(Self { cpu, gpu })
+        Ok(Self { cpu, gpu, has_unflushed_changes: false })
     }
-
-    pub fn new(device: &Device, cmd: &CommandPool, data: &[V]) -> Result<GpuFuture<Self>, vk::Result> {
-        let mut slf = Self::with_capacity(device, data.len())?;
-        slf.cpu.map_copy_unmap(0, data)?;
-        let fence = Fence::new(device, false)?;
+    pub fn flush_to_gpu(&mut self, cmd: &CommandPool, fence: Fence) -> Result<GpuFuture<()>, vk::Result> {
         cmd.create_command_buffer()?
             .begin(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)?
-            .copy(&slf.cpu, &slf.gpu)
+            .copy(self.cpu(), self.gpu())
             .end()?
             .submit(&[], &[], Some(&fence))?;
-        Ok(GpuFuture::new(slf, fence))
+        self.has_unflushed_changes = false;
+        Ok(GpuFuture::new((), fence))
+    }
+    pub fn new(device: &Device, cmd: &CommandPool, data: &[V]) -> Result<GpuFuture<Self>, vk::Result> {
+        let mut slf = Self::with_capacity(device, data.len())?;
+        unsafe { slf.set_len(data.len()) }
+        slf.as_slice_mut().copy_from_slice(data);
+        let fence = Fence::new(device, false)?;
+        slf.flush_to_gpu(cmd, fence).map(|v| v.replace(slf))
     }
 }
 
+
+impl<V: Copy, C: CpuWriteable, G: GpuWriteable> Index<usize> for StageBuffer<V, C, G> {
+    type Output = V;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.cpu[index]
+    }
+}
+
+impl<V: Copy, C: CpuWriteable, G: GpuWriteable> IndexMut<usize> for StageBuffer<V, C, G> {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.cpu[index]
+    }
+}
 pub type VertexBuffer<V: VertexSource> = StageBuffer<V, Cpu, Gpu>;
 
-impl<V: Debug> VertexBuffer<V> {
+impl<V: Copy> VertexBuffer<V> {
     pub fn new_vertex_buffer(device: &Device, cmd: &CommandPool, data: &[V]) -> Result<GpuFuture<Self>, vk::Result> {
         Self::new(device, cmd, data)
     }

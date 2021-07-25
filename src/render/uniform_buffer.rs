@@ -7,12 +7,12 @@ use crate::render::swap_chain::SwapChain;
 use ash::vk;
 use std::ops::{Deref, DerefMut};
 
-pub struct UniformBuffers<T, const size: usize> {
+pub struct UniformBuffers<T:Copy, const size: usize> {
     pub data: [T; size],
     buff: Vec<Buffer<T, Uniform>>,
 }
 
-impl <T, const size: usize>  Deref for UniformBuffers<T, size>{
+impl <T:Copy, const size: usize>  Deref for UniformBuffers<T, size>{
     type Target = [T; size];
 
     fn deref(&self) -> &Self::Target {
@@ -20,12 +20,12 @@ impl <T, const size: usize>  Deref for UniformBuffers<T, size>{
     }
 }
 
-impl <T, const size: usize>  DerefMut for UniformBuffers<T, size>{
+impl <T:Copy, const size: usize>  DerefMut for UniformBuffers<T, size>{
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.data
     }
 }
-impl<T, const size: usize> UniformBuffers<T, size> {
+impl<T:Copy, const size: usize> UniformBuffers<T, size> {
     pub fn new_array(device:&Device, swapchain:&SwapChain, data: [T; size]) -> Result<Self, ash::vk::Result> {
         let buff:Result<Vec<Buffer<T, Uniform>>,vk::Result> = (0..swapchain.len()).into_iter().map(|_|Buffer::<T,Uniform>::with_capacity(device, size)).collect();
         buff.map(|buff|Self{buff,data})
@@ -51,7 +51,7 @@ impl<T, const size: usize> UniformBuffers<T, size> {
     }
 }
 
-impl <V:Debug, const size:usize> Debug for UniformBuffers<V,size>{
+impl <V:Copy+Debug, const size:usize> Debug for UniformBuffers<V,size>{
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         self.data.fmt(f)
     }

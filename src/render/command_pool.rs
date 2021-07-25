@@ -44,7 +44,7 @@ impl<X> CommandBuffer<X> {
 
 
 impl<X: OptionalRenderPass> CommandBuffer<X> {
-    pub fn copy<V, T1: Type, T2: Type>(self, src: &Buffer<V, T1>, dst: &Buffer<V, T2>) -> Self {
+    pub fn copy<V:Copy, T1: Type, T2: Type>(self, src: &Buffer<V, T1>, dst: &Buffer<V, T2>) -> Self {
         assert_eq!(src.capacity(), dst.capacity());
         unsafe {
             self.device.inner().cmd_copy_buffer(
@@ -61,7 +61,7 @@ impl<X: OptionalRenderPass> CommandBuffer<X> {
         self
     }
 
-    pub fn copy_to_image<V, T: Type, D: Dim>(self, src: &Buffer<V, T>, dst: &Texture<D, Color>, img_layout: vk::ImageLayout) -> Self {
+    pub fn copy_to_image<V:Copy, T: Type, D: Dim>(self, src: &Buffer<V, T>, dst: &Texture<D, Color>, img_layout: vk::ImageLayout) -> Self {
         // assert_eq!(src.capacity(),dst.capacity());
         unsafe {
             self.device.inner().cmd_copy_buffer_to_image(

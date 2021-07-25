@@ -9,7 +9,7 @@ pub trait DescriptorBinding{
     fn create_binding(&self, binding:u32)->vk::DescriptorSetLayoutBinding;
 }
 
-impl <V,const size:usize> DescriptorBinding for UniformBuffers<V,size>{
+impl <V:Copy,const size:usize> DescriptorBinding for UniformBuffers<V,size>{
     fn create_binding(&self, binding: u32) -> DescriptorSetLayoutBinding {
         vk::DescriptorSetLayoutBinding {
             binding,

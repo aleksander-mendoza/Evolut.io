@@ -1,7 +1,7 @@
 use ash::vk;
 use ash::vk::Format;
 
-pub trait VertexSource{
+pub trait VertexSource: Copy{
     fn get_attribute_descriptions(binding:u32) -> Vec<vk::VertexInputAttributeDescription>;
 }
 
@@ -102,7 +102,7 @@ impl From<&[u8; 2]> for u8_u8 {
 }
 
 #[repr(C)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct VertexClr {
     pub pos:glm::Vec2,
     pub color:glm::Vec3
@@ -155,7 +155,7 @@ impl VertexSource for u8 {
 
 
 #[repr(C)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct VertexTex {
     pub pos:glm::Vec2,
     pub tex:glm::Vec2,
@@ -182,7 +182,7 @@ impl VertexSource for VertexTex {
 
 
 #[repr(C)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct VertexClrTex {
     pub pos:glm::Vec2,
     pub clr:glm::Vec3,

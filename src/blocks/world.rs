@@ -10,14 +10,13 @@ pub struct World {
     blocks: WorldBlocks,
     faces: WorldFaces,
 }
-
 impl World {
-    pub fn new(width: usize, depth: usize, device:&Device)->Self{
+    pub fn new(width: usize, depth: usize, device:&Device) -> Result<Self, ash::vk::Result> {
         let size = WorldSize::new(width,depth);
-        Self{
+        WorldFaces::new(size, device).map(|faces|Self{
             blocks: WorldBlocks::new(size),
-            faces: WorldFaces::new(size, device)
-        }
+            faces
+        })
     }
     pub fn blocks(&self) -> &WorldBlocks {
         &self.blocks
@@ -110,26 +109,26 @@ impl World {
             false
         }
     }
-    pub fn gl_update_all_chunks(&mut self) {
-        for chunk in self.faces.iter_mut() {
-            chunk.gl_update_opaque();
-            chunk.gl_update_transparent();
-        }
-    }
-    pub fn gl_draw(&self, chunk_location_uniform: UniformVec3fv, shader: &Program) {
-        for (chunk_idx, chunk) in self.faces.iter().enumerate() {
-            assert!(chunk_idx < self.faces.len());
-            let (x, z) = self.size().chunk_idx_into_chunk_pos(chunk_idx);
-            shader.set_uniform_vec3fv(chunk_location_uniform, &[(x * CHUNK_WIDTH) as f32, 0., (z * CHUNK_DEPTH) as f32]);
-            chunk.gl_draw_opaque();
-        }
-        for (chunk_idx, chunk) in self.faces.iter().enumerate() {
-            assert!(chunk_idx < self.faces.len());
-            let (x, z) = self.size().chunk_idx_into_chunk_pos(chunk_idx);
-            shader.set_uniform_vec3fv(chunk_location_uniform, &[(x * CHUNK_WIDTH) as f32, 0., (z * CHUNK_DEPTH) as f32]);
-            chunk.gl_draw_transparent();
-        }
-    }
+    // pub fn gl_update_all_chunks(&mut self) {
+    //     for chunk in self.faces.iter_mut() {
+    //         chunk.gl_update_opaque();
+    //         chunk.gl_update_transparent();
+    //     }
+    // }
+    // pub fn gl_draw(&self, chunk_location_uniform: UniformVec3fv, shader: &Program) {
+    //     for (chunk_idx, chunk) in self.faces.iter().enumerate() {
+    //         assert!(chunk_idx < self.faces.len());
+    //         let (x, z) = self.size().chunk_idx_into_chunk_pos(chunk_idx);
+    //         shader.set_uniform_vec3fv(chunk_location_uniform, &[(x * CHUNK_WIDTH) as f32, 0., (z * CHUNK_DEPTH) as f32]);
+    //         chunk.gl_draw_opaque();
+    //     }
+    //     for (chunk_idx, chunk) in self.faces.iter().enumerate() {
+    //         assert!(chunk_idx < self.faces.len());
+    //         let (x, z) = self.size().chunk_idx_into_chunk_pos(chunk_idx);
+    //         shader.set_uniform_vec3fv(chunk_location_uniform, &[(x * CHUNK_WIDTH) as f32, 0., (z * CHUNK_DEPTH) as f32]);
+    //         chunk.gl_draw_transparent();
+    //     }
+    // }
 
     pub fn compute_faces(&mut self) {
         for x in 0..self.size().world_width() {

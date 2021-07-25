@@ -1,4 +1,4 @@
-use crate::render::data::u8_u8_u8_u8;
+use crate::render::data::{u8_u8_u8_u8, VertexAttrib};
 use crate::blocks::block::Block;
 use crate::blocks::face_orientation::FaceOrientation;
 use crate::blocks::world_size::{CHUNK_WIDTH, CHUNK_HEIGHT, CHUNK_DEPTH};
@@ -20,13 +20,13 @@ impl VertexSource for Face {
                 binding,
                 location: 0,
                 format:  u8_u8_u8_u8::FORMAT,
-                offset: offset_of!(Self, pos) as u32,
+                offset: offset_of!(Self, coords) as u32,
             },
             vk::VertexInputAttributeDescription {
                 binding,
                 location: 1,
                 format: u32::FORMAT,
-                offset: offset_of!(Self, color) as u32,
+                offset: offset_of!(Self, tex_id) as u32,
             },
         ]
     }
@@ -72,7 +72,7 @@ impl Face {
         self.coords.d2 as usize
     }
     pub fn block_orientation(&self) -> FaceOrientation {
-        self.coords.d3 as FaceOrientation
+        FaceOrientation::from(self.coords.d3)
     }
     pub fn encode_coords_and_ort(x: u8, y: u8, z: u8, orientation: FaceOrientation) -> u32 {
         assert!((x as usize) < CHUNK_WIDTH);

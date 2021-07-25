@@ -16,7 +16,7 @@ impl BoneInstance {
         Self { position, body_part_and_bone_variant: u8_u8::new(body_part as u8, bone_variant), rotation }
     }
     pub fn body_part(&self) -> BodyPart {
-        self.body_part_and_bone_variant.d0 as BodyPart
+        BodyPart::from(self.body_part_and_bone_variant.d0)
     }
     pub fn bone_variant(&self) -> u8 {
         self.body_part_and_bone_variant.d1
@@ -38,7 +38,19 @@ pub enum BodyPart {
     ZombieLeftArm = 4,
     ZombieRightArm = 5,
 }
-
+impl From<u8> for BodyPart{
+    fn from(m: u8) -> Self {
+        match m{
+             0 => Self::ZombieLeftLeg,
+             1 => Self::ZombieRightLeg,
+             2 => Self::ZombieTorso,
+             3 => Self::ZombieHead,
+             4 => Self::ZombieLeftArm,
+             5 => Self::ZombieRightArm,
+            t => panic!("Invalid enum value {} for BodyPart",t)
+        }
+    }
+}
 /**Size of a single pixel in world-space. Size of a block is 1x1x1. Every block is composed of 16x16 pixels.
  Hence size of a pixel is 1/16. */
 pub const U: f32 = 1. / 16.;

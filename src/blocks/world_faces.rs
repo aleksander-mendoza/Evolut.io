@@ -4,6 +4,7 @@ use crate::blocks::face_orientation::FaceOrientation;
 use crate::blocks::block::Block;
 use std::ops::{Deref, DerefMut};
 use crate::render::device::Device;
+use ash::vk;
 
 pub struct WorldFaces {
     chunks: Vec<ChunkFaces>,
@@ -11,8 +12,8 @@ pub struct WorldFaces {
 }
 
 impl WorldFaces{
-    pub fn new(size:WorldSize, device:&Device)->Self{
-        Self{ chunks: std::iter::repeat_with(||ChunkFaces::new(device)).take(size.total_chunks()).collect(), size }
+    pub fn new(size:WorldSize, device:&Device)->Result<Self,vk::Result>{
+        Ok(Self{ chunks: std::iter::repeat_with(||ChunkFaces::new(device)).take(size.total_chunks()).collect::<Result<Vec<ChunkFaces>,vk::Result>>()?, size })
     }
     pub fn size(&self)->&WorldSize{
         &self.size
@@ -23,7 +24,7 @@ impl WorldFaces{
     pub(crate) fn remove_block_opaque(&mut self, x: usize, y: usize, z: usize) {
         self.get_chunk_mut(x, z).remove_block_opaque(x, y, z)
     }
-    pub(crate) fn push_block(&mut self, x: usize, y: usize, z: usize, ort: FaceOrientation, block: Block) {
+    pub(crate) fn push_block(&mut self, x: usize, y: usize, z: usize, ort: FaceOrientation, block: Block) -> Result<bool, ash::vk::Result> {
         self.get_chunk_mut(x, z).push_block(x, y, z, ort, block)
     }
     pub(crate) fn remove_transparent_block_face(&mut self, x: usize, y: usize, z: usize, ort: FaceOrientation) {
@@ -35,7 +36,7 @@ impl WorldFaces{
     pub(crate) fn update_block_textures(&mut self, x: usize, y: usize, z: usize, new_block: Block) {
         self.get_chunk_mut(x, z).update_block_textures(x, y, z, new_block)
     }
-    pub(crate) fn change_block_textures(&mut self, x: usize, y: usize, z: usize, new_block: Block) {
+    pub(crate) fn change_block_textures(&mut self, x: usize, y: usize, z: usize, new_block: Block) -> Result<(), ash::vk::Result> {
         self.get_chunk_mut(x, z).change_block_textures(x, y, z, new_block)
     }
     pub fn get_chunk_mut(&mut self, x: usize, z: usize) -> &mut ChunkFaces {

@@ -15,6 +15,10 @@ impl <T> GpuFuture<T>{
     pub fn new(val:T,fence:Fence)->Self{
         Self{val,fence}
     }
+    pub fn replace<B>(mut self,val:B)->GpuFuture<B>{
+        let Self{ fence, ..} = self;
+        GpuFuture{fence, val}
+    }
     pub fn get(self)->Result<(Fence,T),vk::Result>{
         self.fence.wait(None).map(move |()|{
             let Self{ fence, val } = self;

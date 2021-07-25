@@ -10,13 +10,15 @@ use std::ops::{Deref, DerefMut};
 use crate::input::Input;
 use crate::fps::FpsCounter;
 use failure::err_msg;
+use crate::blocks::World;
+use crate::blocks::block_properties::{BEDROCK, DIRT, GRASS, PLANK};
 
 mod block_world;
 mod display;
 mod render;
 mod input;
 mod fps;
-// mod blocks;
+mod blocks;
 
 fn main() -> Result<(), failure::Error> {
     #[cfg(target_os = "macos")] {
@@ -45,6 +47,15 @@ fn main() -> Result<(), failure::Error> {
     let rotation_speed = 1f32;
     let ash::vk::Extent2D { width, height } = display.extent();
     let mut projection_matrix = proj(width as f32, height as f32);
+
+    let mut world = World::new(2,2, &gl);
+    world.blocks_mut().no_update_fill_level(0,1,BEDROCK);
+    world.blocks_mut().no_update_fill_level(1,1,DIRT);
+    world.blocks_mut().no_update_fill_level(2,1,GRASS);
+    world.blocks_mut().no_update_outline(5,2,5,5,5,5,PLANK);
+    world.compute_faces();
+    world.gl_update_all_chunks();
+
     'main: loop {
         fps_counter.update();
         input.poll();

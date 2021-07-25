@@ -10,6 +10,20 @@ pub enum FaceOrientation {
     ZMinus = 5,
 }
 
+impl From<u8> for FaceOrientation{
+    fn from(m: u8) -> Self {
+       match m{
+           0 => Self::YPlus,
+           1 => Self::YMinus,
+           2 => Self::XPlus,
+           3 => Self::XMinus,
+           4 => Self::ZPlus,
+           5 => Self::ZMinus,
+           t => panic!("Invalid enum {} for FaceOrientation",t)
+       }
+    }
+}
+
 impl FaceOrientation {
     pub fn is_side(&self) -> bool {
         (self.clone() as u8) > 1

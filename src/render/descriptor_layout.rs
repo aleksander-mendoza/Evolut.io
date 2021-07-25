@@ -45,10 +45,10 @@ impl DescriptorLayout{
     pub fn raw(&self)->vk::DescriptorSetLayout{
         self.inner.raw
     }
-    pub fn new_uniform<T,const size:usize>(buffer:&UniformBuffers<T,size>) -> Result<DescriptorLayout, ash::vk::Result> {
+    pub fn new_uniform<T:Copy,const size:usize>(buffer:&UniformBuffers<T,size>) -> Result<DescriptorLayout, ash::vk::Result> {
         DescriptorLayout::new(buffer.device(),&[buffer.create_binding(0)])
     }
-    pub fn new_sampler_uniform<T,const size:usize>(sampler:&Sampler, buffer:&UniformBuffers<T,size>) -> Result<DescriptorLayout, ash::vk::Result> {
+    pub fn new_sampler_uniform<T:Copy,const size:usize>(sampler:&Sampler, buffer:&UniformBuffers<T,size>) -> Result<DescriptorLayout, ash::vk::Result> {
         DescriptorLayout::new(sampler.device(),&[sampler.create_binding(0),buffer.create_binding(1)])
     }
     pub fn new(device: &Device, layouts:&[vk::DescriptorSetLayoutBinding]) -> Result<Self, ash::vk::Result> {

@@ -22,7 +22,7 @@ use crate::render::texture::{StageTexture, Dim2D, TextureView};
 use crate::render::sampler::Sampler;
 use crate::render::framebuffer::Framebuffer;
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct UniformData{
     pub mvp:glm::Mat4
 }

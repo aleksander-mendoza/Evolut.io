@@ -3,50 +3,15 @@ use crate::blocks::block::Block;
 use crate::blocks::face_orientation::FaceOrientation;
 use crate::blocks::world_size::{WorldSize};
 use crate::render::device::Device;
-use crate::render::buffer::{Buffer, StageBuffer};
+use crate::render::buffer::{Buffer, VertexBuffer};
+use ash::vk;
 
 pub struct ChunkFaces {
-    opaque_faces: Vec<Face>,
-    transparent_faces: Vec<Face>,
-    has_opaque_faces_to_update: bool,
-    has_transparent_faces_to_update: bool,
-    opaque_faces_model: StageBuffer<Face>,
-    transparent_faces_model: StageBuffer<Face>,
+    opaque_faces: VertexBuffer<Face>,
+    transparent_faces: VertexBuffer<Face>,
 }
 
 impl ChunkFaces {
-    pub fn gl_draw_opaque(&self){
-        self.opaque_faces_model.draw_instanced_triangles(0, /*one quad=2 triangles=6 vertices*/6, self.opaque_faces_model.ibo().len());
-    }
-    pub fn gl_draw_transparent(&self){
-        self.transparent_faces_model.draw_instanced_triangles(0, /*one quad=2 triangles=6 vertices*/6, self.transparent_faces_model.ibo().len());
-    }
-    pub fn gl_update_opaque(&mut self) -> bool {
-        let Self {
-            opaque_faces,
-            has_opaque_faces_to_update,
-            opaque_faces_model, ..
-        } = self;
-        if *has_opaque_faces_to_update {
-            *has_opaque_faces_to_update = false;
-            opaque_faces_model.ibo_mut().update(opaque_faces.as_slice());
-            assert_eq!(opaque_faces_model.ibo().len(), opaque_faces.len());
-            true
-        } else { false }
-    }
-    pub fn gl_update_transparent(&mut self) -> bool {
-        let Self {
-            transparent_faces,
-            has_transparent_faces_to_update,
-            transparent_faces_model, ..
-        } = self;
-        if *has_transparent_faces_to_update {
-            *has_transparent_faces_to_update = false;
-            transparent_faces_model.ibo_mut().update(transparent_faces.as_slice());
-            assert_eq!(transparent_faces_model.ibo().len(), transparent_faces.len());
-            true
-        } else { false }
-    }
 
     pub fn opaque_as_slice(&self) -> &[Face] {
         self.opaque_faces.as_slice()
@@ -60,30 +25,24 @@ impl ChunkFaces {
     pub fn len_transparent(&self) -> usize {
         self.transparent_faces.len()
     }
-    pub fn new(device:&Device) -> Self {
-        Self {
-            opaque_faces: Vec::new(),
-            transparent_faces: Vec::new(),
-            has_opaque_faces_to_update: false,
-            has_transparent_faces_to_update: false,
-            opaque_faces_model: DynamicBuffer::with_capacity(16, &gl),
-            transparent_faces_model: DynamicBuffer::with_capacity(16, &gl),
-        }
+    pub fn new(device:&Device) -> Result<Self,vk::Result> {
+        Ok(Self {
+            opaque_faces: VertexBuffer::with_capacity(device,16)?,
+            transparent_faces: VertexBuffer::with_capacity(device,16)?,
+        })
     }
-    pub(crate) fn push_block(&mut self, x: usize, y: usize, z: usize, ort: FaceOrientation, block: Block) {
+    pub fn push_block(&mut self, x: usize, y: usize, z: usize, ort: FaceOrientation, block: Block) -> Result<bool, ash::vk::Result> {
         let (x, y, z) = WorldSize::absolute_block_to_chunk_block_position(x,y,z);
         self.push(x, y, z, ort, block)
     }
-    fn push(&mut self, x: u8, y: u8, z: u8, ort: FaceOrientation, block: Block) {
+    fn push(&mut self, x: u8, y: u8, z: u8, ort: FaceOrientation, block: Block) -> Result<bool, ash::vk::Result> {
         let face = Face::from_coords_and_ort(x, y, z, ort, block.texture_id(ort));
         assert!(self.find_opaque_by_coords_and_ort(face.coords_and_ort()).is_none());
         assert!(self.find_transparent_by_coords_and_ort(face.coords_and_ort()).is_none());
         if block.is_transparent() {
-            self.transparent_faces.push(face);
-            self.has_transparent_faces_to_update = true;
+            self.transparent_faces.push(face)
         } else {
-            self.opaque_faces.push(face);
-            self.has_opaque_faces_to_update = true;
+            self.opaque_faces.push(face)
         }
     }
     pub fn find_transparent_by_coords_and_ort(&self, coords: u32) -> Option<&Face> {
@@ -147,31 +106,29 @@ impl ChunkFaces {
         let faces = if new_block.is_transparent() {
             assert!(self.find_opaque(x, y, z).is_none(), "Failed to update texture at {},{},{} to new block id {}", x, y, z, new_block);
             assert!(self.find_transparent(x, y, z).is_some(), "Failed to update texture at {},{},{} to new block id {}", x, y, z, new_block);
-            self.has_transparent_faces_to_update = true;
             &mut self.transparent_faces
         } else {
             assert!(self.find_opaque(x, y, z).is_some(), "Failed to update texture at {},{},{} to new block id {}", x, y, z, new_block);
             assert!(self.find_transparent(x, y, z).is_none(), "Failed to update texture at {},{},{} to new block id {}", x, y, z, new_block);
-            self.has_opaque_faces_to_update = true;
             &mut self.opaque_faces
         };
-
+        faces.mark_with_unflushed_changes();
         for face in faces.iter_mut() {
             if face.matches_coords(x, y, z) {
                 face.update_texture(new_block);
             }
         }
     }
-    fn borrow_transparent_and_opaque_mut(&mut self) -> (&mut Vec<Face>, &mut Vec<Face>) {
+    fn borrow_transparent_and_opaque_mut(&mut self) -> (&mut VertexBuffer<Face>, &mut VertexBuffer<Face>) {
         let Self { transparent_faces, opaque_faces, .. } = self;
         (transparent_faces, opaque_faces)
     }
-    pub(crate) fn change_block_textures(&mut self, x: usize, y: usize, z: usize, new_block: Block) {
+    pub fn change_block_textures(&mut self, x: usize, y: usize, z: usize, new_block: Block) -> Result<(), ash::vk::Result> {
         let (x, y, z) = WorldSize::absolute_block_to_chunk_block_position(x,y,z);
         self.change_textures(x, y, z, new_block)
     }
     /**Changes textures on existing faces and assumes that the transparency is going to be switched. If transparency did not change, use update_textures instead*/
-    fn change_textures(&mut self, x: u8, y: u8, z: u8, new_block: Block) {
+    fn change_textures(&mut self, x: u8, y: u8, z: u8, new_block: Block) -> Result<(),vk::Result> {
         assert!(!new_block.is_air());
         let (from, to) = if new_block.is_transparent() {
             assert!(self.find_opaque(x, y, z).is_some(), "Failed to update texture at {},{},{} to new block id {}", x, y, z, new_block);
@@ -187,11 +144,12 @@ impl ChunkFaces {
         let mut i = 0;
         while i < from.len() {
             if from[i].matches_coords(x, y, z) {
-                to.push(from.swap_remove(i))
+                to.push(from.swap_remove(i))?;
             } else {
                 i += 1;
             }
         }
+        Ok(())
     }
     pub(crate) fn remove_opaque_block_face(&mut self, x: usize, y: usize, z: usize, ort: FaceOrientation) {
         let (x, y, z) = WorldSize::absolute_block_to_chunk_block_position(x,y,z);
@@ -211,22 +169,19 @@ impl ChunkFaces {
     }
     fn update_texture(&mut self, idx: usize, new_block: Block) {
         assert!(!new_block.is_air());
-        let face = if new_block.is_transparent() {
-            self.has_transparent_faces_to_update = true;
-            &mut self.transparent_faces[idx]
+        let faces = if new_block.is_transparent() {
+            &mut self.transparent_faces
         } else {
-            self.has_opaque_faces_to_update = true;
-            &mut self.opaque_faces[idx]
+            &mut self.opaque_faces
         };
-        face.update_texture(new_block)
+        faces.mark_with_unflushed_changes();
+        faces[idx].update_texture(new_block)
     }
     fn remove_transparent_at(&mut self, idx: usize) {
         self.transparent_faces.swap_remove(idx);
-        self.has_transparent_faces_to_update = true;
     }
     fn remove_opaque_at(&mut self, idx: usize) {
         self.opaque_faces.swap_remove(idx);
-        self.has_opaque_faces_to_update = true;
     }
 }
 
