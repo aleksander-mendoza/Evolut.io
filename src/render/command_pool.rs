@@ -8,18 +8,35 @@ use crate::render::pipeline::Pipeline;
 use crate::render::semaphore::Semaphore;
 use ash::prelude::VkResult;
 use crate::render::fence::Fence;
-use crate::render::buffer::{Buffer, Type, Gpu, Cpu, GpuIndirect};
+use crate::render::buffer::{Buffer, Type, Gpu, Cpu, GpuIndirect, StageBuffer, CpuWriteable, GpuWriteable};
 use crate::render::data::VertexSource;
 use crate::render::descriptor_pool::DescriptorSet;
 use crate::render::texture::{Dim, Texture};
 use crate::render::framebuffer::Framebuffer;
 use crate::render::imageview::{Color, Aspect};
+use std::rc::Rc;
 
 pub struct CommandBuffer {
     raw: vk::CommandBuffer,
     device: Device,
 }
 impl CommandBuffer {
+    pub fn raw(&self) -> vk::CommandBuffer{
+        self.raw
+    }
+    pub fn copy_from_staged_if_has_changes<V:Copy, C:CpuWriteable, G:GpuWriteable>(&mut self, staged: &mut StageBuffer<V, C, G>) -> &mut Self {
+        if staged.has_unflushed_changes(){
+            staged.mark_with_no_changes();
+            self.copy_from_staged(staged)
+        }else{
+            self
+        }
+    }
+    pub fn copy_from_staged<V:Copy, C:CpuWriteable, G:GpuWriteable>(&mut self, staged: &StageBuffer<V, C, G>) -> &mut Self {
+        self.copy(staged.cpu(), staged.gpu())
+
+    }
+
     pub fn copy<V:Copy, T1: Type, T2: Type>(&mut self, src: &Buffer<V, T1>, dst: &Buffer<V, T2>) -> &mut Self {
         assert_eq!(src.capacity(), dst.capacity());
         unsafe {
@@ -251,6 +268,10 @@ impl CommandBuffer {
         }
         self
     }
+    pub fn bind_and_draw_all<V: VertexSource, T: Type>(&mut self, buffer: &Buffer<V, T>) -> &mut CommandBuffer {
+        self.vertex_input(buffer)
+            .draw(buffer.len() as u32,1,0,0)
+    }
     pub fn draw(&mut self, vertex_count: u32, instance_count: u32, first_vertex: u32, first_instance: u32) -> &mut Self{
         unsafe {
             self.device.inner().cmd_draw(
@@ -307,17 +328,35 @@ impl CommandBuffer {
     }
 }
 
-pub struct CommandPool {
+
+struct CommandPoolInner {
     raw: vk::CommandPool,
     device: Device,
 }
 
+impl Drop for CommandPoolInner {
+    fn drop(&mut self) {
+        unsafe { self.device.inner().destroy_command_pool(self.raw, None) }
+    }
+}
+
+#[derive(Clone)]
+pub struct CommandPool {
+    inner:Rc<CommandPoolInner>
+}
+
 impl CommandPool {
+    pub fn device(&self) -> &Device {
+        &self.inner.device
+    }
+    pub fn raw(&self) -> vk::CommandPool {
+        self.inner.raw
+    }
     pub fn release(&self) -> VkResult<()> {
-        unsafe{self.device.inner().reset_command_pool(self.raw,CommandPoolResetFlags::RELEASE_RESOURCES)}
+        unsafe{self.device().inner().reset_command_pool(self.raw(),CommandPoolResetFlags::RELEASE_RESOURCES)}
     }
     pub fn reset(&self) -> VkResult<()> {
-        unsafe{self.device.inner().reset_command_pool(self.raw,CommandPoolResetFlags::empty())}
+        unsafe{self.device().inner().reset_command_pool(self.raw(),CommandPoolResetFlags::empty())}
     }
     pub fn new(device: &Device, allow_resets:bool) -> Result<Self, vk::Result> {
         let command_pool_create_info = vk::CommandPoolCreateInfo::builder()
@@ -329,34 +368,28 @@ impl CommandPool {
         };
         unsafe {
             device.inner().create_command_pool(&command_pool_create_info, None)
-        }.map(|raw| Self { raw, device: device.clone() })
+        }.map(|raw| Self { inner:Rc::new(CommandPoolInner{ raw, device: device.clone() })})
     }
     pub fn clear(&mut self) -> VkResult<()> {
-        unsafe { self.device.inner().reset_command_pool(self.raw, vk::CommandPoolResetFlags::RELEASE_RESOURCES) }
+        unsafe { self.device().inner().reset_command_pool(self.raw(), vk::CommandPoolResetFlags::RELEASE_RESOURCES) }
     }
     pub fn create_command_buffer(&self) -> Result<CommandBuffer, vk::Result> {
         self.create_command_buffers(1).map(|v| v.into_iter().next().unwrap())
     }
     pub fn create_command_buffers(&self, count: u32) -> Result<Vec<CommandBuffer>, vk::Result> {
         let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
-            .command_pool(self.raw)
+            .command_pool(self.raw())
             .command_buffer_count(count)
             .level(vk::CommandBufferLevel::PRIMARY);
 
         unsafe {
-            self.device.inner()
+            self.device().inner()
                 .allocate_command_buffers(&command_buffer_allocate_info)
-        }.map(|vec| vec.into_iter().map(|raw| CommandBuffer { raw, device: self.device.clone() }).collect())
+        }.map(|vec| vec.into_iter().map(|raw| CommandBuffer { raw, device: self.device().clone() }).collect())
     }
     pub fn free(&self, cmd: CommandBuffer) {
         unsafe {
-            self.device.inner().free_command_buffers(self.raw, &[cmd.raw])
+            self.device().inner().free_command_buffers(self.raw(), &[cmd.raw])
         }
-    }
-}
-
-impl Drop for CommandPool {
-    fn drop(&mut self) {
-        unsafe { self.device.inner().destroy_command_pool(self.raw, None) }
     }
 }

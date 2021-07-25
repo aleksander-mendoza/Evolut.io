@@ -10,8 +10,8 @@ use std::path::Path;
 use crate::render::command_pool::{CommandPool, CommandBuffer};
 use crate::render::imageview::{ImageView, Aspect, Color, Depth};
 use crate::render::fence::Fence;
-use crate::render::gpu_future::GpuFuture;
 use crate::render::swap_chain::SwapChain;
+use crate::render::submitter::Submitter;
 
 pub trait Dim {
     const DIM: vk::ImageType;
@@ -171,7 +171,7 @@ impl<D: Dim> StageTexture<D> {
 }
 
 impl StageTexture<Dim2D> {
-    pub fn new(device: &Device, file: &Path, cmd: &CommandPool, flip: bool) -> Result<GpuFuture<Self>, failure::Error> {
+    pub fn new(device: &Device, file: &Path, cmd: &CommandPool, flip: bool) -> Result<Submitter<Self>, failure::Error> {
         let img = image::open(file).map_err(err_msg)?;
         let img = if flip { img.flipv() } else { img };
         let img = img.into_rgba8();
@@ -188,18 +188,17 @@ impl StageTexture<Dim2D> {
         let data = img.as_bytes();
         let staging_buffer = Buffer::<u8, Cpu>::new(device, data)?;
         let texture = TextureView::new(device, format, Dim2D::new(img.width(), img.height()))?;
-        let slf = Self { staging_buffer, texture };
-        let fence = Fence::new(device, false)?;
-        cmd.create_command_buffer()?
+        let mut slf = Submitter::new(Self { staging_buffer, texture },cmd)?;
+        let (cmd,tex) = slf.inner_val();
+        cmd.cmd()
             .begin(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)?
-            .layout_barrier(slf.texture(), vk::ImageLayout::UNDEFINED, vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-            .copy_to_image(slf.staging_buffer(), slf.texture(), vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-            .layout_barrier(slf.texture(), vk::ImageLayout::TRANSFER_DST_OPTIMAL, vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-            .end()?
-            .submit(&[], &[], Some(&fence))?;
-        Ok(GpuFuture::new(slf, fence))
+            .layout_barrier(tex.texture(), vk::ImageLayout::UNDEFINED, vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+            .copy_to_image(tex.staging_buffer(), tex.texture(), vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+            .layout_barrier(tex.texture(), vk::ImageLayout::TRANSFER_DST_OPTIMAL, vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .end()?;
+        cmd.submit()?;
+        Ok(slf)
     }
 }
-
 
 

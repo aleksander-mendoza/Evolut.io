@@ -19,6 +19,10 @@ impl Fence {
         unsafe{self.device.inner().wait_for_fences(&[self.raw], true, timeout.unwrap_or(u64::MAX))}
     }
 
+    pub fn is_signaled(&self) -> VkResult<bool> {
+        unsafe{self.device.inner().get_fence_status(self.raw)}
+    }
+
     pub fn reset(&self) -> VkResult<()> {
         unsafe{self.device.inner().reset_fences(&[self.raw])}
     }

@@ -19,6 +19,7 @@ use crate::render::descriptor_pool::DescriptorSet;
 use crate::render::pipeline::Pipeline;
 use crate::render::swap_chain::SwapChain;
 use crate::render::render_pass::RenderPass;
+use crate::render::submitter::Submitter;
 
 mod block_world;
 mod display;
@@ -26,6 +27,27 @@ mod render;
 mod input;
 mod fps;
 mod blocks;
+
+#[derive(Debug, Copy, Clone)]
+pub struct UniformData {
+    mvp: glm::Mat4,
+    mv: glm::Mat4,
+}
+
+impl UniformData {
+    fn new() -> Self {
+        Self {
+            mvp: glm::identity(),
+            mv: glm::identity(),
+        }
+    }
+}
+
+// impl VertexSource for UniformData{
+//     fn get_attribute_descriptions(binding: u32) -> Vec<VertexInputAttributeDescription> {
+//         glm::Mat4::get_attribute_descriptions(binding)
+//     }
+// }
 
 const CLEAR_VALUES: [vk::ClearValue; 2] = [vk::ClearValue {
     color: vk::ClearColorValue {
@@ -38,7 +60,7 @@ const CLEAR_VALUES: [vk::ClearValue; 2] = [vk::ClearValue {
     },
 }];
 
-fn cmd_buff(cmd:&mut CommandBuffer, framebuffer:&Framebuffer, uniform:&DescriptorSet, pipeline:&Pipeline, swapchain:&SwapChain, render_pass:&RenderPass, data:&DisplayData) -> Result<(), ash::vk::Result> {
+fn cmd_buff(cmd: &mut CommandBuffer, framebuffer: &Framebuffer, uniform: &DescriptorSet, pipeline: &Pipeline, swapchain: &SwapChain, render_pass: &RenderPass, data: &DisplayData) -> Result<(), ash::vk::Result> {
     cmd
         .reset()?
         .begin(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE)?
@@ -66,7 +88,7 @@ fn main() -> Result<(), failure::Error> {
         .build()?;
     sdl.mouse().set_relative_mouse_mode(true);
     let vulkan = VulkanContext::new(window)?;
-    let mut display = Display::new(vulkan)?;
+    let mut display = Display::new(vulkan, UniformData::new())?;
     display.record_commands(cmd_buff)?;
     let event_pump = sdl.event_pump().map_err(err_msg)?;
     let mut input = Input::new(event_pump);
@@ -81,13 +103,13 @@ fn main() -> Result<(), failure::Error> {
     let ash::vk::Extent2D { width, height } = display.extent();
     let mut projection_matrix = proj(width as f32, height as f32);
 
-    let mut world = World::new(2, 2, display.device())?;
+    let mut world = World::new(2, 2, display.cmd_pool())?;
     world.blocks_mut().no_update_fill_level(0, 1, BEDROCK);
     world.blocks_mut().no_update_fill_level(1, 1, DIRT);
     world.blocks_mut().no_update_fill_level(2, 1, GRASS);
     world.blocks_mut().no_update_outline(5, 2, 5, 5, 5, 5, PLANK);
     world.compute_faces();
-    // world.update_all_chunks();
+    world.flush_all_chunks()?;
 
     'main: loop {
         fps_counter.update();
@@ -119,21 +141,21 @@ fn main() -> Result<(), failure::Error> {
         let mut movement_vector = glm::quat_rotate_vec3(&inverse_rotation, &movement_vector);
         // world.blocks().zero_out_velocity_vector_on_hitbox_collision(&mut movement_vector, &(location-glm::vec3(0.4f32,1.5,0.4)),&(location+glm::vec3(0.4f32,0.3,0.4)));
         location += movement_vector;
-        if input.has_mouse_left_click()||input.has_mouse_right_click() {
-            let ray_trace_vector = glm::vec4(0f32,0.,-player_reach, 0.);
+        if input.has_mouse_left_click() || input.has_mouse_right_click() {
+            let ray_trace_vector = glm::vec4(0f32, 0., -player_reach, 0.);
             let ray_trace_vector = glm::quat_rotate_vec(&inverse_rotation, &ray_trace_vector);
             if input.has_mouse_left_click() {
                 world.ray_cast_remove_block(location.as_slice(), ray_trace_vector.as_slice());
-            }else{
+            } else {
                 world.ray_cast_place_block(location.as_slice(), ray_trace_vector.as_slice(), block_in_hand);
             }
-            world.gl_update_all_chunks();
+            // world.gl_update_all_chunks();
         }
         let v = glm::quat_to_mat4(&rotation) * glm::translation(&-location);
 
         let m = model_matrix;
-        let mv = &v * m;
-        display.uniforms_mut().mvp = projection_matrix * &mv;
+        display.uniforms_mut().mv = &v * m;
+        display.uniforms_mut().mvp = projection_matrix * &display.uniforms().mv;
         if display.render()? {
             display.device().device_wait_idle()?;
             display.recreate()?;

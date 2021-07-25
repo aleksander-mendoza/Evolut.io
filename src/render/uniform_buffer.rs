@@ -57,7 +57,7 @@ impl <V:Copy+Debug, const size:usize> Debug for UniformBuffers<V,size>{
     }
 }
 
-impl<T:VertexSource> UniformBuffers<T, 1> {
+impl<T:Copy> UniformBuffers<T, 1> {
     pub fn new(device:&Device, swapchain:&SwapChain, data: T) -> Result<Self, ash::vk::Result> {
         Self::new_array(device, swapchain,[data])
     }

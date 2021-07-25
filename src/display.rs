@@ -22,24 +22,8 @@ use crate::render::texture::{StageTexture, Dim2D, TextureView};
 use crate::render::sampler::Sampler;
 use crate::render::framebuffer::Framebuffer;
 
-#[derive(Debug, Copy, Clone)]
-pub struct UniformData{
-    pub mvp:glm::Mat4
-}
 
-impl UniformData{
-    fn new()->Self{
-        Self{mvp:glm::translation(&glm::vec3(0., 0.2, 0.2)) }
-    }
-}
-
-impl VertexSource for UniformData{
-    fn get_attribute_descriptions(binding: u32) -> Vec<VertexInputAttributeDescription> {
-        glm::Mat4::get_attribute_descriptions(binding)
-    }
-}
-
-struct DisplayInner {
+struct DisplayInner<U:Copy> {
     // The order of all fields
     // is very important, because
     // they will be dropped
@@ -51,7 +35,7 @@ struct DisplayInner {
     render_pass: RenderPass,
     depth_attachment: TextureView<Dim2D, Depth>,
     image_views: Vec<ImageView<Color>>,
-    uniforms: UniformBuffers<UniformData, 1>,
+    uniforms: UniformBuffers<U, 1>,
     swapchain: SwapChain,
 }
 
@@ -59,11 +43,11 @@ pub struct DisplayData {
     pub data: VertexBuffer<VertexClrTex>,
     pub indirect: IndirectBuffer,
     texture: StageTexture<Dim2D>,
-    sampler: Sampler,
+    sampler: Sampler
 }
 
-impl DisplayData {
-    pub fn new(vulkan: &VulkanContext, cmd_pool: &CommandPool) -> Result<DisplayData, failure::Error> {
+impl DisplayData{
+    pub fn new(vulkan: &VulkanContext, cmd_pool: &CommandPool) -> Result<Self, failure::Error> {
         let data: [VertexClrTex; 3] = [
             VertexClrTex {
                 pos: glm::vec2(0.0, -0.5),
@@ -89,9 +73,9 @@ impl DisplayData {
             first_instance: 0
         }])?;
         let texture = StageTexture::new(vulkan.device(), "assets/img/wall.jpg".as_ref(), cmd_pool, true)?;
-        let (_, data) = data.get()?;
-        let (_, texture) = texture.get()?;
-        let (_, indirect) = indirect.get()?;
+        let data = data.take()?;
+        let texture = texture.take()?;
+        let indirect = indirect.take()?;
         let sampler = Sampler::new(vulkan.device(), vk::Filter::NEAREST, true)?;
         Ok(Self { texture, data, sampler ,indirect})
     }
@@ -99,11 +83,11 @@ impl DisplayData {
 
 
 
-impl DisplayInner {
-    pub fn new(vulkan: &VulkanContext, data: &DisplayData) -> Result<Self, failure::Error> {
+impl <U:Copy> DisplayInner<U> {
+    pub fn new(vulkan: &VulkanContext, data: &DisplayData,uniform:U) -> Result<Self, failure::Error> {
         let swapchain = vulkan.instance().create_swapchain(vulkan.device(), vulkan.surface())?;
         let image_views = swapchain.create_image_views()?;
-        let uniforms = UniformBuffers::new(vulkan.device(),&swapchain, UniformData::new())?;
+        let uniforms = UniformBuffers::new(vulkan.device(),&swapchain, uniform)?;
         let descriptor_layout = DescriptorLayout::new_sampler_uniform(&data.sampler, &uniforms)?;
         let depth_attachment = TextureView::depth_buffer_for(&swapchain)?;
         let render_pass = RenderPassBuilder::new()
@@ -173,14 +157,14 @@ impl DisplayInner {
 }
 
 
-pub struct Display {
+pub struct Display<U:Copy> {
     command_buffers: Vec<CommandBuffer>,
-    inner: DisplayInner,
+    inner: DisplayInner<U>,
     data: DisplayData,
     cmd_pool: CommandPool,
     vulkan: VulkanContext,
 }
-impl Display {
+impl <U:Copy> Display<U> {
 
     pub fn record_commands<F>(&mut self,f:F)->Result<(),vk::Result> where F:Fn(&mut CommandBuffer,&Framebuffer,&DescriptorSet,&Pipeline,&SwapChain,&RenderPass,&DisplayData)->Result<(), ash::vk::Result>{
         let Self{ command_buffers, inner, data, cmd_pool, vulkan } = self;
@@ -193,7 +177,9 @@ impl Display {
         }
         Ok(())
     }
-
+    pub fn cmd_pool(&self) -> &CommandPool {
+        &self.cmd_pool
+    }
     pub fn device(&self) -> &Device {
         self.vulkan.device()
     }
@@ -207,19 +193,22 @@ impl Display {
     pub fn extent(&self) -> vk::Extent2D {
         self.swapchain().extent()
     }
-    pub fn uniforms_mut(&mut self)->&mut UniformData{
+    pub fn uniforms_mut(&mut self)->&mut U{
         &mut self.inner.uniforms.data[0]
     }
+    pub fn uniforms(&self)->&U{
+        &self.inner.uniforms.data[0]
+    }
     pub fn recreate(&mut self) -> Result<(), failure::Error> {
-        self.inner = DisplayInner::new(&self.vulkan, &self.data)?;
+        self.inner = DisplayInner::new(&self.vulkan, &self.data, self.inner.uniforms.data[0])?;
         Ok(())
     }
 
-    pub fn new(vulkan: VulkanContext) -> Result<Self, failure::Error> {
+    pub fn new(vulkan: VulkanContext, uniform:U) -> Result<Self, failure::Error> {
         let cmd_pool = CommandPool::new(vulkan.device(), true)?;
         let data = DisplayData::new(&vulkan, &cmd_pool)?;
         cmd_pool.reset()?;
-        let inner = DisplayInner::new(&vulkan, &data)?;
+        let inner = DisplayInner::new(&vulkan, &data, uniform)?;
         let command_buffers = cmd_pool.create_command_buffers(inner.framebuffers.len() as u32)?;
         Ok(Self {
             command_buffers,

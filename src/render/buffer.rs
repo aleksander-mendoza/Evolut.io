@@ -5,9 +5,9 @@ use ash::version::{DeviceV1_0, InstanceV1_0};
 use crate::render::instance::Instance;
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 use std::marker::PhantomData;
-use crate::render::command_pool::CommandPool;
+use crate::render::command_pool::{CommandPool, CommandBuffer};
 use crate::render::fence::Fence;
-use crate::render::gpu_future::GpuFuture;
+use crate::render::submitter::Submitter;
 use std::fmt::Debug;
 use std::ptr::NonNull;
 use std::slice::{Iter, IterMut};
@@ -195,8 +195,8 @@ pub struct Vector<V: Copy, C: CpuWriteable> {
     len: usize,
     data_ptr: NonNull<V>,
 }
-
 impl<V: Copy, C: CpuWriteable> Vector<V, C> {
+
     pub fn buffer(&self) -> &Buffer<V, C> {
         &self.cpu
     }
@@ -320,6 +320,9 @@ impl<V: Copy, C: CpuWriteable, G: GpuWriteable> StageBuffer<V, C, G> {
     pub fn mark_with_unflushed_changes(&mut self) {
         self.has_unflushed_changes = true
     }
+    pub fn mark_with_no_changes(&mut self) {
+        self.has_unflushed_changes = false
+    }
     pub fn pop(&mut self) -> V {
         self.has_unflushed_changes = true;
         self.cpu.pop()
@@ -365,24 +368,27 @@ impl<V: Copy, C: CpuWriteable, G: GpuWriteable> StageBuffer<V, C, G> {
         let gpu = Buffer::with_capacity(device, capacity)?;
         Ok(Self { cpu, gpu, has_unflushed_changes: false })
     }
-    pub fn flush_to_gpu(&mut self, cmd: &CommandPool, fence: Fence) -> Result<GpuFuture<()>, vk::Result> {
-        cmd.create_command_buffer()?
-            .begin(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)?
-            .copy(self.cpu(), self.gpu())
-            .end()?
-            .submit(&[], &[], Some(&fence))?;
-        self.has_unflushed_changes = false;
-        Ok(GpuFuture::new((), fence))
-    }
-    pub fn new(device: &Device, cmd: &CommandPool, data: &[V]) -> Result<GpuFuture<Self>, vk::Result> {
-        let mut slf = Self::with_capacity(device, data.len())?;
+
+    pub fn new(device: &Device, cmd: &CommandPool, data: &[V]) -> Result<Submitter<Self>, vk::Result> {
+        let mut slf = Submitter::new(Self::with_capacity(device, data.len())?,cmd)?;
         unsafe { slf.set_len(data.len()) }
         slf.as_slice_mut().copy_from_slice(data);
-        let fence = Fence::new(device, false)?;
-        slf.flush_to_gpu(cmd, fence).map(|v| v.replace(slf))
+        slf.flush_to_gpu()?;
+        Ok(slf)
     }
 }
 
+impl <V:Copy,C:CpuWriteable,G:GpuWriteable> Submitter<StageBuffer<V,C,G>>{
+    pub fn flush_to_gpu(&mut self) -> Result<(), vk::Result> {
+        let (cmd,buff) = self.inner_val();
+        cmd.reset()?
+            .reset()?
+            .begin(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)?
+            .copy_from_staged_if_has_changes(buff)
+            .end()?;
+        self.inner_mut().submit()
+    }
+}
 
 impl<V: Copy, C: CpuWriteable, G: GpuWriteable> Index<usize> for StageBuffer<V, C, G> {
     type Output = V;
@@ -400,7 +406,7 @@ impl<V: Copy, C: CpuWriteable, G: GpuWriteable> IndexMut<usize> for StageBuffer<
 pub type VertexBuffer<V: VertexSource> = StageBuffer<V, Cpu, Gpu>;
 
 impl<V: Copy> VertexBuffer<V> {
-    pub fn new_vertex_buffer(device: &Device, cmd: &CommandPool, data: &[V]) -> Result<GpuFuture<Self>, vk::Result> {
+    pub fn new_vertex_buffer(device: &Device, cmd: &CommandPool, data: &[V]) -> Result<Submitter<Self>, vk::Result> {
         Self::new(device, cmd, data)
     }
 }
@@ -408,7 +414,7 @@ impl<V: Copy> VertexBuffer<V> {
 pub type IndirectBuffer = StageBuffer<vk::DrawIndirectCommand, Cpu, GpuIndirect>;
 
 impl IndirectBuffer {
-    pub fn new_indirect_buffer(device: &Device, cmd: &CommandPool, data: &[vk::DrawIndirectCommand]) -> Result<GpuFuture<Self>, vk::Result> {
+    pub fn new_indirect_buffer(device: &Device, cmd: &CommandPool, data: &[vk::DrawIndirectCommand]) -> Result<Submitter<Self>, vk::Result> {
         Self::new(device, cmd, data)
     }
 }

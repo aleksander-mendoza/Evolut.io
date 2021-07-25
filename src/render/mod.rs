@@ -16,7 +16,7 @@ pub mod frames_in_flight;
 pub mod vulkan_context;
 pub mod data;
 pub mod buffer;
-pub mod gpu_future;
+pub mod submitter;
 pub mod descriptor_pool;
 pub mod descriptor_layout;
 pub mod uniform_buffer;

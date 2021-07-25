@@ -57,7 +57,7 @@ impl DescriptorSet{
         self.raw
     }
 
-    pub fn update_buffer<T:VertexSource>(&self,binding:u32,buffer:&Buffer<T,Uniform>){
+    pub fn update_buffer<T:Copy>(&self,binding:u32,buffer:&Buffer<T,Uniform>){
         assert_eq!(self.layout.layout(binding).descriptor_type, vk::DescriptorType::UNIFORM_BUFFER, "Tried to bind buffer to {} ",binding);
         let descriptor_info = buffer.descriptor_info();
 

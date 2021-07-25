@@ -5,6 +5,7 @@ use crate::blocks::world_size::{WorldSize};
 use crate::render::device::Device;
 use crate::render::buffer::{Buffer, VertexBuffer};
 use ash::vk;
+use crate::render::command_pool::CommandBuffer;
 
 pub struct ChunkFaces {
     opaque_faces: VertexBuffer<Face>,
@@ -12,7 +13,18 @@ pub struct ChunkFaces {
 }
 
 impl ChunkFaces {
-
+    pub fn opaque(&self) -> &VertexBuffer<Face> {
+        &self.opaque_faces
+    }
+    pub fn transparent(&self) -> &VertexBuffer<Face> {
+        &self.transparent_faces
+    }
+    pub fn flush_opaque(&mut self, cmd:&mut CommandBuffer) {
+        cmd.copy_from_staged_if_has_changes(&mut self.opaque_faces);
+    }
+    pub fn flush_transparent(&mut self, cmd: &mut CommandBuffer) {
+        cmd.copy_from_staged_if_has_changes(&mut self.transparent_faces);
+    }
     pub fn opaque_as_slice(&self) -> &[Face] {
         self.opaque_faces.as_slice()
     }
