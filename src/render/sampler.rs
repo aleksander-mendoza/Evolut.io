@@ -47,3 +47,9 @@ impl Sampler {
         }
     }
 }
+
+impl Drop for Sampler{
+    fn drop(&mut self) {
+        unsafe { self.device.inner().destroy_sampler(self.raw, None) }
+    }
+}

@@ -4,7 +4,7 @@ use crate::render::pipeline::{PipelineBuilder, Pipeline};
 use crate::render::render_pass::{RenderPassBuilder, RenderPass};
 use crate::render::shader_module::ShaderModule;
 use ash::vk::{ShaderStageFlags, PhysicalDevice, ClearValue, VertexInputAttributeDescription};
-use crate::render::command_pool::{CommandPool, CommandBuffer, StateFinished};
+use crate::render::command_pool::{CommandPool, CommandBuffer};
 use crate::render::imageview::{ImageView, Color, Depth};
 use crate::render::frames_in_flight::FramesInFlight;
 use crate::render::surface::Surface;
@@ -44,29 +44,26 @@ struct DisplayInner {
     // is very important, because
     // they will be dropped
     // in the exact same order
-    command_buffers: Vec<CommandBuffer<StateFinished>>,
     descriptor_sets: Vec<DescriptorSet>,
     descriptor_pool: DescriptorPool,
     framebuffers: Vec<Framebuffer>,
     pipeline: Pipeline,
-    clear_values: Vec<ClearValue>,
     render_pass: RenderPass,
     depth_attachment: TextureView<Dim2D, Depth>,
-    cmd_pool: CommandPool,
     image_views: Vec<ImageView<Color>>,
     uniforms: UniformBuffers<UniformData, 1>,
     swapchain: SwapChain,
 }
 
-struct DisplayData {
-    data: VertexBuffer<VertexClrTex>,
-    indirect: IndirectBuffer,
+pub struct DisplayData {
+    pub data: VertexBuffer<VertexClrTex>,
+    pub indirect: IndirectBuffer,
     texture: StageTexture<Dim2D>,
     sampler: Sampler,
 }
 
 impl DisplayData {
-    pub fn new(vulkan: &VulkanContext) -> Result<DisplayData, failure::Error> {
+    pub fn new(vulkan: &VulkanContext, cmd_pool: &CommandPool) -> Result<DisplayData, failure::Error> {
         let data: [VertexClrTex; 3] = [
             VertexClrTex {
                 pos: glm::vec2(0.0, -0.5),
@@ -84,15 +81,14 @@ impl DisplayData {
                 tex: glm::vec2(0.0, 0.0),
             },
         ];
-        let mut cmd_pool = CommandPool::new(vulkan.device())?;
-        let data = StageBuffer::new_vertex_buffer(vulkan.device(), &cmd_pool, &data)?;
-        let indirect = StageBuffer::new_indirect_buffer(vulkan.device(), &cmd_pool, &[vk::DrawIndirectCommand{
+        let data = StageBuffer::new_vertex_buffer(vulkan.device(), cmd_pool, &data)?;
+        let indirect = StageBuffer::new_indirect_buffer(vulkan.device(), cmd_pool, &[vk::DrawIndirectCommand{
             vertex_count: 3,
             instance_count: 4,
             first_vertex: 0,
             first_instance: 0
         }])?;
-        let texture = StageTexture::new(vulkan.device(), "assets/img/wall.jpg".as_ref(), &cmd_pool, true)?;
+        let texture = StageTexture::new(vulkan.device(), "assets/img/wall.jpg".as_ref(), cmd_pool, true)?;
         let (_, data) = data.get()?;
         let (_, texture) = texture.get()?;
         let (_, indirect) = indirect.get()?;
@@ -102,13 +98,13 @@ impl DisplayData {
 }
 
 
+
 impl DisplayInner {
     pub fn new(vulkan: &VulkanContext, data: &DisplayData) -> Result<Self, failure::Error> {
         let swapchain = vulkan.instance().create_swapchain(vulkan.device(), vulkan.surface())?;
         let image_views = swapchain.create_image_views()?;
         let uniforms = UniformBuffers::new(vulkan.device(),&swapchain, UniformData::new())?;
         let descriptor_layout = DescriptorLayout::new_sampler_uniform(&data.sampler, &uniforms)?;
-        let cmd_pool = CommandPool::new(vulkan.device())?;
         let depth_attachment = TextureView::depth_buffer_for(&swapchain)?;
         let render_pass = RenderPassBuilder::new()
             .color_attachment(swapchain.format())
@@ -153,59 +149,51 @@ impl DisplayInner {
             .build(&render_pass)?;
         let framebuffers: Result<Vec<Framebuffer>, vk::Result> = image_views.iter().map(|v| Framebuffer::new_color_and_depth(&render_pass, &swapchain, v, depth_attachment.imageview())).collect();
         let framebuffers = framebuffers?;
-        let clear_values = vec![vk::ClearValue {
-            color: vk::ClearColorValue {
-                float32: [0.0, 0.0, 0.0, 1.0],
-            },
-        }, vk::ClearValue {
-            depth_stencil: vk::ClearDepthStencilValue {
-                depth: 1.,
-                stencil: 0,
-            },
-        }];
+
         let descriptor_pool = DescriptorPool::new(vulkan.device(), &descriptor_layout, &swapchain)?;
         let descriptor_sets = descriptor_pool.create_sets(&std::iter::repeat(descriptor_layout).take(swapchain.len()).collect::<Vec<DescriptorLayout>>())?;
         for (ds, u) in descriptor_sets.iter().zip(uniforms.buffers()) {
             ds.update_sampler(0, &data.sampler, data.texture.imageview());
             ds.update_buffer(1, u);
         }
-        let command_buffers: Result<Vec<CommandBuffer<StateFinished>>, vk::Result> = cmd_pool.create_command_buffers(framebuffers.len() as u32)?
-            .into_iter().zip(framebuffers.iter().zip(descriptor_sets.iter())).map(|(cmd, (fb, ds))|
-            cmd.single_pass_indirect_input_uniform(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE,
-                                                   &render_pass,
-                                                   fb,
-                                                   ds,
-                                                   swapchain.render_area(),
-                                                   &clear_values,
-                                                   &pipeline,
-                                                   data.data.gpu(),
-                                                   data.indirect.gpu())
-        ).collect();
-        let command_buffers = command_buffers?;
+
         Ok(Self {
             depth_attachment,
-            command_buffers,
             swapchain,
             image_views,
             framebuffers,
-            cmd_pool,
             render_pass,
             pipeline,
             uniforms,
-            clear_values,
             descriptor_pool,
             descriptor_sets,
         })
     }
+
 }
+
 
 pub struct Display {
+    command_buffers: Vec<CommandBuffer>,
     inner: DisplayInner,
-    vulkan: VulkanContext,
     data: DisplayData,
+    cmd_pool: CommandPool,
+    vulkan: VulkanContext,
 }
-
 impl Display {
+
+    pub fn record_commands<F>(&mut self,f:F)->Result<(),vk::Result> where F:Fn(&mut CommandBuffer,&Framebuffer,&DescriptorSet,&Pipeline,&SwapChain,&RenderPass,&DisplayData)->Result<(), ash::vk::Result>{
+        let Self{ command_buffers, inner, data, cmd_pool, vulkan } = self;
+        let DisplayInner{ descriptor_sets, descriptor_pool, framebuffers,
+            pipeline,
+            render_pass, depth_attachment,
+            image_views, uniforms, swapchain } = inner;
+        for (cmd, (fb, ds)) in command_buffers.iter_mut().zip(framebuffers.iter().zip(descriptor_sets.iter())){
+            f(cmd,fb,ds, pipeline,swapchain,render_pass,data)?
+        }
+        Ok(())
+    }
+
     pub fn device(&self) -> &Device {
         self.vulkan.device()
     }
@@ -227,12 +215,17 @@ impl Display {
         Ok(())
     }
 
-    pub fn new(vulkan: VulkanContext) -> Result<Display, failure::Error> {
-        let data = DisplayData::new(&vulkan)?;
+    pub fn new(vulkan: VulkanContext) -> Result<Self, failure::Error> {
+        let cmd_pool = CommandPool::new(vulkan.device(), true)?;
+        let data = DisplayData::new(&vulkan, &cmd_pool)?;
+        cmd_pool.reset()?;
         let inner = DisplayInner::new(&vulkan, &data)?;
+        let command_buffers = cmd_pool.create_command_buffers(inner.framebuffers.len() as u32)?;
         Ok(Self {
+            command_buffers,
             inner,
             vulkan,
+            cmd_pool,
             data,
         })
     }
@@ -244,7 +237,7 @@ impl Display {
         let render_finished = self.vulkan.frames_in_flight().current_rendering();
         fence.reset()?;
         self.inner.uniforms.flush(image_idx as usize)?;
-        let command_buffer = &self.inner.command_buffers[image_idx as usize];
+        let command_buffer = &self.command_buffers[image_idx as usize];
         command_buffer.submit(&[(image_available, vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)],
                               std::slice::from_ref(render_finished),
                               Some(fence))?;

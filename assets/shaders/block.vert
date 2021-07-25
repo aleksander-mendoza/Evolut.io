@@ -1,13 +1,13 @@
-#version 330 core
+#version 450
 layout (location = 0) in uvec4 coords;
 layout (location = 1) in uint tex_id;
-out vec2 UV;
+layout (location = 0) out vec2 UV;
 
+layout (push_constant) uniform vec3 chunk_location;
 layout (binding = 1) uniform Matrices
 {
     mat4 MVP;
     mat4 MV;
-    vec3 chunk_location;
 };
 
 void main()

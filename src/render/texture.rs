@@ -7,7 +7,7 @@ use ash::vk::{Extent3D, DeviceMemory, Image, DeviceSize, Extent2D};
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use failure::err_msg;
 use std::path::Path;
-use crate::render::command_pool::{CommandPool, CommandBuffer, OptionalRenderPass};
+use crate::render::command_pool::{CommandPool, CommandBuffer};
 use crate::render::imageview::{ImageView, Aspect, Color, Depth};
 use crate::render::fence::Fence;
 use crate::render::gpu_future::GpuFuture;
