@@ -329,7 +329,7 @@ impl Input {
     }
     pub fn get_direction_unit_vector(&self) -> glm::TVec3<f32> {
         let x_axis = -(self.left as i32) + (self.right as i32);
-        let y_axis = -(self.up as i32) + (self.down as i32);
+        let y_axis = -(self.down as i32) + (self.up as i32);
         let z_axis = -(self.forward as i32) + (self.backward as i32);
         let length = ((x_axis * x_axis + y_axis * y_axis + z_axis * z_axis) as f32).sqrt();
         if length == 0f32 {

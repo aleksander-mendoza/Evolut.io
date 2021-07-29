@@ -55,11 +55,11 @@ fn main() -> Result<(), failure::Error> {
     let mut input = Input::new(event_pump);
     let mut fps_counter = FpsCounter::new(timer, 60);
     let mut rotation = glm::quat_identity();
-    let mut location = glm::vec3(0f32, 0f32, 2f32);
+    let mut location = glm::vec3(2f32, 5f32, 2f32);
     let mut block_in_hand = Block::new(2u32);
     let model_matrix = glm::identity::<f32, 4>();
     let movement_speed = 0.005f32;
-    let player_reach = 3f32;
+    let player_reach = 4f32;
     let rotation_speed = 1f32;
     let ash::vk::Extent2D { width, height } = display.extent();
     let mut projection_matrix = proj(width as f32, height as f32);
@@ -82,7 +82,7 @@ fn main() -> Result<(), failure::Error> {
             let normalized_x = (input.mouse_move_xrel() as f32) / width
                 * fps_counter.delta_f32()
                 * rotation_speed;
-            let normalized_y = (-input.mouse_move_yrel() as f32) / height
+            let normalized_y = (input.mouse_move_yrel() as f32) / height
                 * fps_counter.delta_f32()
                 * rotation_speed;
             rotation = glm::quat_angle_axis(normalized_y, &glm::vec3(1f32, 0f32, 0f32))
@@ -107,6 +107,9 @@ fn main() -> Result<(), failure::Error> {
             world.flush_all_chunks();
             world.reset();
             display.rerecord_all_cmd_buffers()?;
+        }
+        if input.number() > -1{
+            block_in_hand = Block::new((input.number()+1) as u32)
         }
         let v = glm::quat_to_mat4(&rotation) * glm::translation(&-location);
 

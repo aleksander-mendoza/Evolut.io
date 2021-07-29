@@ -35,12 +35,12 @@ impl BlockWorldBuilder {
         let sampler = Sampler::new(cmd_pool.device(), vk::Filter::NEAREST, true)?;
         let frag = ShaderModule::new(include_glsl!("assets/shaders/block.frag", kind: frag) as &[u32], ShaderStageFlags::FRAGMENT, cmd_pool.device())?;
         let vert = ShaderModule::new(include_glsl!("assets/shaders/block.vert") as &[u32], ShaderStageFlags::VERTEX, cmd_pool.device())?;
-        let mut world = World::new(1,1, cmd_pool)?;
+        let mut world = World::new(2,2, cmd_pool)?;
         world.blocks_mut().no_update_fill_level(0, 1, BEDROCK);
         world.blocks_mut().no_update_fill_level(1, 1, DIRT);
         world.blocks_mut().no_update_fill_level(2, 1, GRASS);
         world.blocks_mut().no_update_fill_level(10, 1, GLASS);
-        // world.blocks_mut().no_update_outline(5, 2, 5, 5, 5, 5, PLANK);
+        world.blocks_mut().no_update_outline(5, 2, 5, 5, 5, 5, PLANK);
         world.compute_faces();
         world.flush_all_chunks()?;
         let texture = texture.take()?.take();
@@ -55,10 +55,10 @@ impl BlockWorldBuilder {
             .shader("main", vert)
             .depth_test(true)
             .color_blend_attachment_states(vk::PipelineColorBlendAttachmentState {
-                blend_enable: vk::FALSE,
+                blend_enable: vk::TRUE,
                 color_write_mask: vk::ColorComponentFlags::all(),
-                src_color_blend_factor: vk::BlendFactor::ONE,
-                dst_color_blend_factor: vk::BlendFactor::ZERO,
+                src_color_blend_factor: vk::BlendFactor::SRC_ALPHA,
+                dst_color_blend_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
                 color_blend_op: vk::BlendOp::ADD,
                 src_alpha_blend_factor: vk::BlendFactor::ONE,
                 dst_alpha_blend_factor: vk::BlendFactor::ZERO,
