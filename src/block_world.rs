@@ -54,6 +54,8 @@ impl BlockWorldBuilder {
             .shader("main", frag)
             .shader("main", vert)
             .depth_test(true)
+            .cull_face(vk::CullModeFlags::FRONT)
+            .front_face_clockwise(true)
             .color_blend_attachment_states(vk::PipelineColorBlendAttachmentState {
                 blend_enable: vk::TRUE,
                 color_write_mask: vk::ColorComponentFlags::all(),

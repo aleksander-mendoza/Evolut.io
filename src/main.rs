@@ -93,7 +93,7 @@ fn main() -> Result<(), failure::Error> {
         let movement_vector = input.get_direction_unit_vector() * movement_speed * fps_counter.delta_f32();
         let inverse_rotation = glm::quat_inverse(&rotation);
         let mut movement_vector = glm::quat_rotate_vec3(&inverse_rotation, &movement_vector);
-        // world.blocks().zero_out_velocity_vector_on_hitbox_collision(&mut movement_vector, &(location-glm::vec3(0.4f32,1.5,0.4)),&(location+glm::vec3(0.4f32,0.3,0.4)));
+        display.pipeline().world().blocks().zero_out_velocity_vector_on_hitbox_collision(&mut movement_vector, &(location-glm::vec3(0.4f32,1.5,0.4)),&(location+glm::vec3(0.4f32,0.3,0.4)));
         location += movement_vector;
         if input.has_mouse_left_click() || input.has_mouse_right_click() {
             let ray_trace_vector = glm::vec4(0f32, 0., -player_reach, 0.);

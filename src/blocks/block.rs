@@ -42,8 +42,8 @@ impl Block {
     pub fn is_solid(&self) -> bool {
         self.idx > 0
     }
-    pub fn is_transparent(&self) -> bool {
-        self.idx < STONE.idx
+    pub fn opacity(&self) -> f32 {
+        BLOCKS[self.idx as usize].opacity()
     }
     pub fn is_air(&self) -> bool {
         self.idx == 0
@@ -56,4 +56,7 @@ impl Block {
     }
     pub fn show_neighboring_faces(&self) -> bool { self.is_transparent() }
     pub fn show_my_faces(&self) -> bool { !self.is_air() }
+    pub fn is_transparent(&self) -> bool{
+        self.opacity() < 1.
+    }
 }

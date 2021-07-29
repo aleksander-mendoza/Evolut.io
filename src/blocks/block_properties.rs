@@ -3,23 +3,33 @@ use crate::blocks::{FaceOrientation, Block};
 pub struct BlockProp{
     name:&'static str,
     texture_ids:[u32;6],
+    opacity:f32, // the higher, the more opaque
 }
 
 impl BlockProp{
+    const fn regular_transparent(name:&'static str, texture_id:u32, opacity:f32) ->Self{
+        Self{name,texture_ids:[texture_id;6],opacity}
+    }
     const fn regular(name:&'static str, texture_id:u32)->Self{
-        Self{name,texture_ids:[texture_id;6]}
+        Self::regular_transparent(name,texture_id,1.)
     }
     const fn top_sides_bottom(name:&'static str, texture_id_top:u32,texture_id_side:u32,texture_id_bottom:u32)->Self{
-        Self{name,texture_ids:[texture_id_top,texture_id_bottom,texture_id_side,texture_id_side,texture_id_side,texture_id_side]}
+        Self::top_sides_bottom_transparent(name,texture_id_top,texture_id_side,texture_id_bottom,1.)
+    }
+    const fn top_sides_bottom_transparent(name:&'static str, texture_id_top:u32,texture_id_side:u32,texture_id_bottom:u32,opacity:f32)->Self{
+        Self{name,texture_ids:[texture_id_top,texture_id_bottom,texture_id_side,texture_id_side,texture_id_side,texture_id_side],opacity}
     }
     const fn top_sides_bottom_front(name:&'static str, texture_id_top:u32,texture_id_side:u32,texture_id_bottom:u32,texture_id_front:u32)->Self{
-        Self{name,texture_ids:[texture_id_top,texture_id_bottom,texture_id_side,texture_id_side,texture_id_side,texture_id_front]}
+        Self{name,texture_ids:[texture_id_top,texture_id_bottom,texture_id_side,texture_id_side,texture_id_side,texture_id_front],opacity:1.}
     }
     pub fn get_texture_id(&self, ort:FaceOrientation)->u32{
         self.texture_ids[ort as usize]
     }
     pub fn name(&self)->&'static str{
         self.name
+    }
+    pub fn opacity(&self)->f32{
+        self.opacity
     }
 }
 pub const AIR:Block = Block::new(0);
@@ -41,12 +51,12 @@ pub const BEDROCK:Block = Block::new(15);
 pub const GRAVEL:Block = Block::new(14);
 
 pub const BLOCKS:[BlockProp;34] = [
-    BlockProp::regular("air", /*Some dummy value*/256),
-    BlockProp::regular("glass", 28),
-    BlockProp::regular("ice", 55),
-    BlockProp::regular("spawner", 53),
-    BlockProp::regular("water", 31),
-    BlockProp::top_sides_bottom("leaves", 51,52, 51),
+    BlockProp::regular_transparent("air", /*Some dummy value*/256, 0.),
+    BlockProp::regular_transparent("glass", 28, 0.1),
+    BlockProp::regular_transparent("ice", 55, 0.7),
+    BlockProp::regular_transparent("spawner", 53, 0.),
+    BlockProp::regular_transparent("water", 31, 0.5),
+    BlockProp::top_sides_bottom_transparent("leaves", 51,52, 51, 0.),
     // blocks above are transparent. Blocks below are not
     BlockProp::regular("stone", 1),
     BlockProp::regular("dirt", 2),
