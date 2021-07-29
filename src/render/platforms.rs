@@ -23,6 +23,7 @@ use objc::runtime::YES;
 fn append_debug(mut v:Vec<*const i8>,debug:bool)->Vec<*const i8>{
     if debug{
         v.push( DebugUtils::name().as_ptr());
+        v.push(b"VK_EXT_validation_features\0".as_ptr() as *const i8);
         v
     }else{
         v
@@ -52,6 +53,5 @@ pub fn required_extension_names(debug:bool) -> Vec<*const i8> {
     append_debug(vec![
         Surface::name().as_ptr(),
         XlibSurface::name().as_ptr(),
-        DebugUtils::name().as_ptr(),
     ],debug)
 }

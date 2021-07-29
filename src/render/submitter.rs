@@ -87,10 +87,22 @@ impl <T> Submitter<T>{
     pub fn inner(&self) -> &SubmitterCmd{
         &self.inner
     }
-
+    pub fn wait(&self, timeout:Option<u64>) -> VkResult<()> {
+        self.inner().wait(timeout)
+    }
+    pub fn reset(&mut self) -> VkResult<&mut CommandBuffer> {
+        self.inner_mut().reset()
+    }
     pub fn inner_mut(&mut self) -> &mut SubmitterCmd{
         &mut self.inner
     }
-
-
+    pub fn cmd_pool(&self) -> &CommandPool{
+        self.inner().cmd_pool()
+    }
+    pub fn cmd(&mut self) -> &mut CommandBuffer {
+        self.inner_mut().cmd()
+    }
+    pub fn device(&self) -> &Device {
+        self.inner().device()
+    }
 }

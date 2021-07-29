@@ -51,8 +51,8 @@ impl ChunkFaces {
     }
     fn push(&mut self, x: u8, y: u8, z: u8, ort: FaceOrientation, block: Block) -> Result<bool, failure::Error> {
         let face = Face::from_coords_and_ort(x, y, z, ort, block.texture_id(ort));
-        assert!(self.find_opaque_by_coords_and_ort(face.coords_and_ort()).is_none());
-        assert!(self.find_transparent_by_coords_and_ort(face.coords_and_ort()).is_none());
+        debug_assert!(self.find_opaque_by_coords_and_ort(face.coords_and_ort()).is_none());
+        debug_assert!(self.find_transparent_by_coords_and_ort(face.coords_and_ort()).is_none());
         if block.is_transparent() {
             self.transparent_faces.push(face).map_err(err_msg)
         } else {
@@ -84,8 +84,8 @@ impl ChunkFaces {
 
     fn remove_transparent(&mut self, x: u8, y: u8, z: u8) {
         let mut i = 0;
-        assert!(self.find_opaque(x, y, z).is_none());
-        assert!(self.find_transparent(x, y, z).is_some());
+        debug_assert!(self.find_opaque(x, y, z).is_none());
+        debug_assert!(self.find_transparent(x, y, z).is_some());
         while i < self.transparent_faces.len() {
             if self.transparent_faces[i].matches_coords(x, y, z) {
                 self.remove_transparent_at(i);
@@ -99,8 +99,8 @@ impl ChunkFaces {
         self.remove_opaque(x, y, z)
     }
     fn remove_opaque(&mut self, x: u8, y: u8, z: u8) {
-        assert!(self.find_opaque(x, y, z).is_some());
-        assert!(self.find_transparent(x, y, z).is_none());
+        debug_assert!(self.find_opaque(x, y, z).is_some());
+        debug_assert!(self.find_transparent(x, y, z).is_none());
         let mut i = 0;
         while i < self.opaque_faces.len() {
             if self.opaque_faces[i].matches_coords(x, y, z) {
@@ -143,15 +143,15 @@ impl ChunkFaces {
     }
     /**Changes textures on existing faces and assumes that the transparency is going to be switched. If transparency did not change, use update_textures instead*/
     fn change_textures(&mut self, x: u8, y: u8, z: u8, new_block: Block) -> Result<(),failure::Error> {
-        assert!(!new_block.is_air());
+        debug_assert!(!new_block.is_air());
         let (from, to) = if new_block.is_transparent() {
-            assert!(self.find_opaque(x, y, z).is_some(), "Failed to update texture at {},{},{} to new block id {}", x, y, z, new_block);
-            assert!(self.find_transparent(x, y, z).is_none(), "Failed to update texture at {},{},{} to new block id {}", x, y, z, new_block);
+            debug_assert!(self.find_opaque(x, y, z).is_some(), "Failed to update texture at {},{},{} to new block id {}", x, y, z, new_block);
+            debug_assert!(self.find_transparent(x, y, z).is_none(), "Failed to update texture at {},{},{} to new block id {}", x, y, z, new_block);
             let (trans, opaq) = self.borrow_transparent_and_opaque_mut();
             (opaq, trans)
         } else {
-            assert!(self.find_opaque(x, y, z).is_none(), "Failed to update texture at {},{},{} to new block id {}", x, y, z, new_block);
-            assert!(self.find_transparent(x, y, z).is_some(), "Failed to update texture at {},{},{} to new block id {}", x, y, z, new_block);
+            debug_assert!(self.find_opaque(x, y, z).is_none(), "Failed to update texture at {},{},{} to new block id {}", x, y, z, new_block);
+            debug_assert!(self.find_transparent(x, y, z).is_some(), "Failed to update texture at {},{},{} to new block id {}", x, y, z, new_block);
             self.borrow_transparent_and_opaque_mut()
         };
 
@@ -182,7 +182,7 @@ impl ChunkFaces {
         self.remove_transparent_at(self.position_transparent_by_coords_and_ort(face).unwrap())
     }
     fn update_texture(&mut self, idx: usize, new_block: Block) {
-        assert!(!new_block.is_air());
+        debug_assert!(!new_block.is_air());
         let faces = if new_block.is_transparent() {
             &mut self.transparent_faces
         } else {

@@ -129,6 +129,7 @@ impl Device {
         let features = vk::PhysicalDeviceFeatures::builder();
 
         let layers = get_validation_layer_support(entry)?;
+
         let extensions = device_extensions();
         let device_create_info = vk::DeviceCreateInfo::builder()
             .queue_create_infos(std::slice::from_ref(&queue_create_info))

@@ -115,24 +115,23 @@ impl World {
             false
         }
     }
-
-    // pub fn draw(&self, cmd: &mut CommandBuffer, pipeline:&Pipeline, instance_buffer_binding:BufferBinding<Face>,chunk_location_uniform: PushConstant<glm::Vec3>) {
-    //     for (chunk_idx, chunk) in self.faces.iter().enumerate() {
-    //         assert!(chunk_idx < self.faces.len());
-    //         let (x, z) = self.size().chunk_idx_into_chunk_pos(chunk_idx);
-    //         cmd.push_constant(pipeline,chunk_location_uniform,&glm::vec3((x * CHUNK_WIDTH) as f32, 0., (z * CHUNK_DEPTH) as f32))
-    //             .vertex_input(instance_buffer_binding, chunk.opaque().gpu())
-    //             .draw(6,chunk.len_opaque() as u32,0,0);
-    //     }
-    //     cmd.barrier()?;
-    //     for (chunk_idx, chunk) in self.faces.iter().enumerate() {
-    //         assert!(chunk_idx < self.faces.len());
-    //         let (x, z) = self.size().chunk_idx_into_chunk_pos(chunk_idx);
-    //         cmd.push_constant(pipeline,chunk_location_uniform,&glm::vec3((x * CHUNK_WIDTH) as f32, 0., (z * CHUNK_DEPTH) as f32))
-    //             .vertex_input(instance_buffer_binding, chunk.transparent().gpu())
-    //             .draw(6,chunk.len_transparent() as u32,0,0);
-    //     }
-    // }
+    pub fn draw(&self, cmd: &mut CommandBuffer, pipeline:&Pipeline, instance_buffer_binding:BufferBinding<Face>,chunk_location_uniform: PushConstant<glm::Vec3>) {
+        for (chunk_idx, chunk) in self.faces.iter().enumerate() {
+            assert!(chunk_idx < self.faces.len());
+            let (x, z) = self.size().chunk_idx_into_chunk_pos(chunk_idx);
+            cmd.push_constant(pipeline,chunk_location_uniform,&glm::vec3((x * CHUNK_WIDTH) as f32, 0., (z * CHUNK_DEPTH) as f32))
+                .vertex_input(instance_buffer_binding, chunk.opaque().gpu())
+                .draw(6,chunk.len_opaque() as u32,0,0);
+        }
+        // TODO: cmd.barrier()?;
+        for (chunk_idx, chunk) in self.faces.iter().enumerate() {
+            assert!(chunk_idx < self.faces.len());
+            let (x, z) = self.size().chunk_idx_into_chunk_pos(chunk_idx);
+            cmd.push_constant(pipeline,chunk_location_uniform,&glm::vec3((x * CHUNK_WIDTH) as f32, 0., (z * CHUNK_DEPTH) as f32))
+                .vertex_input(instance_buffer_binding, chunk.transparent().gpu())
+                .draw(6,chunk.len_transparent() as u32,0,0);
+        }
+    }
 
     pub fn compute_faces(&mut self) {
         for x in 0..self.size().world_width() {
@@ -182,16 +181,16 @@ impl World {
 }
 
 impl Submitter<World>{
-    // pub fn flush_all_chunks(&mut self) -> Result<(),failure::Error>{
-    //     let (cmd, world) = self.inner_val();
-    //     cmd.reset()?
-    //         .reset()?
-    //         .begin(ash::vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)?;
-    //     for chunk in world.faces.iter_mut() {
-    //         chunk.flush_opaque(cmd.cmd());
-    //         chunk.flush_transparent(cmd.cmd());
-    //     }
-    //     cmd.cmd().end()?;
-    //     cmd.submit()
-    // }
+    pub fn flush_all_chunks(&mut self) -> Result<(),failure::Error>{
+        let (cmd, world) = self.inner_val();
+        cmd.reset()?
+            .reset()?
+            .begin(ash::vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)?;
+        for chunk in world.faces.iter_mut() {
+            chunk.flush_opaque(cmd.cmd());
+            chunk.flush_transparent(cmd.cmd());
+        }
+        cmd.cmd().end()?;
+        cmd.submit().map_err(err_msg)
+    }
 }

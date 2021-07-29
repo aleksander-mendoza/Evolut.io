@@ -53,7 +53,8 @@ impl<V: Copy, C: CpuWriteable> Vector<V, C> {
         Ok(())
     }
     pub unsafe fn unsafe_push(&mut self, v: V) {
-        self.cpu.as_mut_ptr().offset(self.len() as isize).write(v)
+        self.cpu.as_mut_ptr().offset(self.len() as isize).write(v);
+        self.len+=1
     }
     pub fn swap_remove(&mut self, idx:usize) -> V{
         let last = self.len()-1;

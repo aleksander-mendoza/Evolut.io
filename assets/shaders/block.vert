@@ -13,7 +13,6 @@ layout (binding = 1) uniform Matrices{
 
 void main()
 {
-
     const vec3 A = vec3(0,0,0);// left bottom back
     const vec3 B = vec3(1,0,0);// right bottom back
     const vec3 C = vec3(1,0,1);// right bottom front
@@ -64,7 +63,7 @@ void main()
     uint orientation = coords.w;
     vec3 block_position = vec3(float(x),float(y),float(z));
     vec3 vertex_pos = vertices[orientation*uint(6) + uint(gl_VertexIndex)];
-    gl_Position = MVP * vec4(vertex_pos+block_position+chunk_location, 1.0);
+    gl_Position = MVP * vec4(vertex_pos+block_position, 1.0);
     vec2 uv = texture_uv[orientation*uint(6) + uint(gl_VertexIndex)];
     UV = vec2(uv.x + float(tex_id)*single_block_u,uv.y);
 }

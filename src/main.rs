@@ -22,6 +22,7 @@ use crate::render::render_pass::RenderPass;
 use crate::render::submitter::Submitter;
 use crate::mvp_uniforms::MvpUniforms;
 use crate::triangles::Triangles;
+use crate::block_world::BlockWorld;
 
 mod block_world;
 mod display;
@@ -48,7 +49,7 @@ fn main() -> Result<(), failure::Error> {
     sdl.mouse().set_relative_mouse_mode(true);
     let mut  mvp_uniforms = MvpUniforms::new();
     let vulkan = VulkanContext::new(window)?;
-    let mut display = Display::<MvpUniforms,Triangles>::new(vulkan,&mvp_uniforms)?;
+    let mut display = Display::<MvpUniforms,BlockWorld>::new(vulkan,&mvp_uniforms)?;
 
     let event_pump = sdl.event_pump().map_err(err_msg)?;
     let mut input = Input::new(event_pump);
@@ -95,14 +96,17 @@ fn main() -> Result<(), failure::Error> {
         // world.blocks().zero_out_velocity_vector_on_hitbox_collision(&mut movement_vector, &(location-glm::vec3(0.4f32,1.5,0.4)),&(location+glm::vec3(0.4f32,0.3,0.4)));
         location += movement_vector;
         if input.has_mouse_left_click() || input.has_mouse_right_click() {
-            // let ray_trace_vector = glm::vec4(0f32, 0., -player_reach, 0.);
-            // let ray_trace_vector = glm::quat_rotate_vec(&inverse_rotation, &ray_trace_vector);
-            // if input.has_mouse_left_click() {
-            //     display.world.ray_cast_remove_block(location.as_slice(), ray_trace_vector.as_slice());
-            // } else {
-            //     world.ray_cast_place_block(location.as_slice(), ray_trace_vector.as_slice(), block_in_hand);
-            // }
-            // world.gl_update_all_chunks();
+            let ray_trace_vector = glm::vec4(0f32, 0., -player_reach, 0.);
+            let ray_trace_vector = glm::quat_rotate_vec(&inverse_rotation, &ray_trace_vector);
+            let world = display.pipeline_mut().world_mut();
+            if input.has_mouse_left_click() {
+                world.ray_cast_remove_block(location.as_slice(), ray_trace_vector.as_slice());
+            } else {
+                world.ray_cast_place_block(location.as_slice(), ray_trace_vector.as_slice(), block_in_hand);
+            }
+            world.flush_all_chunks();
+            world.reset();
+            display.rerecord_all_cmd_buffers()?;
         }
         let v = glm::quat_to_mat4(&rotation) * glm::translation(&-location);
 

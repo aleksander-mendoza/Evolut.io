@@ -42,6 +42,12 @@ pub struct Display<U:Copy,P:Renderable<U>>{
     _p:PhantomData<U>
 }
 impl <U:Copy,P:Renderable<U>> Display<U,P> {
+    pub fn pipeline(&self) -> &P{
+        &self.pipeline
+    }
+    pub fn pipeline_mut(&mut self) -> &mut P{
+        &mut self.pipeline
+    }
     pub fn new(vulkan: VulkanContext, uniform_data:&U) -> Result<Self, failure::Error> {
         let render_pass = vulkan.create_single_render_pass()?;
         let cmd_pool = CommandPool::new(vulkan.device(),true)?;

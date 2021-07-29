@@ -2,7 +2,7 @@ use std::ffi::CString;
 use ash::version::{EntryV1_0, InstanceV1_0};
 use crate::render::constants::APP_INFO;
 use crate::render::platforms::{required_extension_names};
-use ash::InstanceError;
+use ash::{InstanceError, vk};
 use crate::render::validation_layer::{populate_debug_messenger_create_info, get_validation_layer_support};
 use failure::{err_msg, Error};
 use ash::vk::DebugUtilsMessengerCreateInfoEXT;
@@ -20,13 +20,21 @@ pub struct Instance {
     inner:Rc<InstanceInner>
 }
 
+
 impl Instance {
     pub fn new(entry: &ash::Entry, debug: bool) -> Result<Self, failure::Error> {
         let mut extension_names = required_extension_names(debug);
+        let mut extension_features_vec = vec![];
+        if debug{
+            // extension_features_vec.push(vk::ValidationFeatureEnableEXT::BEST_PRACTICES);
+            // extension_features_vec.push(vk::ValidationFeatureEnableEXT::DEBUG_PRINTF);
+        }
+        let mut extension_features = vk::ValidationFeaturesEXT::builder().enabled_validation_features(&extension_features_vec).build();
         let mut debug_builder = DebugUtilsMessengerCreateInfoEXT::builder();
         let mut instance_builder = ash::vk::InstanceCreateInfo::builder()
             .application_info(&APP_INFO)
-            .enabled_extension_names(&extension_names);
+            .enabled_extension_names(&extension_names)
+            .push_next(&mut extension_features);
         if debug {
             debug_builder = populate_debug_messenger_create_info(debug_builder);
             instance_builder = instance_builder.push_next(&mut debug_builder)
