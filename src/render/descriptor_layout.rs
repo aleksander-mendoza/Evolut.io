@@ -8,7 +8,7 @@ use crate::render::descriptor_binding::DescriptorBinding;
 use std::ops::Deref;
 use crate::render::sampler::Sampler;
 use ash::vk::DescriptorPoolSize;
-use crate::render::uniform_buffer::UniformBuffers;
+use crate::render::swap_chain::SwapChain;
 
 struct DescriptorLayoutInner{
     raw:vk::DescriptorSetLayout,
@@ -26,13 +26,13 @@ pub struct DescriptorLayout{
     inner:Rc<DescriptorLayoutInner>
 }
 impl DescriptorLayout{
-    pub fn pool_sizes(&self, swapchain_images:usize) -> Vec<DescriptorPoolSize> {
+    pub fn pool_sizes(&self, swapchain:&SwapChain) -> Vec<DescriptorPoolSize> {
         let mut sizes = Vec::new();
         for layout in &self.inner.bindings_to_layout{
             if let Some(layout) = layout{
                 sizes.push(vk::DescriptorPoolSize {
                     ty: layout.descriptor_type,
-                    descriptor_count: swapchain_images as u32,
+                    descriptor_count: swapchain.len() as u32,
                 });
             }
         }
@@ -45,10 +45,10 @@ impl DescriptorLayout{
     pub fn raw(&self)->vk::DescriptorSetLayout{
         self.inner.raw
     }
-    pub fn new_uniform<T:Copy,const size:usize>(buffer:&UniformBuffers<T,size>) -> Result<DescriptorLayout, ash::vk::Result> {
-        DescriptorLayout::new(buffer.device(),&[buffer.create_binding(0)])
+    pub fn new_uniform<T:Copy,const size:usize>(device:&Device, buffer:&[T;size]) -> Result<DescriptorLayout, ash::vk::Result> {
+        DescriptorLayout::new(device,&[buffer.create_binding(0)])
     }
-    pub fn new_sampler_uniform<T:Copy,const size:usize>(sampler:&Sampler, buffer:&UniformBuffers<T,size>) -> Result<DescriptorLayout, ash::vk::Result> {
+    pub fn new_sampler_uniform<T:Copy,const size:usize>(sampler:&Sampler, buffer:&[T;size]) -> Result<DescriptorLayout, ash::vk::Result> {
         DescriptorLayout::new(sampler.device(),&[sampler.create_binding(0),buffer.create_binding(1)])
     }
     pub fn new(device: &Device, layouts:&[vk::DescriptorSetLayoutBinding]) -> Result<Self, ash::vk::Result> {

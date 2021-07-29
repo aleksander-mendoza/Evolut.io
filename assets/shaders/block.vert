@@ -3,9 +3,10 @@ layout (location = 0) in uvec4 coords;
 layout (location = 1) in uint tex_id;
 layout (location = 0) out vec2 UV;
 
-layout (push_constant) uniform vec3 chunk_location;
-layout (binding = 1) uniform Matrices
-{
+layout (push_constant) uniform Chunk{
+    vec3 chunk_location;
+};
+layout (binding = 1) uniform Matrices{
     mat4 MVP;
     mat4 MV;
 };
@@ -62,8 +63,8 @@ void main()
     uint z = coords.z;
     uint orientation = coords.w;
     vec3 block_position = vec3(float(x),float(y),float(z));
-    vec3 vertex_pos = vertices[orientation*uint(6) + uint(gl_VertexID)];
+    vec3 vertex_pos = vertices[orientation*uint(6) + uint(gl_VertexIndex)];
     gl_Position = MVP * vec4(vertex_pos+block_position+chunk_location, 1.0);
-    vec2 uv = texture_uv[orientation*uint(6) + uint(gl_VertexID)];
+    vec2 uv = texture_uv[orientation*uint(6) + uint(gl_VertexIndex)];
     UV = vec2(uv.x + float(tex_id)*single_block_u,uv.y);
 }

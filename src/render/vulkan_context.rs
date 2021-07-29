@@ -3,6 +3,7 @@ use crate::render::device::Device;
 use ash::vk::{PhysicalDevice};
 use crate::render::surface::Surface;
 use crate::render::instance::Instance;
+use crate::render::single_render_pass::SingleRenderPass;
 
 pub struct VulkanContext {
     // The order of all fields
@@ -57,5 +58,8 @@ impl VulkanContext {
     }
     pub fn entry(&self) -> &ash::Entry {
         &self.entry
+    }
+    pub fn create_single_render_pass(&self)->Result<SingleRenderPass,failure::Error>{
+        SingleRenderPass::new_swapchain_and_render_pass(self.instance(),self.device(),self.surface())
     }
 }

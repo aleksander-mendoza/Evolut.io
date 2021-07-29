@@ -5,7 +5,7 @@ extern crate nalgebra_glm as glm;
 extern crate memoffset;
 
 use crate::render::vulkan_context::VulkanContext;
-use crate::display::{Display, DisplayData};
+use crate::display::{Display};
 use std::ops::{Deref, DerefMut};
 use crate::input::Input;
 use crate::fps::FpsCounter;
@@ -20,6 +20,8 @@ use crate::render::pipeline::Pipeline;
 use crate::render::swap_chain::SwapChain;
 use crate::render::render_pass::RenderPass;
 use crate::render::submitter::Submitter;
+use crate::mvp_uniforms::MvpUniforms;
+use crate::triangles::Triangles;
 
 mod block_world;
 mod display;
@@ -27,52 +29,9 @@ mod render;
 mod input;
 mod fps;
 mod blocks;
+mod mvp_uniforms;
+mod triangles;
 
-#[derive(Debug, Copy, Clone)]
-pub struct UniformData {
-    mvp: glm::Mat4,
-    mv: glm::Mat4,
-}
-
-impl UniformData {
-    fn new() -> Self {
-        Self {
-            mvp: glm::identity(),
-            mv: glm::identity(),
-        }
-    }
-}
-
-// impl VertexSource for UniformData{
-//     fn get_attribute_descriptions(binding: u32) -> Vec<VertexInputAttributeDescription> {
-//         glm::Mat4::get_attribute_descriptions(binding)
-//     }
-// }
-
-const CLEAR_VALUES: [vk::ClearValue; 2] = [vk::ClearValue {
-    color: vk::ClearColorValue {
-        float32: [0.0, 0.0, 0.0, 1.0],
-    },
-}, vk::ClearValue {
-    depth_stencil: vk::ClearDepthStencilValue {
-        depth: 1.,
-        stencil: 0,
-    },
-}];
-
-fn cmd_buff(cmd: &mut CommandBuffer, framebuffer: &Framebuffer, uniform: &DescriptorSet, pipeline: &Pipeline, swapchain: &SwapChain, render_pass: &RenderPass, data: &DisplayData) -> Result<(), ash::vk::Result> {
-    cmd
-        .reset()?
-        .begin(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE)?
-        .render_pass(render_pass, framebuffer, swapchain.render_area(), &CLEAR_VALUES)
-        .bind_pipeline(pipeline)
-        .vertex_input(data.data.gpu())
-        .uniform(pipeline, uniform)
-        .draw_indirect(data.indirect.gpu())
-        .end_render_pass()
-        .end()?;
-    Ok(())
-}
 
 fn main() -> Result<(), failure::Error> {
     #[cfg(target_os = "macos")] {
@@ -87,9 +46,10 @@ fn main() -> Result<(), failure::Error> {
         .resizable()
         .build()?;
     sdl.mouse().set_relative_mouse_mode(true);
+    let mut  mvp_uniforms = MvpUniforms::new();
     let vulkan = VulkanContext::new(window)?;
-    let mut display = Display::new(vulkan, UniformData::new())?;
-    display.record_commands(cmd_buff)?;
+    let mut display = Display::<MvpUniforms,Triangles>::new(vulkan,&mvp_uniforms)?;
+
     let event_pump = sdl.event_pump().map_err(err_msg)?;
     let mut input = Input::new(event_pump);
     let mut fps_counter = FpsCounter::new(timer, 60);
@@ -103,14 +63,7 @@ fn main() -> Result<(), failure::Error> {
     let ash::vk::Extent2D { width, height } = display.extent();
     let mut projection_matrix = proj(width as f32, height as f32);
 
-    let mut world = World::new(2, 2, display.cmd_pool())?;
-    world.blocks_mut().no_update_fill_level(0, 1, BEDROCK);
-    world.blocks_mut().no_update_fill_level(1, 1, DIRT);
-    world.blocks_mut().no_update_fill_level(2, 1, GRASS);
-    world.blocks_mut().no_update_outline(5, 2, 5, 5, 5, 5, PLANK);
-    world.compute_faces();
-    world.flush_all_chunks()?;
-
+    display.rerecord_all_cmd_buffers()?;
     'main: loop {
         fps_counter.update();
         input.poll();
@@ -142,24 +95,25 @@ fn main() -> Result<(), failure::Error> {
         // world.blocks().zero_out_velocity_vector_on_hitbox_collision(&mut movement_vector, &(location-glm::vec3(0.4f32,1.5,0.4)),&(location+glm::vec3(0.4f32,0.3,0.4)));
         location += movement_vector;
         if input.has_mouse_left_click() || input.has_mouse_right_click() {
-            let ray_trace_vector = glm::vec4(0f32, 0., -player_reach, 0.);
-            let ray_trace_vector = glm::quat_rotate_vec(&inverse_rotation, &ray_trace_vector);
-            if input.has_mouse_left_click() {
-                world.ray_cast_remove_block(location.as_slice(), ray_trace_vector.as_slice());
-            } else {
-                world.ray_cast_place_block(location.as_slice(), ray_trace_vector.as_slice(), block_in_hand);
-            }
+            // let ray_trace_vector = glm::vec4(0f32, 0., -player_reach, 0.);
+            // let ray_trace_vector = glm::quat_rotate_vec(&inverse_rotation, &ray_trace_vector);
+            // if input.has_mouse_left_click() {
+            //     display.world.ray_cast_remove_block(location.as_slice(), ray_trace_vector.as_slice());
+            // } else {
+            //     world.ray_cast_place_block(location.as_slice(), ray_trace_vector.as_slice(), block_in_hand);
+            // }
             // world.gl_update_all_chunks();
         }
         let v = glm::quat_to_mat4(&rotation) * glm::translation(&-location);
 
         let m = model_matrix;
-        display.uniforms_mut().mv = &v * m;
-        display.uniforms_mut().mvp = projection_matrix * &display.uniforms().mv;
-        if display.render()? {
+
+        mvp_uniforms.mv = &v * m;
+        mvp_uniforms.mvp = projection_matrix * &mvp_uniforms.mv;
+        if display.render(false,&mvp_uniforms)? {
             display.device().device_wait_idle()?;
             display.recreate()?;
-            display.record_commands(cmd_buff)?;
+            display.rerecord_all_cmd_buffers()?;
             projection_matrix = proj(width, height);
         }
     }

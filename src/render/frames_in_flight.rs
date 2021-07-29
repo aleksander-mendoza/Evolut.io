@@ -9,15 +9,20 @@ pub struct FramesInFlight{
     render_finished_semaphores:Vec<Semaphore>,
     in_flight_fences:Vec<Fence>,
     current_frame:usize,
+    device:Device
 }
 
 impl FramesInFlight{
+    pub fn device(&self) -> &Device{
+        &self.device
+    }
     pub fn new(device:&Device,frames_in_flight:usize)->Result<Self,vk::Result>{
         let mut slf = Self{
             image_available_semaphores: Vec::with_capacity(frames_in_flight),
             render_finished_semaphores: Vec::with_capacity(frames_in_flight),
             in_flight_fences: Vec::with_capacity(frames_in_flight),
-            current_frame: 0
+            current_frame: 0,
+            device:device.clone()
         };
         for _ in 0..frames_in_flight{
             slf.image_available_semaphores.push(Semaphore::new(device)?);

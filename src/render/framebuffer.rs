@@ -5,11 +5,13 @@ use ash::version::DeviceV1_0;
 use crate::render::swap_chain::SwapChain;
 use crate::render::imageview::{ImageView, Depth, Color};
 use crate::render::texture::Dim2D;
+use failure::err_msg;
 
 pub struct Framebuffer {
     raw: vk::Framebuffer,
     device: Device,
     render_pass: RenderPass,
+    image_view:ImageView<Color>
 }
 
 impl Framebuffer {
@@ -19,21 +21,18 @@ impl Framebuffer {
     pub fn device(&self) -> &Device {
         &self.device
     }
-    pub fn new_color_and_depth(render_pass: &RenderPass, swapchain: &SwapChain, color:&ImageView<Color>, depth:&ImageView<Depth>) -> Result<Framebuffer, ash::vk::Result> {
-        Self::new(render_pass,swapchain,&[color.raw(),depth.raw()])
-    }
-
-    pub fn new(render_pass: &RenderPass, swapchain: &SwapChain, attachments:&[vk::ImageView]) -> Result<Framebuffer, ash::vk::Result> {
+    pub fn new(render_pass: &RenderPass, swapchain: &SwapChain, color:ImageView<Color>, depth:&ImageView<Depth>) -> Result<Framebuffer, failure::Error> {
+        let attachments = [color.raw(),depth.raw()];
         let framebuffer_create_info = vk::FramebufferCreateInfo::builder()
             .render_pass(render_pass.raw())
-            .attachments(attachments)
+            .attachments(&attachments)
             .width(swapchain.extent().width)
             .height(swapchain.extent().height)
             .layers(1);
 
         unsafe {
             render_pass.device().inner().create_framebuffer(&framebuffer_create_info, None)
-        }.map(|raw| Framebuffer { raw, device: render_pass.device().clone(), render_pass: render_pass.clone() })
+        }.map(move |raw| Framebuffer { raw, device: render_pass.device().clone(), image_view: color, render_pass: render_pass.clone() }).map_err(err_msg)
     }
 }
 

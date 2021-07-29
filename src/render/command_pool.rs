@@ -4,17 +4,19 @@ use ash::version::DeviceV1_0;
 use std::marker::PhantomData;
 use crate::render::render_pass::RenderPass;
 use ash::vk::{ClearValue, CommandPoolResetFlags};
-use crate::render::pipeline::Pipeline;
+use crate::render::pipeline::{Pipeline, PushConstant, BufferBinding};
 use crate::render::semaphore::Semaphore;
 use ash::prelude::VkResult;
 use crate::render::fence::Fence;
-use crate::render::buffer::{Buffer, Type, Gpu, Cpu, GpuIndirect, StageBuffer, CpuWriteable, GpuWriteable};
-use crate::render::data::VertexSource;
+use crate::render::buffer::{Buffer, Type, Gpu, Cpu, GpuIndirect, CpuWriteable, GpuWriteable};
+use crate::render::data::{VertexSource, VertexAttrib};
 use crate::render::descriptor_pool::DescriptorSet;
 use crate::render::texture::{Dim, Texture};
 use crate::render::framebuffer::Framebuffer;
 use crate::render::imageview::{Color, Aspect};
 use std::rc::Rc;
+use crate::render::util::any_as_u8_slice;
+use crate::render::stage_buffer::StageBuffer;
 
 pub struct CommandBuffer {
     raw: vk::CommandBuffer,
@@ -79,6 +81,20 @@ impl CommandBuffer {
         }
         self
     }
+    pub fn barrier<D: Dim, A: Aspect>(&mut self, src_access_mask: vk::AccessFlags, dst_access_mask: vk::AccessFlags,source_stage: vk::PipelineStageFlags, destination_stage: vk::PipelineStageFlags) -> &mut Self{
+        unsafe {
+            self.device.inner().cmd_pipeline_barrier(
+                self.raw,
+                source_stage,
+                destination_stage,
+                vk::DependencyFlags::empty(),
+                &[],
+                &[],
+                &[],
+            )
+        }
+        self
+    }
 
     pub fn layout_barrier<D: Dim, A: Aspect>(&mut self, image: &Texture<D, A>, old_layout: vk::ImageLayout, new_layout: vk::ImageLayout) -> &mut Self{
         let src_access_mask;
@@ -135,80 +151,61 @@ impl CommandBuffer {
         result.map(|()|self)
     }
 
-    pub fn single_pass(&mut self,
-                       usage: vk::CommandBufferUsageFlags,
-                       render_pass: &RenderPass,
-                       framebuffer: &Framebuffer,
-                       render_area: vk::Rect2D,
-                       clear: &[ClearValue],
-                       pipeline: &Pipeline,
-                       vertex_count: u32,
-                       instance_count: u32,
-                       first_vertex: u32,
-                       first_instance: u32) -> Result<&mut Self, vk::Result> {
-        self.begin(usage)?
-            .render_pass(render_pass, framebuffer, render_area, clear)
-            .bind_pipeline(pipeline)
-            .draw(vertex_count, instance_count, first_vertex, first_instance)
-            .end_render_pass()
-            .end()
-    }
-
-    pub fn single_pass_vertex_input<V: VertexSource, T: Type>(&mut self,
-                                                              usage: vk::CommandBufferUsageFlags,
-                                                              render_pass: &RenderPass,
-                                                              framebuffer: &Framebuffer,
-                                                              render_area: vk::Rect2D,
-                                                              clear: &[ClearValue],
-                                                              pipeline: &Pipeline,
-                                                              buffer: &Buffer<V, T>) -> Result<&mut Self, vk::Result> {
-        self.begin(usage)?
-            .render_pass(render_pass, framebuffer, render_area, clear)
-            .bind_pipeline(pipeline)
-            .vertex_input(buffer)
-            .draw(buffer.capacity() as u32, 1, 0, 0)
-            .end_render_pass()
-            .end()
-    }
-
-    pub fn single_pass_vertex_input_uniform<V: VertexSource, T: Type>(&mut self,
-                                                                      usage: vk::CommandBufferUsageFlags,
-                                                                      render_pass: &RenderPass,
-                                                                      framebuffer: &Framebuffer,
-                                                                      uniform: &DescriptorSet,
-                                                                      render_area: vk::Rect2D,
-                                                                      clear: &[ClearValue],
-                                                                      pipeline: &Pipeline,
-                                                                      buffer: &Buffer<V, T>) -> Result<&mut Self, vk::Result> {
-        self.begin(usage)?
-            .render_pass(render_pass, framebuffer, render_area, clear)
-            .bind_pipeline(pipeline)
-            .vertex_input(buffer)
-            .uniform(pipeline, uniform)
-            .draw(buffer.capacity() as u32, 1, 0, 0)
-            .end_render_pass()
-            .end()
-    }
-
-    pub fn single_pass_indirect_input_uniform<V: VertexSource, T: Type>(&mut self,
-                                                                        usage: vk::CommandBufferUsageFlags,
-                                                                        render_pass: &RenderPass,
-                                                                        framebuffer: &Framebuffer,
-                                                                        uniform: &DescriptorSet,
-                                                                        render_area: vk::Rect2D,
-                                                                        clear: &[ClearValue],
-                                                                        pipeline: &Pipeline,
-                                                                        buffer: &Buffer<V, T>,
-                                                                        indirect_buffer:&Buffer<vk::DrawIndirectCommand,GpuIndirect>) -> Result<&mut Self, vk::Result> {
-        self.begin(usage)?
-            .render_pass(render_pass, framebuffer, render_area, clear)
-            .bind_pipeline(pipeline)
-            .vertex_input(buffer)
-            .uniform(pipeline, uniform)
-            .draw_indirect(indirect_buffer)
-            .end_render_pass()
-            .end()
-    }
+    // pub fn single_pass(&mut self,
+    //                    usage: vk::CommandBufferUsageFlags,
+    //                    render_pass: &RenderPass,
+    //                    framebuffer: &Framebuffer,
+    //                    render_area: vk::Rect2D,
+    //                    clear: &[ClearValue],
+    //                    pipeline: &Pipeline,
+    //                    vertex_count: u32,
+    //                    instance_count: u32,
+    //                    first_vertex: u32,
+    //                    first_instance: u32) -> Result<&mut Self, vk::Result> {
+    //     self.begin(usage)?
+    //         .render_pass(render_pass, framebuffer, render_area, clear)
+    //         .bind_pipeline(pipeline)
+    //         .draw(vertex_count, instance_count, first_vertex, first_instance)
+    //         .end_render_pass()
+    //         .end()
+    // }
+    //
+    // pub fn single_pass_vertex_input<V: VertexSource, T: Type>(&mut self,
+    //                                                           usage: vk::CommandBufferUsageFlags,
+    //                                                           render_pass: &RenderPass,
+    //                                                           framebuffer: &Framebuffer,
+    //                                                           render_area: vk::Rect2D,
+    //                                                           clear: &[ClearValue],
+    //                                                           pipeline: &Pipeline,
+    //                                                           buffer: &Buffer<V, T>) -> Result<&mut Self, vk::Result> {
+    //     self.begin(usage)?
+    //         .render_pass(render_pass, framebuffer, render_area, clear)
+    //         .bind_pipeline(pipeline)
+    //         .vertex_input(buffer)
+    //         .draw(buffer.capacity() as u32, 1, 0, 0)
+    //         .end_render_pass()
+    //         .end()
+    // }
+    //
+    // pub fn single_pass_vertex_input_uniform<V: VertexSource, T: Type>(&mut self,
+    //                                                                   usage: vk::CommandBufferUsageFlags,
+    //                                                                   render_pass: &RenderPass,
+    //                                                                   framebuffer: &Framebuffer,
+    //                                                                   uniform: &DescriptorSet,
+    //                                                                   render_area: vk::Rect2D,
+    //                                                                   clear: &[ClearValue],
+    //                                                                   pipeline: &Pipeline,
+    //                                                                   buffer: &Buffer<V, T>) -> Result<&mut Self, vk::Result> {
+    //     self.begin(usage)?
+    //         .render_pass(render_pass, framebuffer, render_area, clear)
+    //         .bind_pipeline(pipeline)
+    //         .vertex_input(buffer)
+    //         .uniform(pipeline, uniform)
+    //         .draw(buffer.capacity() as u32, 1, 0, 0)
+    //         .end_render_pass()
+    //         .end()
+    // }
+    //
 
     pub fn render_pass(&mut self, render_pass: &RenderPass, framebuffer: &Framebuffer, render_area: vk::Rect2D, clear: &[ClearValue]) -> &mut Self{
         let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
@@ -244,11 +241,24 @@ impl CommandBuffer {
         }
         self
     }
-    pub fn vertex_input<V: VertexSource, T: Type>(&mut self, buffer: &Buffer<V, T>) -> &mut Self{
+    pub fn push_constant<V: VertexAttrib>(&mut self,pipeline: &Pipeline, push_constant:PushConstant<V>, c: &V) -> &mut Self{
+
+        unsafe {
+            self.device.inner().cmd_push_constants(
+                self.raw,
+                pipeline.layout(),
+                vk::ShaderStageFlags::VERTEX,
+                push_constant.offset(),
+                any_as_u8_slice(c)
+            )
+        }
+        self
+    }
+    pub fn vertex_input<V: VertexSource, T: Type>(&mut self, binding:BufferBinding<V>,buffer: &Buffer<V, T>) -> &mut Self{
         unsafe {
             self.device.inner().cmd_bind_vertex_buffers(
                 self.raw,
-                0,
+                binding.binding(),
                 &[buffer.raw()],
                 &[0],
             )
@@ -267,10 +277,6 @@ impl CommandBuffer {
             )
         }
         self
-    }
-    pub fn bind_and_draw_all<V: VertexSource, T: Type>(&mut self, buffer: &Buffer<V, T>) -> &mut CommandBuffer {
-        self.vertex_input(buffer)
-            .draw(buffer.len() as u32,1,0,0)
     }
     pub fn draw(&mut self, vertex_count: u32, instance_count: u32, first_vertex: u32, first_instance: u32) -> &mut Self{
         unsafe {

@@ -8,14 +8,21 @@ use crate::render::semaphore::Semaphore;
 use crate::render::fence::Fence;
 use crate::render::instance::Instance;
 use crate::render::render_pass::RenderPass;
+use crate::render::framebuffer::Framebuffer;
+use std::rc::Rc;
 
-pub struct SwapChain {
+struct SwapChainInner{
     swapchain_loader: ash::extensions::khr::Swapchain,
     swapchain: vk::SwapchainKHR,
     images: Vec<vk::Image>,
     format: vk::Format,
     extent: vk::Extent2D,
     device: Device,
+}
+
+#[derive(Clone)]
+pub struct SwapChain {
+    inner:Rc<SwapChainInner>
 }
 
 fn choose_swapchain_format(available_formats: &Vec<vk::SurfaceFormatKHR>) -> vk::SurfaceFormatKHR {
@@ -52,6 +59,34 @@ fn choose_swapchain_extent(capabilities: &vk::SurfaceCapabilitiesKHR, window_wid
                 capabilities.min_image_extent.height,
                 capabilities.max_image_extent.height,
             ),
+        }
+    }
+}
+#[derive(Copy, Clone,Eq, PartialEq)]
+pub struct SwapchainImageIdx(u32);
+impl SwapchainImageIdx{
+    pub fn get(&self)->u32{
+        self.0
+    }
+    pub fn get_usize(&self)->usize{
+        self.0 as usize
+    }
+}
+pub struct ImgIter{
+    current:u32,
+    max:u32
+}
+
+impl Iterator for ImgIter{
+    type Item = SwapchainImageIdx;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current<self.max {
+            let idx = SwapchainImageIdx(self.current);
+            self.current += 1;
+            Some(idx)
+        }else{
+            None
         }
     }
 }
@@ -94,30 +129,37 @@ impl SwapChain {
 
         let images = unsafe { swapchain_loader.get_swapchain_images(swapchain) }?;
 
-        Ok(Self {
+        Ok(Self { inner: Rc::new(SwapChainInner{
             swapchain_loader,
             swapchain,
             format: surface_format.format,
             extent,
             images,
             device: device.clone(),
-        })
+        })})
     }
 
+
     pub fn create_image_views(&self) -> Result<Vec<ImageView<Color>>, vk::Result> {
-        self.images.iter().map(|&image| ImageView::new(image, self.format, self.device())).collect()
+        self.inner.images.iter().map(|&image| ImageView::new(image, self.format(), self.device())).collect()
     }
     pub fn len(&self) -> usize {
-        self.images.len()
+        self.inner.images.len()
     }
     pub fn format(&self) -> vk::Format {
-        self.format
+        self.inner.format
     }
     pub fn extent(&self) -> vk::Extent2D {
-        self.extent
+        self.inner.extent
+    }
+    pub fn raw(&self) -> vk::SwapchainKHR{
+        self.inner.swapchain
+    }
+    pub fn loader(&self) -> &ash::extensions::khr::Swapchain {
+        &self.inner.swapchain_loader
     }
     pub fn device(&self) -> &Device {
-        &self.device
+        &self.inner.device
     }
     pub fn render_area(&self) -> vk::Rect2D {
         ash::vk::Rect2D {
@@ -136,33 +178,39 @@ impl SwapChain {
         }
     }
 
-    pub fn acquire_next_image(&self, timeout:Option<u64>,semaphore:Option<&Semaphore>, fence:Option<&Fence>) -> VkResult<(u32, bool)> {
+    pub fn acquire_next_image(&self, timeout:Option<u64>,semaphore:Option<&Semaphore>, fence:Option<&Fence>) -> VkResult<(SwapchainImageIdx, bool)> {
         unsafe {
-            self.swapchain_loader.acquire_next_image(
-                self.swapchain,
+            self.loader().acquire_next_image(
+                self.raw(),
                 timeout.unwrap_or(u64::MAX),
                 semaphore.map(Semaphore::raw).unwrap_or(vk::Semaphore::null()),
                 fence.map(Fence::raw).unwrap_or(vk::Fence::null()),
             )
-        }
+        }.map(|(image_idx,is_suboptimal)|(SwapchainImageIdx(image_idx),is_suboptimal))
     }
 
-    pub fn present(&self, wait_for:&[Semaphore], image_index:u32) -> VkResult<bool> {
+    pub fn iter_images(&self) -> ImgIter{
+        ImgIter{current:0, max:self.len() as u32}
+    }
+
+    pub fn present(&self, wait_for:&[Semaphore], image_index:SwapchainImageIdx) -> VkResult<bool> {
         let semaphores:Vec<vk::Semaphore> = wait_for.iter().map(Semaphore::raw).collect();
+        let raw = [self.raw()];
+        let idx = image_index.get();
         let present_info = vk::PresentInfoKHR::builder()
             .wait_semaphores(&semaphores)
-            .swapchains(std::slice::from_ref(&self.swapchain))
-            .image_indices(std::slice::from_ref(&image_index));
+            .swapchains(&raw)
+            .image_indices(std::slice::from_ref(&idx));
 
         unsafe {
-            self.swapchain_loader.queue_present(self.device.raw_queue(), &present_info)
+            self.loader().queue_present(self.device().raw_queue(), &present_info)
         }
     }
 
 
 }
 
-impl Drop for SwapChain {
+impl Drop for SwapChainInner {
     fn drop(&mut self) {
         unsafe {
             self.swapchain_loader.destroy_swapchain(self.swapchain, None);

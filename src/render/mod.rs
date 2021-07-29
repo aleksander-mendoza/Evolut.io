@@ -19,9 +19,14 @@ pub mod buffer;
 pub mod submitter;
 pub mod descriptor_pool;
 pub mod descriptor_layout;
-pub mod uniform_buffer;
 pub mod texture;
 pub mod sampler;
 pub mod descriptor_binding;
 pub mod framebuffer;
+pub mod single_render_pass;
+pub mod descriptors;
+pub mod util;
+pub mod vector;
+pub mod stage_buffer;
+pub mod host_buffer;
 

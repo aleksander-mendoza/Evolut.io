@@ -3,9 +3,11 @@ use crate::blocks::block::Block;
 use crate::blocks::face_orientation::FaceOrientation;
 use crate::blocks::world_size::{WorldSize};
 use crate::render::device::Device;
-use crate::render::buffer::{Buffer, VertexBuffer};
+use crate::render::buffer::{Buffer};
 use ash::vk;
 use crate::render::command_pool::CommandBuffer;
+use failure::err_msg;
+use crate::render::stage_buffer::VertexBuffer;
 
 pub struct ChunkFaces {
     opaque_faces: VertexBuffer<Face>,
@@ -37,24 +39,24 @@ impl ChunkFaces {
     pub fn len_transparent(&self) -> usize {
         self.transparent_faces.len()
     }
-    pub fn new(device:&Device) -> Result<Self,vk::Result> {
+    pub fn new(device:&Device) -> Result<Self,failure::Error> {
         Ok(Self {
             opaque_faces: VertexBuffer::with_capacity(device,16)?,
             transparent_faces: VertexBuffer::with_capacity(device,16)?,
         })
     }
-    pub fn push_block(&mut self, x: usize, y: usize, z: usize, ort: FaceOrientation, block: Block) -> Result<bool, ash::vk::Result> {
+    pub fn push_block(&mut self, x: usize, y: usize, z: usize, ort: FaceOrientation, block: Block) -> Result<bool, failure::Error> {
         let (x, y, z) = WorldSize::absolute_block_to_chunk_block_position(x,y,z);
         self.push(x, y, z, ort, block)
     }
-    fn push(&mut self, x: u8, y: u8, z: u8, ort: FaceOrientation, block: Block) -> Result<bool, ash::vk::Result> {
+    fn push(&mut self, x: u8, y: u8, z: u8, ort: FaceOrientation, block: Block) -> Result<bool, failure::Error> {
         let face = Face::from_coords_and_ort(x, y, z, ort, block.texture_id(ort));
         assert!(self.find_opaque_by_coords_and_ort(face.coords_and_ort()).is_none());
         assert!(self.find_transparent_by_coords_and_ort(face.coords_and_ort()).is_none());
         if block.is_transparent() {
-            self.transparent_faces.push(face)
+            self.transparent_faces.push(face).map_err(err_msg)
         } else {
-            self.opaque_faces.push(face)
+            self.opaque_faces.push(face).map_err(err_msg)
         }
     }
     pub fn find_transparent_by_coords_and_ort(&self, coords: u32) -> Option<&Face> {
@@ -135,12 +137,12 @@ impl ChunkFaces {
         let Self { transparent_faces, opaque_faces, .. } = self;
         (transparent_faces, opaque_faces)
     }
-    pub fn change_block_textures(&mut self, x: usize, y: usize, z: usize, new_block: Block) -> Result<(), ash::vk::Result> {
+    pub fn change_block_textures(&mut self, x: usize, y: usize, z: usize, new_block: Block) -> Result<(), failure::Error> {
         let (x, y, z) = WorldSize::absolute_block_to_chunk_block_position(x,y,z);
         self.change_textures(x, y, z, new_block)
     }
     /**Changes textures on existing faces and assumes that the transparency is going to be switched. If transparency did not change, use update_textures instead*/
-    fn change_textures(&mut self, x: u8, y: u8, z: u8, new_block: Block) -> Result<(),vk::Result> {
+    fn change_textures(&mut self, x: u8, y: u8, z: u8, new_block: Block) -> Result<(),failure::Error> {
         assert!(!new_block.is_air());
         let (from, to) = if new_block.is_transparent() {
             assert!(self.find_opaque(x, y, z).is_some(), "Failed to update texture at {},{},{} to new block id {}", x, y, z, new_block);

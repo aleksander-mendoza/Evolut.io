@@ -8,18 +8,21 @@ use crate::render::device::Device;
 use crate::render::command_pool::{CommandBuffer, CommandPool};
 use crate::render::submitter::Submitter;
 use ash::prelude::VkResult;
+use crate::render::pipeline::{PushConstant, Pipeline, BufferBinding};
+use crate::blocks::Face;
+use failure::err_msg;
 
 pub struct World {
     blocks: WorldBlocks,
     faces: WorldFaces,
 }
 impl World {
-    pub fn new(width: usize, depth: usize, cmd_pool:&CommandPool) -> Result<Submitter<Self>, ash::vk::Result> {
+    pub fn new(width: usize, depth: usize, cmd_pool:&CommandPool) -> Result<Submitter<Self>, failure::Error> {
         let size = WorldSize::new(width,depth);
         WorldFaces::new(size, cmd_pool.device()).map(|faces|Self{
             blocks: WorldBlocks::new(size),
             faces
-        }).and_then(|w|Submitter::new(w, cmd_pool))
+        }).and_then(|w|Submitter::new(w, cmd_pool).map_err(err_msg))
     }
     pub fn blocks(&self) -> &WorldBlocks {
         &self.blocks
@@ -113,20 +116,23 @@ impl World {
         }
     }
 
-    pub fn draw(&self, cmd: &mut CommandBuffer, chunk_location_uniform: &mut glm::Vec2) {
-        for (chunk_idx, chunk) in self.faces.iter().enumerate() {
-            assert!(chunk_idx < self.faces.len());
-            let (x, z) = self.size().chunk_idx_into_chunk_pos(chunk_idx);
-            chunk_location_uniform.as_mut_slice().copy_from_slice(&[(x * CHUNK_WIDTH) as f32, 0., (z * CHUNK_DEPTH) as f32]);
-            // cmd. chunk.opaque()
-        }
-        for (chunk_idx, chunk) in self.faces.iter().enumerate() {
-            assert!(chunk_idx < self.faces.len());
-            let (x, z) = self.size().chunk_idx_into_chunk_pos(chunk_idx);
-            chunk_location_uniform.as_mut_slice().copy_from_slice(&[(x * CHUNK_WIDTH) as f32, 0., (z * CHUNK_DEPTH) as f32]);
-            // chunk.draw_transparent();
-        }
-    }
+    // pub fn draw(&self, cmd: &mut CommandBuffer, pipeline:&Pipeline, instance_buffer_binding:BufferBinding<Face>,chunk_location_uniform: PushConstant<glm::Vec3>) {
+    //     for (chunk_idx, chunk) in self.faces.iter().enumerate() {
+    //         assert!(chunk_idx < self.faces.len());
+    //         let (x, z) = self.size().chunk_idx_into_chunk_pos(chunk_idx);
+    //         cmd.push_constant(pipeline,chunk_location_uniform,&glm::vec3((x * CHUNK_WIDTH) as f32, 0., (z * CHUNK_DEPTH) as f32))
+    //             .vertex_input(instance_buffer_binding, chunk.opaque().gpu())
+    //             .draw(6,chunk.len_opaque() as u32,0,0);
+    //     }
+    //     cmd.barrier()?;
+    //     for (chunk_idx, chunk) in self.faces.iter().enumerate() {
+    //         assert!(chunk_idx < self.faces.len());
+    //         let (x, z) = self.size().chunk_idx_into_chunk_pos(chunk_idx);
+    //         cmd.push_constant(pipeline,chunk_location_uniform,&glm::vec3((x * CHUNK_WIDTH) as f32, 0., (z * CHUNK_DEPTH) as f32))
+    //             .vertex_input(instance_buffer_binding, chunk.transparent().gpu())
+    //             .draw(6,chunk.len_transparent() as u32,0,0);
+    //     }
+    // }
 
     pub fn compute_faces(&mut self) {
         for x in 0..self.size().world_width() {
@@ -176,16 +182,16 @@ impl World {
 }
 
 impl Submitter<World>{
-    pub fn flush_all_chunks(&mut self) -> VkResult<()> {
-        let (cmd, world) = self.inner_val();
-        cmd.reset()?
-            .reset()?
-            .begin(ash::vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)?;
-        for chunk in world.faces.iter_mut() {
-            chunk.flush_opaque(cmd.cmd());
-            chunk.flush_transparent(cmd.cmd());
-        }
-        cmd.cmd().end()?;
-        cmd.submit()
-    }
+    // pub fn flush_all_chunks(&mut self) -> Result<(),failure::Error>{
+    //     let (cmd, world) = self.inner_val();
+    //     cmd.reset()?
+    //         .reset()?
+    //         .begin(ash::vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)?;
+    //     for chunk in world.faces.iter_mut() {
+    //         chunk.flush_opaque(cmd.cmd());
+    //         chunk.flush_transparent(cmd.cmd());
+    //     }
+    //     cmd.cmd().end()?;
+    //     cmd.submit()
+    // }
 }

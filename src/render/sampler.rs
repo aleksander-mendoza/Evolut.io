@@ -39,7 +39,7 @@ impl Sampler {
         }.map(|raw|Self{raw,device:device.clone()})
     }
 
-    pub fn descriptor_info(&self, imageview:&ImageView<Color>)->vk::DescriptorImageInfo{
+    pub fn descriptor_info(&self, imageview:&ImageView<Color>) ->vk::DescriptorImageInfo{
         vk::DescriptorImageInfo {
             sampler: self.raw(),
             image_view: imageview.raw(),

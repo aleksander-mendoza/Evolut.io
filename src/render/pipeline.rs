@@ -7,9 +7,10 @@ use failure::err_msg;
 use crate::render::render_pass::{RenderPassBuilder, RenderPass};
 use std::rc::Rc;
 use ash::vk::PipelineLayout;
-use crate::render::data::VertexSource;
+use crate::render::data::{VertexSource, VertexAttrib};
 use crate::render::descriptor_layout::DescriptorLayout;
 use crate::render::buffer::{Buffer, Type};
+use std::marker::PhantomData;
 
 
 pub struct Pipeline {
@@ -23,6 +24,9 @@ pub struct Pipeline {
 }
 
 impl Pipeline {
+    pub fn render_pass(&self) -> &RenderPass{
+        &self.render_pass
+    }
     pub fn device(&self) -> &Device {
         self.render_pass.device()
     }
@@ -48,6 +52,7 @@ impl Drop for Pipeline {
 pub struct PipelineBuilder {
     viewport: Vec<vk::Viewport>,
     scissors: Vec<vk::Rect2D>,
+    push_constants: Vec<vk::PushConstantRange>,
     shaders: Vec<(String, ShaderModule)>,
     rasterizer: vk::PipelineRasterizationStateCreateInfo,
     multisample_state_create_info: vk::PipelineMultisampleStateCreateInfo,
@@ -60,6 +65,12 @@ pub struct PipelineBuilder {
     descriptor_layout: Vec<DescriptorLayout>
 
 }
+#[derive(Copy,Clone,Eq, PartialEq)]
+pub struct PushConstant<T:VertexAttrib>(u32,PhantomData<T>);
+impl <T:VertexAttrib> PushConstant<T>{pub fn offset(&self)->u32{self.0}}
+#[derive(Copy,Clone,Eq, PartialEq)]
+pub struct BufferBinding<T:VertexSource>(u32,PhantomData<T>);
+impl <T:VertexSource> BufferBinding<T>{pub fn binding(&self)->u32{self.0}}
 
 impl PipelineBuilder {
     pub fn new() -> Self {
@@ -72,6 +83,7 @@ impl PipelineBuilder {
         Self {
             viewport: vec![],
             scissors: vec![],
+            push_constants: vec![],
             shaders: vec![],
             rasterizer: vk::PipelineRasterizationStateCreateInfo::builder()
                 .line_width(1.0)
@@ -99,76 +111,101 @@ impl PipelineBuilder {
             descriptor_layout: vec![]
         }
     }
-    pub fn depth_bounds(mut self, min:f32,max:f32)->Self{
+    pub fn push_constant<T:VertexAttrib>(&mut self)->PushConstant<T>{
+        let offset = self.push_constants.last().map(|r|r.offset+r.size).unwrap_or(0);
+        self.push_constants.push(vk::PushConstantRange{
+            stage_flags: vk::ShaderStageFlags::VERTEX,
+            offset ,
+            size: std::mem::size_of::<T>() as u32
+        });
+        PushConstant(offset,PhantomData)
+    }
+    pub fn depth_bounds(&mut self, min:f32,max:f32)->&mut Self{
         self.depth_state_create_info.depth_bounds_test_enable = vk::TRUE;
         self.depth_state_create_info.max_depth_bounds = max;
         self.depth_state_create_info.min_depth_bounds = min;
         self
     }
-    pub fn stencil_test(mut self, enable:bool)->Self{
+    pub fn stencil_test(&mut self, enable:bool)->&mut Self{
         self.depth_state_create_info.stencil_test_enable = enable.into();
         self
     }
-    pub fn depth_test(mut self, enable:bool)->Self{
+    pub fn depth_test(&mut self, enable:bool)->&mut Self{
         self.depth_state_create_info.depth_test_enable = enable.into();
         self.depth_state_create_info.depth_write_enable = enable.into();
         self
     }
-    pub fn descriptor_layout(mut self, layout:DescriptorLayout)->Self{
+    pub fn descriptor_layout(&mut self, layout:DescriptorLayout)->&mut Self{
         self.descriptor_layout.push(layout);
         self
     }
 
-    pub fn color_blend_attachment_states(mut self, blend_state: vk::PipelineColorBlendAttachmentState) -> Self {
+    pub fn color_blend_attachment_states(&mut self, blend_state: vk::PipelineColorBlendAttachmentState) -> &mut Self {
         self.color_blend_attachment_states.push(blend_state);
         self
     }
-    pub fn viewports(mut self, viewport: vk::Viewport) -> Self {
+    pub fn reset_viewports(&mut self) -> &mut Self {
+        self.viewport.clear();
+        self
+    }
+    pub fn viewports(&mut self, viewport: vk::Viewport) -> &mut Self {
         self.viewport.push(viewport);
         self
     }
-
-    pub fn scissors(mut self, scissors: vk::Rect2D) -> Self {
+    pub fn reset_scissors(&mut self) -> &mut Self {
+        self.scissors.clear();
+        self
+    }
+    pub fn scissors(&mut self, scissors: vk::Rect2D) -> &mut Self {
         self.scissors.push(scissors);
         self
     }
 
-    pub fn cull_face(mut self, cull_mode: vk::CullModeFlags) -> Self {
+    pub fn cull_face(&mut self, cull_mode: vk::CullModeFlags) -> &mut Self {
         self.rasterizer.cull_mode = cull_mode;
         self
     }
 
-    pub fn front_face_clockwise(mut self, clockwise: bool) -> Self {
+    pub fn front_face_clockwise(&mut self, clockwise: bool) -> &mut Self {
         self.rasterizer.front_face = if clockwise { vk::FrontFace::CLOCKWISE } else { vk::FrontFace::COUNTER_CLOCKWISE };
         self
     }
 
-    pub fn line_width(mut self, line_width: f32) -> Self {
+    pub fn line_width(&mut self, line_width: f32) -> &mut Self {
         self.rasterizer.line_width = line_width;
         self
     }
 
-    pub fn polygon_mode(mut self, polygon_mode: vk::PolygonMode) -> Self {
+    pub fn polygon_mode(&mut self, polygon_mode: vk::PolygonMode) -> &mut Self {
         self.rasterizer.polygon_mode = polygon_mode;
         self
     }
 
-    pub fn shader(mut self, main_func: impl ToString, shader: ShaderModule) -> Self {
+    pub fn shader(&mut self, main_func: impl ToString, shader: ShaderModule) -> &mut Self {
         self.shaders.push((main_func.to_string(), shader.clone()));
         self
     }
 
-    pub fn topology(mut self,topology:vk::PrimitiveTopology)->Self{
+    pub fn topology(&mut self,topology:vk::PrimitiveTopology)->&mut Self{
         self.topology = topology;
         self
     }
-    pub fn vertex_input<V:VertexSource>(self, binding:u32, _buffer:&Buffer<V,impl Type>)->Self{
-        self.input_buffer(binding,_buffer,vk::VertexInputRate::VERTEX)
+    pub fn vertex_input<V:VertexSource>(&mut self, binding:u32)->BufferBinding<V>{
+        self.input_buffer(binding,vk::VertexInputRate::VERTEX)
     }
-    pub fn instance_input<V:VertexSource>(self, binding:u32, _buffer:&Buffer<V,impl Type>)->Self{
-        self.input_buffer(binding,_buffer,vk::VertexInputRate::INSTANCE)
+    pub fn instance_input<V:VertexSource>(&mut self, binding:u32)->BufferBinding<V>{
+        self.input_buffer(binding,vk::VertexInputRate::INSTANCE)
     }
-    pub fn input_buffer<V:VertexSource>(mut self, binding:u32, _buffer:&Buffer<V,impl Type>, input_rate:vk::VertexInputRate)->Self{
+    pub fn vertex_input_from<V:VertexSource>(&mut self, binding:u32, _buffer:&Buffer<V,impl Type>)->BufferBinding<V>{
+        self.input_buffer_from(binding,_buffer,vk::VertexInputRate::VERTEX)
+    }
+    pub fn instance_input_from<V:VertexSource>(&mut self, binding:u32, _buffer:&Buffer<V,impl Type>)->BufferBinding<V>{
+        self.input_buffer_from(binding,_buffer,vk::VertexInputRate::INSTANCE)
+    }
+    pub fn input_buffer_from<V:VertexSource>(&mut self, binding:u32, _buffer:&Buffer<V,impl Type>, input_rate:vk::VertexInputRate)->BufferBinding<V>{
+        self.input_buffer(binding, input_rate)
+    }
+    pub fn input_buffer<V:VertexSource>(&mut self, binding:u32, input_rate:vk::VertexInputRate)->BufferBinding<V>{
         self.vertex_input_binding.push(vk::VertexInputBindingDescription {
             binding,
             stride: std::mem::size_of::<V>() as u32,
@@ -177,13 +214,14 @@ impl PipelineBuilder {
         for attr in V::get_attribute_descriptions(binding){
             self.vertex_input_attribute.push(attr);
         }
-        self
+        BufferBinding(binding,PhantomData)
     }
 
     pub fn build(&mut self, render_pass: &RenderPass) -> Result<Pipeline, failure::Error> {
         let Self {
             viewport,
             scissors,
+            push_constants,
             shaders,
             rasterizer,
             multisample_state_create_info,
@@ -208,6 +246,7 @@ impl PipelineBuilder {
         color_blend_state.p_attachments = color_blend_attachment_states.as_ptr();
         let set_layouts:Vec<vk::DescriptorSetLayout> = descriptor_layout.iter().map(|s|s.raw()).collect();
         let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo::builder()
+            .push_constant_ranges(&push_constants)
             .set_layouts(&set_layouts);
         let pipeline_layout = unsafe { render_pass.device().inner()
             .create_pipeline_layout(&pipeline_layout_create_info, None) }?;

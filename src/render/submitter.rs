@@ -24,6 +24,9 @@ impl SubmitterCmd{
             Ok(())
         }
     }
+    pub fn cmd_pool(&self) -> &CommandPool{
+        &self.pool
+    }
     pub fn cmd(&mut self) -> &mut CommandBuffer {
         &mut self.cmd
     }

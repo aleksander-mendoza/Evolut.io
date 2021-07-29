@@ -52,12 +52,7 @@ impl <A:Aspect> ImageView<A> {
         unsafe { device.inner().create_image_view(&imageview_create_info, None) }.map(|img| Self { raw: img, device: device.clone(), _a: PhantomData })
     }
 }
-impl ImageView<Color>{
-    pub fn create_framebuffer(&self, render_pass: &RenderPass, swapchain: &SwapChain) -> Result<Framebuffer, ash::vk::Result> {
-        Framebuffer::new(render_pass,swapchain,&[self.raw()])
-    }
 
-}
 
 impl <A:Aspect> Drop for ImageView<A> {
     fn drop(&mut self) {

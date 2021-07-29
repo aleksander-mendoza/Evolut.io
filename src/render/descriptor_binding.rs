@@ -3,14 +3,13 @@ use crate::render::buffer::{Buffer, Uniform};
 use crate::render::data::VertexSource;
 use ash::vk::DescriptorSetLayoutBinding;
 use crate::render::sampler::Sampler;
-use crate::render::uniform_buffer::UniformBuffers;
 
 pub trait DescriptorBinding{
     fn create_binding(&self, binding:u32)->vk::DescriptorSetLayoutBinding;
 }
 
-impl <V:Copy,const size:usize> DescriptorBinding for UniformBuffers<V,size>{
-    fn create_binding(&self, binding: u32) -> DescriptorSetLayoutBinding {
+impl <V:Copy,const size:usize> DescriptorBinding for [V;size]{
+    fn create_binding(&self,binding: u32) -> DescriptorSetLayoutBinding {
         vk::DescriptorSetLayoutBinding {
             binding,
             descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
@@ -22,7 +21,7 @@ impl <V:Copy,const size:usize> DescriptorBinding for UniformBuffers<V,size>{
 }
 
 impl DescriptorBinding for Sampler{
-    fn create_binding(&self, binding: u32) -> DescriptorSetLayoutBinding {
+    fn create_binding(&self,binding: u32) -> DescriptorSetLayoutBinding {
         vk::DescriptorSetLayoutBinding {
             binding,
             descriptor_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
