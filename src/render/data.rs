@@ -27,6 +27,9 @@ impl VertexAttrib for u8{
 impl VertexAttrib for u32 {
     const FORMAT: Format = vk::Format::R32_UINT;
 }
+impl VertexAttrib for f32 {
+    const FORMAT: Format = vk::Format::R32_SFLOAT;
+}
 
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

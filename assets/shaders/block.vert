@@ -6,7 +6,7 @@ layout (location = 0) out vec2 UV;
 layout (push_constant) uniform Chunk{
     vec3 chunk_location;
 };
-layout (binding = 1) uniform Matrices{
+layout (binding = 0) uniform Matrices{
     mat4 MVP;
     mat4 MV;
 };

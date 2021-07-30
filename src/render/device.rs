@@ -1,7 +1,7 @@
-use ash::version::{InstanceV1_0, DeviceV1_0};
+use ash::version::{InstanceV1_0, DeviceV1_0, InstanceV1_1};
 use ash::vk;
 use failure::err_msg;
-use ash::vk::{QueueFamilyProperties, ExtensionProperties, PhysicalDeviceMemoryProperties, MemoryRequirements, ImageFormatProperties};
+use ash::vk::{QueueFamilyProperties, ExtensionProperties, PhysicalDeviceMemoryProperties, MemoryRequirements, ImageFormatProperties, PhysicalDeviceSubgroupPropertiesBuilder, PhysicalDeviceSubgroupProperties};
 use crate::render::instance::Instance;
 use crate::render::validation_layer::get_validation_layer_support;
 use crate::render::surface::Surface;
@@ -183,6 +183,13 @@ impl Device {
     }
     pub fn get_physical_device_memory_properties(&self) -> PhysicalDeviceMemoryProperties {
         unsafe { self.instance().raw().get_physical_device_memory_properties(self.physical_device()) }
+    }
+    pub fn get_physical_device_subgroup_properties(&self) -> PhysicalDeviceSubgroupProperties {
+        let mut subgroup_prop = vk::PhysicalDeviceSubgroupProperties::builder();
+        let mut prop = vk::PhysicalDeviceProperties2::builder()
+            .push_next(&mut subgroup_prop);
+        unsafe { self.instance().raw().get_physical_device_properties2(self.physical_device(), &mut prop); }
+        subgroup_prop.build()
     }
     // pub fn get_physical_device_image_format_properties(&self, format:vk::Format, img_type:vk::ImageType) -> VkResult<ImageFormatProperties> {
     //     unsafe { self.instance().raw().get_physical_device_image_format_properties(self.physical_device(),format,img_type,tiling) }

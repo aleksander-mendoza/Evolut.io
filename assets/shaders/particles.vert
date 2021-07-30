@@ -1,15 +1,22 @@
+#version 450
+layout (location = 0) in vec3 point;
+layout (location = 1) in float point_size;
+layout (location = 2) in vec4 color;
+layout (location = 0) out vec4 frag_color;
+layout (binding = 0) uniform Matrices{
+    mat4 MVP;
+    mat4 MV;
+};
 
-#version 330 core
-layout (location = 0) in vec3 aPos;
-layout (location = 2) in vec2 vertexUV;
-layout (location = 10) in vec3 instancePosition;
 
-out vec2 UV;
-
-uniform mat4 MVP;
-
+const float eye_distance=0.5;//this is meant to emulate the effect of having eyes
+//slightly in front of the camera, rather than directly in the centre.
 void main()
 {
-    gl_Position = MVP * vec4(aPos + instancePosition, 1.0);
-    UV = vertexUV;
-}  
+    vec4 point4 = vec4(point,1);
+    gl_Position = MVP * point4;
+    gl_Position.y = -gl_Position.y;
+    float point_distance = length(MV * point4)-eye_distance;
+    gl_PointSize = point_size/point_distance;
+    frag_color = color;
+}

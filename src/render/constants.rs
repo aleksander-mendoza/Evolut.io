@@ -6,5 +6,5 @@ pub const APP_INFO: ash::vk::ApplicationInfo = ash::vk::ApplicationInfo {
     application_version: 0,
     p_engine_name: b"Vulkan\0".as_ptr() as *const i8,
     engine_version: 0,
-    api_version: 0,
+    api_version: ash::vk::API_VERSION_1_1, // we need compute shaders with subgroup extension
 };

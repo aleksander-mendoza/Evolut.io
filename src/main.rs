@@ -21,10 +21,12 @@ use crate::render::swap_chain::SwapChain;
 use crate::render::render_pass::RenderPass;
 use crate::render::submitter::Submitter;
 use crate::mvp_uniforms::MvpUniforms;
-use crate::triangles::Triangles;
-use crate::block_world::BlockWorld;
+// use crate::triangles::Triangles;
+use crate::block_world::{BlockWorld, BlockWorldResources};
 use crate::render::shader_module::ShaderModule;
 use ash::vk::ShaderStageFlags;
+use crate::particles::ParticleResources;
+use crate::joint::{Joint, JointResources};
 
 mod block_world;
 mod display;
@@ -34,9 +36,16 @@ mod fps;
 mod blocks;
 mod mvp_uniforms;
 mod triangles;
+mod particle;
+mod particles;
+mod joint;
 
 
 fn main() -> Result<(), failure::Error> {
+    run()
+}
+
+fn run() -> Result<(),failure::Error>{
     #[cfg(target_os = "macos")] {
         sdl2::hint::set("SDL_HINT_MAC_CTRL_CLICK_EMULATE_RIGHT_CLICK", "1");
     }
@@ -51,10 +60,12 @@ fn main() -> Result<(), failure::Error> {
     sdl.mouse().set_relative_mouse_mode(true);
     let mut  mvp_uniforms = MvpUniforms::new();
     let vulkan = VulkanContext::new(window)?;
-    let mut display = Display::<MvpUniforms,BlockWorld>::new(vulkan,&mvp_uniforms)?;
+    let mut display = Display::<MvpUniforms,JointResources<BlockWorldResources,ParticleResources>>::new(vulkan,&mvp_uniforms)?;
 
-    // let comp_shader = ShaderModule::new(include_glsl!("assets/shaders/physics.comp", kind: comp) as &[u32], ShaderStageFlags::COMPUTE, display.device())?;
-
+    // let comp_shader = ShaderModule::new(include_glsl!("assets/shaders/test.comp", kind: comp) as &[u32], ShaderStageFlags::COMPUTE, display.device())?;
+    // println!("{:?}", display.device().get_physical_device_subgroup_properties());
+    // display.cmd_pool().create_command_buffer();
+    // return Ok(());
     let event_pump = sdl.event_pump().map_err(err_msg)?;
     let mut input = Input::new(event_pump);
     let mut fps_counter = FpsCounter::new(timer, 60);
@@ -97,12 +108,12 @@ fn main() -> Result<(), failure::Error> {
         let movement_vector = input.get_direction_unit_vector() * movement_speed * fps_counter.delta_f32();
         let inverse_rotation = glm::quat_inverse(&rotation);
         let mut movement_vector = glm::quat_rotate_vec3(&inverse_rotation, &movement_vector);
-        display.pipeline().world().blocks().zero_out_velocity_vector_on_hitbox_collision(&mut movement_vector, &(location-glm::vec3(0.4f32,1.5,0.4)),&(location+glm::vec3(0.4f32,0.3,0.4)));
+        // display.pipeline().a().world().blocks().zero_out_velocity_vector_on_hitbox_collision(&mut movement_vector, &(location-glm::vec3(0.4f32,1.5,0.4)),&(location+glm::vec3(0.4f32,0.3,0.4)));
         location += movement_vector;
         if input.has_mouse_left_click() || input.has_mouse_right_click() {
             let ray_trace_vector = glm::vec4(0f32, 0., -player_reach, 0.);
             let ray_trace_vector = glm::quat_rotate_vec(&inverse_rotation, &ray_trace_vector);
-            let world = display.pipeline_mut().world_mut();
+            let world = display.pipeline_mut().a_mut().world_mut();
             if input.has_mouse_left_click() {
                 world.ray_cast_remove_block(location.as_slice(), ray_trace_vector.as_slice());
             } else {

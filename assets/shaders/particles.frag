@@ -1,10 +1,7 @@
-
-#version 330 core
-out vec4 FragColor;
-in vec2 UV;
-uniform sampler2D myTextureSampler;
+#version 450
+layout(location=0) out vec4 FragColor;
+layout(location=0) in vec4 frag_color;
 void main()
 {
-    vec3 MaterialDiffuseColor = texture( myTextureSampler, UV ).rgb;
-    FragColor = vec4(MaterialDiffuseColor, 1.0);
+    FragColor = frag_color;
 }
