@@ -27,7 +27,7 @@ impl Instance {
         let mut extension_features_vec = vec![];
         if debug{
             // extension_features_vec.push(vk::ValidationFeatureEnableEXT::BEST_PRACTICES);
-            // extension_features_vec.push(vk::ValidationFeatureEnableEXT::DEBUG_PRINTF);
+            extension_features_vec.push(vk::ValidationFeatureEnableEXT::DEBUG_PRINTF);
         }
         let mut extension_features = vk::ValidationFeaturesEXT::builder().enabled_validation_features(&extension_features_vec).build();
         let mut debug_builder = DebugUtilsMessengerCreateInfoEXT::builder();
@@ -59,11 +59,11 @@ impl Instance {
     }
 
     pub fn pick_physical_device(&self,surface:&Surface) -> Result<ash::vk::PhysicalDevice, failure::Error> {
-        pick_physical_device(self.raw(),surface)
+        pick_physical_device(self.raw(),surface,self.inner.debug.is_some())
     }
 
     pub fn create_device(&self,entry:&ash::Entry, physical_device:ash::vk::PhysicalDevice) -> Result<Device, failure::Error> {
-        Device::new(entry, &self,physical_device)
+        Device::new(entry, &self,physical_device,self.inner.debug.is_some())
     }
 
     pub fn create_surface(&self,entry:&ash::Entry, window: sdl2::video::Window) -> Result<Surface, failure::Error> {

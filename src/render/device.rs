@@ -9,9 +9,22 @@ use std::ffi::CStr;
 use std::rc::Rc;
 use ash::prelude::VkResult;
 
+const DEBUG_DEVICE_EXTENSIONS:[*const i8;2] = [
+    b"VK_KHR_swapchain\0".as_ptr() as *const i8,
+    b"VK_KHR_shader_non_semantic_info\0".as_ptr() as *const i8
+];
+
+const DEVICE_EXTENSIONS:[*const i8;1] = [
+    b"VK_KHR_swapchain\0".as_ptr() as *const i8,
+];
+
 #[cfg(not(target_os = "macos"))]
-fn device_extensions() -> [*const i8; 1] {
-    [ash::extensions::khr::Swapchain::name().as_ptr()]
+fn device_extensions(debug:bool) -> &'static [*const i8] {
+    if debug {
+        &DEBUG_DEVICE_EXTENSIONS
+    }else{
+        &DEVICE_EXTENSIONS
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -35,6 +48,7 @@ fn score_physical_device(
     instance: &ash::Instance,
     physical_device: vk::PhysicalDevice,
     surface: &Surface,
+    debug: bool,
 ) -> u32 {
     let device_properties = unsafe { instance.get_physical_device_properties(physical_device) };
     //let device_features = unsafe { instance.get_physical_device_features(physical_device) };
@@ -56,7 +70,7 @@ fn score_physical_device(
     if device_type_score == 0 { return 0; }
     if surface.formats(physical_device).map(|v| v.len()).unwrap_or(0) == 0 { return 0; }
     if surface.present_modes(physical_device).map(|v| v.len()).unwrap_or(0) == 0 { return 0; }
-    if !device_extensions().iter().all(|&extension| available_extensions.contains(&unsafe { CStr::from_ptr(extension) })) {
+    if !device_extensions(debug).iter().all(|&extension| available_extensions.contains(&unsafe { CStr::from_ptr(extension) })) {
         return 0;
     }
     let queue_score = device_queue_families.iter().enumerate()
@@ -66,14 +80,14 @@ fn score_physical_device(
     device_type_score * queue_score
 }
 
-pub fn pick_physical_device(instance: &ash::Instance, surface: &Surface) -> Result<ash::vk::PhysicalDevice, failure::Error> {
+pub fn pick_physical_device(instance: &ash::Instance, surface: &Surface, debug:bool) -> Result<ash::vk::PhysicalDevice, failure::Error> {
     let physical_devices = unsafe { instance.enumerate_physical_devices() }?;
 
     println!("Devices found with vulkan support:\n{:?}", physical_devices);
 
     physical_devices
         .iter()
-        .map(|&dev| (dev, score_physical_device(instance, dev, surface)))
+        .map(|&dev| (dev, score_physical_device(instance, dev, surface, debug)))
         .max_by_key(|(dev, score)| *score)
         .and_then(|(dev, score)| if score > 0 { Some(dev) } else { None })
         .ok_or_else(|| err_msg("No suitable devices are available. You need to have a GPU with compute shaders and graphics pipeline"))
@@ -119,7 +133,7 @@ impl Device {
         panic!("Failed to find suitable memory type!")
     }
 
-    pub fn new(entry: &ash::Entry, instance: &Instance, physical_device: vk::PhysicalDevice) -> Result<Self, failure::Error> {
+    pub fn new(entry: &ash::Entry, instance: &Instance, physical_device: vk::PhysicalDevice, debug:bool) -> Result<Self, failure::Error> {
         let family_index = pick_queue_family(instance.raw(), physical_device);
 
         let queue_create_info = vk::DeviceQueueCreateInfo::builder()
@@ -130,7 +144,7 @@ impl Device {
 
         let layers = get_validation_layer_support(entry)?;
 
-        let extensions = device_extensions();
+        let extensions = device_extensions(debug);
         let device_create_info = vk::DeviceCreateInfo::builder()
             .queue_create_infos(std::slice::from_ref(&queue_create_info))
             .enabled_layer_names(layers)

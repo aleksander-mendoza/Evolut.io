@@ -23,6 +23,8 @@ use crate::render::submitter::Submitter;
 use crate::mvp_uniforms::MvpUniforms;
 use crate::triangles::Triangles;
 use crate::block_world::BlockWorld;
+use crate::render::shader_module::ShaderModule;
+use ash::vk::ShaderStageFlags;
 
 mod block_world;
 mod display;
@@ -50,6 +52,8 @@ fn main() -> Result<(), failure::Error> {
     let mut  mvp_uniforms = MvpUniforms::new();
     let vulkan = VulkanContext::new(window)?;
     let mut display = Display::<MvpUniforms,BlockWorld>::new(vulkan,&mvp_uniforms)?;
+
+    // let comp_shader = ShaderModule::new(include_glsl!("assets/shaders/physics.comp", kind: comp) as &[u32], ShaderStageFlags::COMPUTE, display.device())?;
 
     let event_pump = sdl.event_pump().map_err(err_msg)?;
     let mut input = Input::new(event_pump);
