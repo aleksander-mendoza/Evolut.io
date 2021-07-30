@@ -11,9 +11,10 @@ use crate::render::descriptors::{DescriptorsBuilder, DescriptorsBuilderLocked, D
 use failure::Error;
 use crate::render::single_render_pass::SingleRenderPass;
 use crate::render::swap_chain::SwapchainImageIdx;
+use crate::render::submitter::Submitter;
 
 pub struct ParticleResources {
-    particles: StageBuffer<Particle, Cpu, Gpu>,
+    particles: Submitter<StageBuffer<Particle, Cpu, Gpu>>,
     frag:ShaderModule,
     vert:ShaderModule,
 }
@@ -26,7 +27,6 @@ impl Resources for ParticleResources {
         let particles = StageBuffer::new(cmd_pool, &particles_data)?;
         let frag = ShaderModule::new(include_glsl!("assets/shaders/particles.frag", kind: frag) as &[u32], ShaderStageFlags::FRAGMENT, cmd_pool.device())?;
         let vert = ShaderModule::new(include_glsl!("assets/shaders/particles.vert") as &[u32], ShaderStageFlags::VERTEX, cmd_pool.device())?;
-        let particles = particles.take()?;
         Ok(Self { particles,vert,frag })
     }
 
@@ -52,7 +52,8 @@ impl Resources for ParticleResources {
                 dst_alpha_blend_factor: vk::BlendFactor::ZERO,
                 alpha_blend_op: vk::BlendOp::ADD,
             });
-        let particle_binding = pipeline.vertex_input::<Particle>(0);
+        let particles = particles.take()?;
+        let particle_binding = pipeline.vertex_input_from(0,particles.gpu());
         let mut particle_builder = ParticleBuilder {
             particles,
             pipeline,
