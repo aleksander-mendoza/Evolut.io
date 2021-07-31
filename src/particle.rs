@@ -7,11 +7,14 @@ use crate::render::data::VertexAttrib;
 #[repr(C, packed)]
 #[derive(Copy,Clone,Debug)]
 pub struct Particle{
-    pos:glm::Vec3,
-    size:f32,
-    color:glm::Vec4,
+    pub pos:glm::Vec3,
+    pub size:f32,
+    pub color:glm::Vec4,
 }
 impl Particle{
+    pub fn rand_vec3()->glm::Vec3{
+        glm::vec3(random::<f32>()*2.-1.,random::<f32>()*2.-1.,random::<f32>()*2.-1.)
+    }
     pub fn random()->Self{
         Self{
             pos: glm::vec3(random::<f32>()*32.,3.+random::<f32>()*8.,random::<f32>()*32.),

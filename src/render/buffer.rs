@@ -24,6 +24,8 @@ pub trait GpuWriteable: Type {}
 
 pub trait AsDescriptor: Type {}
 
+pub trait AsStorage: AsDescriptor {}
+
 impl AsDescriptor for Uniform{}
 
 pub struct Uniform {}
@@ -47,6 +49,8 @@ impl Type for Gpu {
 
 impl AsDescriptor for Storage{}
 
+impl AsStorage for Storage{}
+
 pub struct Storage {}
 
 impl Type for Storage {
@@ -56,6 +60,16 @@ impl Type for Storage {
 }
 
 
+/**It's just like STORAGE buffer, but it does not have TRANSFER_DST flag, because it's meant to be initialised and used only on device*/
+pub struct ProceduralStorage {}
+
+impl Type for ProceduralStorage {
+    const SHARING_MODE: vk::SharingMode = vk::SharingMode::EXCLUSIVE;
+    const REQUIRED_MEMORY_FLAGS: vk::MemoryPropertyFlags = vk::MemoryPropertyFlags::DEVICE_LOCAL;
+    const USAGE: vk::BufferUsageFlags = vk::BufferUsageFlags::from_raw(vk::BufferUsageFlags::STORAGE_BUFFER.as_raw());
+}
+impl AsDescriptor for ProceduralStorage{}
+impl AsStorage for ProceduralStorage{}
 impl GpuWriteable for Storage {}
 impl GpuWriteable for Gpu {}
 

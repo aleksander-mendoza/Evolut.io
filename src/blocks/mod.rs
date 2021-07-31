@@ -5,7 +5,7 @@ mod chunk_faces;
 mod face;
 mod block;
 mod face_orientation;
-mod world_size;
+pub mod world_size;
 mod world;
 mod raycast;
 mod world_faces;

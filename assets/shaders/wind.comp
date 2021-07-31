@@ -13,10 +13,25 @@ layout(set = 0, binding = 0) buffer Particles{
     Particle particles[];
 };
 
+layout(set = 0, binding = 1) buffer Velocity{
+    vec3 velocities[];
+};
+
+layout(set = 0, binding = 2) buffer CollisionGrid{
+    uint collision_grid[];
+};
 void main()
 {
     //grab global ID
     uint gID = gl_GlobalInvocationID.x;
-    particles[gID].position += vec3(0,0.01,0);
-}
+    vec3 position = particles[gID].position;
+    vec3 velocity = velocities[gID];
+    vec3 candidate_position = position + velocity;
+    vec3 new_position = candidate_position - 2*min(candidate_position,vec3(0,0,0)) + 2*min(vec3(32,16,32)-candidate_position,vec3(0,0,0));
 
+    
+
+    particles[gID].position = new_position;
+    velocities[gID] = new_position - position;
+
+}

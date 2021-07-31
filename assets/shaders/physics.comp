@@ -29,19 +29,19 @@ layout(set = 0, binding = 0) uniform Config{
 
 layout(set = 0, binding = 1) readonly buffer  Particles{
     vec4 particles[];
-} particles;
+} ;
 
 layout(set = 0, binding = 2) readonly buffer  World{
-    uint blocks[];
-} world;
+    uint world[];
+} ;
 
 layout(set = 0, binding = 3) buffer  Grid{
-    uint cells[]; // collision detection is based on the very common approach of using a grid
-} grid;
+    uint grid[]; // collision detection is based on the very common approach of using a grid
+} ;
 
 layout(set = 0, binding = 4) buffer Constraints{
-    mat4 matrices[];
-} constraints;
+    mat4 constraints[];
+} ;
 
 int cell_position_to_idx(ivec3 cell_positon){
     return cell_position.x+(cell_position.y+cell_position.z*CHUNK_HEIGHT_IN_CELLS)*CHUNK_WIDTH_IN_CELLS;
@@ -52,14 +52,14 @@ void main()
     uint gID = gl_GlobalInvocationID.x;
     for(int chunk_x=0;chunk_x<chunks_x;chunk_x++){
         for(int chunk_z=0;chunk_z<chunks_z;chunk_z++){
-            vec4 particle = particles.particle[gID];
+            vec4 particle = particles[gID];
             vec3 particle_position = particle.xyz;
             float particle_weight = particle.w;
             if(int(particle.x)/CHUNK_WIDTH==chunk_x && int(particle.z)/CHUNK_DEPTH==chunk_z){
                 particle.x -= chunk_x*CHUNK_WIDTH; //now we will be working in coordinate system
                 particle.z -= chunk_z*CHUNK_DEPTH; //that is relative to this particular chunk
                 ivec3 cell_position = ivec3(particle.xyz/CELL_SIZE);
-                grid.cells[cell_position_to_idx(cell_position)] = gID;
+                grid[cell_position_to_idx(cell_position)] = gID;
                 ivec2 x_range=(cell_position.x+ivec2(-1,2)).clamp(0,CHUNK_WIDTH_IN_CELLS);
                 ivec2 y_range=(cell_position.y+ivec2(-1,2)).clamp(0,CHUNK_HEIGHT_IN_CELLS);
                 ivec2 z_range=(cell_position.z+ivec2(-1,2)).clamp(0,CHUNK_DEPTH_IN_CELLS);
@@ -67,11 +67,11 @@ void main()
                     for(int y=y_range.x;y<y_range.y;y++) {
                         for(int z=z_range.x;z<z_range.y;z++) {
                             int cell_idx = cell_position_to_idx(ivec3(x,y,z));
-                            uint neighbour_particle_idx = grid.cells[cell_idx];
-                            vec4 neighbour_particle = particles.particle[neighbour_particle_idx];
+                            uint neighbour_particle_idx = grid[cell_idx];
+                            vec4 neighbour_particle = particles[neighbour_particle_idx];
                             vec3 neighbour_particle_position = neighbour_particle.xyz;
                             if(dot(particle_position,neighbour_particle_position)<=PARTICLE_COLLISION_DISTANCE_SQUARE){
-                                atomicAdd(
+                                atomicAdd( );
                             }
                         }
                     }

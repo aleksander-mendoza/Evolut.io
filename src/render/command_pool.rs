@@ -274,6 +274,22 @@ impl CommandBuffer {
         }
         self
     }
+    pub fn fill<T:Type>(&mut self, buffer:&Buffer<u32,T>, value:u32) -> &mut Self {
+        unsafe {
+            self.device.inner().cmd_fill_buffer(
+                self.raw, buffer.raw(),0,(std::mem::size_of::<u32>()*buffer.len()) as u64,value
+            );
+        }
+        self
+    }
+    pub fn fill_zeros<V:Copy, T:Type>(&mut self, buffer:&Buffer<V,T>) -> &mut Self {
+        unsafe {
+            self.device.inner().cmd_fill_buffer(
+                self.raw, buffer.raw(),0,(std::mem::size_of::<V>()*buffer.len()) as u64,0
+            );
+        }
+        self
+    }
     pub fn push_constant<V: VertexAttrib>(&mut self,pipeline: &Pipeline, push_constant:PushConstant<V>, c: &V) -> &mut Self{
 
         unsafe {

@@ -3,7 +3,21 @@ use crate::blocks::face_orientation::FaceOrientation;
 pub const CHUNK_WIDTH: usize = 16;
 pub const CHUNK_DEPTH: usize = 16;
 pub const CHUNK_HEIGHT: usize = 256;
-
+pub const GRID_GRANULARITY:usize = 4; // the total number of cells in a block is GRID_GRANULARITY raised to the power of 3
+pub const CELL_SIZE:f32 = 1./GRID_GRANULARITY as f32;
+pub const CELL_DIAGONAL:f32 = 1.73205080757*CELL_SIZE; // sqrt(3)=1.73205080757
+pub const PARTICLE_RADIUS:f32 = CELL_DIAGONAL/2.; //the is the minimum possible particle size that still guarantees
+// only one particle will fall into each grid cell. Here we assume that the center of particle decides,
+// which cell a particel falls into. The particles should normally never overlap... well... sporadically it may happen
+// that they do, especially if they are moving with high speeds and suddenly collide. But such events should be rare
+// and if they do occur, only one fo them will be randomly picked to occupy the grid cell, while the other one will
+// be ignored. But in the next simulation step, the particle positions will almost surely change and the two particles
+// should at some point fall into different cells and then collision will be detected.
+pub const PARTICLE_DIAMETER:f32 = PARTICLE_RADIUS*2.;
+pub const CHUNK_WIDTH_IN_CELLS:usize = CHUNK_WIDTH*GRID_GRANULARITY;
+pub const CHUNK_DEPTH_IN_CELLS:usize = CHUNK_DEPTH*GRID_GRANULARITY;
+pub const CHUNK_HEIGHT_IN_CELLS:usize = CHUNK_HEIGHT*GRID_GRANULARITY;
+pub const PARTICLE_COLLISION_DISTANCE_SQUARE:f32 = PARTICLE_DIAMETER*PARTICLE_DIAMETER;
 
 #[derive(Eq,PartialEq,Clone,Copy)]
 pub struct WorldSize {

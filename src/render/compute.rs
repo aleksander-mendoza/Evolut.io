@@ -1,5 +1,5 @@
 use crate::render::descriptors::{Descriptors, DescriptorsBuilder};
-use crate::render::buffer::{Buffer, Gpu, Storage};
+use crate::render::buffer::{Buffer, Gpu, Storage, AsStorage};
 use ash::vk;
 use std::marker::PhantomData;
 use crate::render::device::Device;
@@ -30,7 +30,7 @@ impl ComputePipelineBuilder {
         self.shader.insert((CString::new(name).expect("Compute shader's function name contains null character"), shader));
         self
     }
-    pub fn storage_buffer<T: Copy>(&mut self, buffer: &Buffer<T, Storage>) -> StorageBufferBinding<T> {
+    pub fn storage_buffer<T: Copy>(&mut self, buffer: &Buffer<T, impl AsStorage>) -> StorageBufferBinding<T> {
         let new_index = self.bindings.len() as u32;
         self.bindings.push(vk::DescriptorSetLayoutBinding {
             binding: new_index,

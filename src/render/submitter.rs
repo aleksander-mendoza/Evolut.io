@@ -5,6 +5,7 @@ use std::ops::{Deref, DerefMut};
 use ash::prelude::VkResult;
 use crate::render::device::Device;
 use ash::version::DeviceV1_0;
+use crate::render::buffer::{Buffer, Type};
 
 pub struct SubmitterCmd{
     pool: CommandPool,
@@ -44,6 +45,7 @@ impl SubmitterCmd{
     pub fn new(pool: &CommandPool)->Result<Self,vk::Result>{
         Ok(Self{fence:Fence::new(pool.device(),false)?,pool:pool.clone(),cmd:pool.create_command_buffer()?, was_submitted: false })
     }
+
 }
 
 pub struct Submitter<T>{
@@ -104,5 +106,13 @@ impl <T> Submitter<T>{
     }
     pub fn device(&self) -> &Device {
         self.inner().device()
+    }
+}
+
+impl <V:Copy,T:Type> Submitter<Buffer<V,T>>{
+    pub fn fill_zeros_submit(&mut self) -> VkResult<()> {
+        let (inner,val) = self.inner_val();
+        inner.cmd().begin(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)?.fill_zeros(val).end()?;
+        inner.submit()
     }
 }
