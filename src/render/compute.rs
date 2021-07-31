@@ -1,5 +1,5 @@
 use crate::render::descriptors::{Descriptors, DescriptorsBuilder};
-use crate::render::buffer::{Buffer, Gpu, Storage, AsStorage};
+use crate::render::buffer::{Buffer, Gpu, Storage, AsStorage, Uniform};
 use ash::vk;
 use std::marker::PhantomData;
 use crate::render::device::Device;
@@ -21,6 +21,9 @@ pub struct ComputePipelineBuilder {
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub struct StorageBufferBinding<T: Copy>(u32, PhantomData<T>);
 
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub struct UniformBufferBinding<T: Copy>(u32, PhantomData<T>);
+
 impl ComputePipelineBuilder {
     pub fn new() -> Self {
         Self { bindings: Vec::new(), descriptors: Vec::new(), shader: None }
@@ -41,6 +44,19 @@ impl ComputePipelineBuilder {
         });
         self.descriptors.push(buffer.descriptor_info());
         StorageBufferBinding(new_index, PhantomData)
+    }
+
+    pub fn uniform_buffer<T: Copy>(&mut self, buffer: &Buffer<T, Uniform>) -> UniformBufferBinding<T> {
+        let new_index = self.bindings.len() as u32;
+        self.bindings.push(vk::DescriptorSetLayoutBinding {
+            binding: new_index,
+            descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
+            descriptor_count: buffer.len() as u32,
+            stage_flags: vk::ShaderStageFlags::COMPUTE,
+            p_immutable_samplers: std::ptr::null(),
+        });
+        self.descriptors.push(buffer.descriptor_info());
+        UniformBufferBinding(new_index, PhantomData)
     }
 
     pub fn build(&self, device: &Device) -> Result<ComputePipeline, failure::Error> {
@@ -68,7 +84,7 @@ impl ComputePipelineBuilder {
 
         match result {
             Ok(pipeline) => {
-                ComputePipeline::new(ComputePipelineInner::new(pipeline, pipeline_layout, device), descriptor_layout, descriptors)
+                ComputePipeline::new(ComputePipelineInner::new(pipeline, pipeline_layout, device), descriptor_layout, descriptors, &bindings)
             }
             Err((pipeline, err)) => {
                 ComputePipelineInner::new(pipeline, pipeline_layout, device);
@@ -116,13 +132,19 @@ pub struct ComputePipeline {
 }
 
 impl ComputePipeline {
-    fn new(inner: ComputePipelineInner, descriptor_layout: DescriptorLayout, descriptors:&[vk::DescriptorBufferInfo]) -> Result<Self, failure::Error> {
+    fn new(inner: ComputePipelineInner, descriptor_layout: DescriptorLayout, descriptors:&[vk::DescriptorBufferInfo], bindings:&[vk::DescriptorSetLayoutBinding]) -> Result<Self, failure::Error> {
         let descriptor_pool = DescriptorPool::manual_new(&descriptor_layout, 1, inner.device())?;
         let descriptor_sets = descriptor_pool.create_sets_with_same_layout(descriptor_layout.clone(), 1)?;
         let descriptor_set = descriptor_sets.into_iter().next().unwrap();
-        for (binding, descriptor) in descriptors.iter().enumerate() {
+        for (descriptor, binding) in descriptors.iter().zip(bindings.iter()) {
             unsafe {
-                descriptor_set.update_storage_buffer_raw(binding as u32, descriptor);
+                if binding.descriptor_type == vk::DescriptorType::STORAGE_BUFFER{
+                    descriptor_set.update_storage_buffer_raw(binding.binding, descriptor);
+                }else{
+                    debug_assert_eq!(binding.descriptor_type , vk::DescriptorType::UNIFORM_BUFFER);
+                    descriptor_set.update_uniform_buffer_raw(binding.binding, descriptor);
+                }
+
             }
         }
         Ok(Self { inner, descriptor_layout, descriptor_pool, descriptor_set })

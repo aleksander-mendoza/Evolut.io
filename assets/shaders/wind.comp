@@ -9,15 +9,21 @@ struct Particle{
     vec4 color;
 };
 
-layout(set = 0, binding = 0) buffer Particles{
+layout(set = 0, binding = 0) uniform Config{
+    int predefined_constraints;
+    int chunks_x;
+    int chunks_z;
+};
+
+layout(set = 0, binding = 1) buffer Particles{
     Particle particles[];
 };
 
-layout(set = 0, binding = 1) buffer Velocity{
+layout(set = 0, binding = 2) buffer Velocity{
     vec3 velocities[];
 };
 
-layout(set = 0, binding = 2) buffer CollisionGrid{
+layout(set = 0, binding = 3) buffer CollisionGrid{
     uint collision_grid[];
 };
 void main()
@@ -27,9 +33,38 @@ void main()
     vec3 position = particles[gID].position;
     vec3 velocity = velocities[gID];
     vec3 candidate_position = position + velocity;
-    vec3 new_position = candidate_position - 2*min(candidate_position,vec3(0,0,0)) + 2*min(vec3(32,16,32)-candidate_position,vec3(0,0,0));
+    vec3 new_position = candidate_position - 2*min(candidate_position,vec3(0,0,0)) + 2*min(vec3(16*chunks_x,16,16*chunks_z)-candidate_position,vec3(0,0,0));
 
-    
+//    //grab global ID
+//    for(int chunk_x=0;chunk_x<chunks_x;chunk_x++){
+//        for(int chunk_z=0;chunk_z<chunks_z;chunk_z++){
+//            vec4 particle = particles[gID];
+//            vec3 particle_position = particle.xyz;
+//            float particle_weight = particle.w;
+//            if(int(particle.x)/CHUNK_WIDTH==chunk_x && int(particle.z)/CHUNK_DEPTH==chunk_z){
+//                particle.x -= chunk_x*CHUNK_WIDTH; //now we will be working in coordinate system
+//                particle.z -= chunk_z*CHUNK_DEPTH; //that is relative to this particular chunk
+//                ivec3 cell_position = ivec3(particle.xyz/CELL_SIZE);
+//                grid[cell_position_to_idx(cell_position)] = gID;
+//                ivec2 x_range=(cell_position.x+ivec2(-1,2)).clamp(0,CHUNK_WIDTH_IN_CELLS);
+//                ivec2 y_range=(cell_position.y+ivec2(-1,2)).clamp(0,CHUNK_HEIGHT_IN_CELLS);
+//                ivec2 z_range=(cell_position.z+ivec2(-1,2)).clamp(0,CHUNK_DEPTH_IN_CELLS);
+//                for(int x=x_range.x;x<x_range.y;x++) {
+//                    for(int y=y_range.x;y<y_range.y;y++) {
+//                        for(int z=z_range.x;z<z_range.y;z++) {
+//                            int cell_idx = cell_position_to_idx(ivec3(x,y,z));
+//                            uint neighbour_particle_idx = grid[cell_idx];
+//                            vec4 neighbour_particle = particles[neighbour_particle_idx];
+//                            vec3 neighbour_particle_position = neighbour_particle.xyz;
+//                            if(dot(particle_position,neighbour_particle_position)<=PARTICLE_COLLISION_DISTANCE_SQUARE){
+//                                atomicAdd( );
+//                            }
+//                        }
+//                    }
+//                }
+//            }
+//        }
+//    }
 
     particles[gID].position = new_position;
     velocities[gID] = new_position - position;

@@ -25,7 +25,11 @@ pub struct BlockWorldResources {
     frag:ShaderModule<Fragment>,
     vert:ShaderModule<Vertex>,
 }
-
+impl BlockWorldResources{
+    pub fn world(&self) -> &Submitter<World>{
+        &self.world
+    }
+}
 impl Resources for BlockWorldResources{
     type Render = BlockWorld;
 
