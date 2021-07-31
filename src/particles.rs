@@ -1,8 +1,8 @@
 use crate::render::stage_buffer::StageBuffer;
 use crate::particle::Particle;
-use crate::render::buffer::{Cpu, Gpu};
+use crate::render::buffer::{Cpu, Gpu, Storage};
 use crate::render::command_pool::{CommandPool, CommandBuffer};
-use crate::render::shader_module::ShaderModule;
+use crate::render::shader_module::{ShaderModule, Fragment, Vertex};
 use ash::vk::ShaderStageFlags;
 use crate::render::pipeline::{PipelineBuilder, BufferBinding, Pipeline};
 use ash::vk;
@@ -14,9 +14,15 @@ use crate::render::swap_chain::SwapchainImageIdx;
 use crate::render::submitter::Submitter;
 
 pub struct ParticleResources {
-    particles: Submitter<StageBuffer<Particle, Cpu, Gpu>>,
-    frag:ShaderModule,
-    vert:ShaderModule,
+    particles: Submitter<StageBuffer<Particle, Cpu, Storage>>,
+    frag:ShaderModule<Fragment>,
+    vert:ShaderModule<Vertex>,
+}
+
+impl ParticleResources{
+    pub fn particles(&self) -> &StageBuffer<Particle, Cpu, Storage>{
+        &self.particles
+    }
 }
 
 impl Resources for ParticleResources {
@@ -25,8 +31,8 @@ impl Resources for ParticleResources {
     fn new(cmd_pool: &CommandPool) -> Result<Self, failure::Error> {
         let particles_data:Vec<Particle> = std::iter::repeat_with(Particle::random).take(64).collect();
         let particles = StageBuffer::new(cmd_pool, &particles_data)?;
-        let frag = ShaderModule::new(include_glsl!("assets/shaders/particles.frag", kind: frag) as &[u32], ShaderStageFlags::FRAGMENT, cmd_pool.device())?;
-        let vert = ShaderModule::new(include_glsl!("assets/shaders/particles.vert") as &[u32], ShaderStageFlags::VERTEX, cmd_pool.device())?;
+        let frag = ShaderModule::new(include_glsl!("assets/shaders/particles.frag", kind: frag) as &[u32],  cmd_pool.device())?;
+        let vert = ShaderModule::new(include_glsl!("assets/shaders/particles.vert") as &[u32],  cmd_pool.device())?;
         Ok(Self { particles,vert,frag })
     }
 
@@ -38,8 +44,8 @@ impl Resources for ParticleResources {
         let Self{ particles, frag, vert } = self;
         let mut pipeline = PipelineBuilder::new();
         pipeline.descriptor_layout(descriptors.layout().clone())
-            .shader("main", frag)
-            .shader("main", vert)
+            .fragment_shader("main", frag)
+            .vertex_shader("main", vert)
             .depth_test(true)
             .topology(vk::PrimitiveTopology::POINT_LIST)
             .color_blend_attachment_states(vk::PipelineColorBlendAttachmentState {
@@ -66,7 +72,7 @@ impl Resources for ParticleResources {
 
 
 pub struct ParticleBuilder {
-    particles: StageBuffer<Particle, Cpu, Gpu>,
+    particles: StageBuffer<Particle, Cpu, Storage>,
     pipeline: PipelineBuilder,
     particle_binding: BufferBinding<Particle>,
 }
@@ -93,16 +99,20 @@ impl Particles {
     pub fn pipeline(&self) -> &Pipeline {
         &self.particle_compiled
     }
+    pub fn particles(&self) -> &StageBuffer<Particle, Cpu, Storage>{
+        &self.particle_builder.particles
+    }
 }
 
 impl Renderable for Particles {
-
-
     fn record_cmd_buffer(&self, cmd: &mut CommandBuffer, image_idx: SwapchainImageIdx, descriptors:&Descriptors, render_pass: &SingleRenderPass) -> Result<(), Error> {
         cmd.bind_pipeline(self.pipeline())
             .uniform(self.pipeline(), descriptors.descriptor_set(image_idx))
             .vertex_input(self.particle_builder.particle_binding, self.particle_builder.particles.gpu())
             .draw(self.particle_builder.particles.len() as u32,1,0,0);
+        Ok(())
+    }
+    fn record_compute_cmd_buffer(&self, cmd: &mut CommandBuffer) -> Result<(), Error> {
         Ok(())
     }
 

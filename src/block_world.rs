@@ -1,7 +1,7 @@
 use crate::blocks::{World, Face};
 use crate::blocks::block_properties::{BEDROCK, DIRT, GRASS, PLANK, GLASS};
 use ash::vk;
-use crate::render::shader_module::ShaderModule;
+use crate::render::shader_module::{ShaderModule, Fragment, Vertex};
 use ash::vk::{ShaderStageFlags, PFN_vkCmdResetQueryPool};
 use crate::render::pipeline::{PipelineBuilder, BufferBinding, PushConstant, Pipeline};
 use crate::render::single_render_pass::SingleRenderPass;
@@ -22,8 +22,8 @@ pub struct BlockWorldResources {
     texture: Submitter<StageTexture<Dim2D>>,
     sampler: Sampler,
     world: Submitter<World>,
-    frag:ShaderModule,
-    vert:ShaderModule,
+    frag:ShaderModule<Fragment>,
+    vert:ShaderModule<Vertex>,
 }
 
 impl Resources for BlockWorldResources{
@@ -32,8 +32,8 @@ impl Resources for BlockWorldResources{
     fn new(cmd_pool: &CommandPool)-> Result<Self, failure::Error>{
         let texture = StageTexture::new("assets/img/blocks.png".as_ref(), cmd_pool, true)?;
         let sampler = Sampler::new(cmd_pool.device(), vk::Filter::NEAREST, true)?;
-        let frag = ShaderModule::new(include_glsl!("assets/shaders/block.frag", kind: frag) as &[u32], ShaderStageFlags::FRAGMENT, cmd_pool.device())?;
-        let vert = ShaderModule::new(include_glsl!("assets/shaders/block.vert") as &[u32], ShaderStageFlags::VERTEX, cmd_pool.device())?;
+        let frag = ShaderModule::new(include_glsl!("assets/shaders/block.frag", kind: frag) as &[u32],  cmd_pool.device())?;
+        let vert = ShaderModule::new(include_glsl!("assets/shaders/block.vert") as &[u32],  cmd_pool.device())?;
         let mut world = World::new(2,2, cmd_pool)?;
         world.blocks_mut().no_update_fill_level(0, 1, BEDROCK);
         world.blocks_mut().no_update_fill_level(1, 1, DIRT);
@@ -60,8 +60,8 @@ impl Resources for BlockWorldResources{
         let Self{ texture, sampler, world, frag, vert } = self;
         let mut pipeline = PipelineBuilder::new();
         pipeline.descriptor_layout(descriptors.layout().clone())
-            .shader("main", frag)
-            .shader("main", vert)
+            .fragment_shader("main", frag)
+            .vertex_shader("main", vert)
             .depth_test(true)
             .cull_face(vk::CullModeFlags::FRONT)
             .front_face_clockwise(true)
@@ -141,6 +141,10 @@ impl Renderable for BlockWorld {
             .bind_pipeline(self.pipeline())
             .uniform(self.pipeline(), descriptors.descriptor_set(image_idx));
         self.block_world_builder.world.draw(cmd, self.pipeline(), self.block_world_builder.instance_binding, self.block_world_builder.chunk_position_binding);
+        Ok(())
+    }
+
+    fn record_compute_cmd_buffer(&self, cmd: &mut CommandBuffer) -> Result<(), Error> {
         Ok(())
     }
 

@@ -27,12 +27,15 @@ pub struct DescriptorLayout{
 }
 impl DescriptorLayout{
     pub fn pool_sizes(&self, swapchain:&SwapChain) -> Vec<DescriptorPoolSize> {
+        self.manual_pool_sizes(swapchain.len() as u32)
+    }
+    pub fn manual_pool_sizes(&self, descriptor_count:u32) -> Vec<DescriptorPoolSize> {
         let mut sizes = Vec::new();
         for layout in &self.inner.bindings_to_layout{
             if let Some(layout) = layout{
                 sizes.push(vk::DescriptorPoolSize {
                     ty: layout.descriptor_type,
-                    descriptor_count: swapchain.len() as u32,
+                    descriptor_count,
                 });
             }
         }

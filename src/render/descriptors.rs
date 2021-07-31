@@ -50,6 +50,7 @@ impl DescriptorsBuilder {
         self.descriptors.push(DescriptorUniform::Sampler(sampler.descriptor_info(image_view)));
     }
 
+
     pub fn singleton_uniform_buffer<T: Copy>(&mut self, buffer: &T) -> UniformBufferBinding<T, 1> {
         self.array_uniform_buffer(std::array::from_ref(buffer))
     }
@@ -87,7 +88,7 @@ impl DescriptorsBuilderLocked {
                             descriptor_set.update_sampler_raw(binding as u32, sampler_info);
                         }
                         &DescriptorUniform::Buffer(type_size, elem_count) => {
-                            descriptor_set.update_buffer_raw(binding as u32, &uniform_buffers[binding].buffer_per_frame[frame].buffer().descriptor_info());
+                            descriptor_set.update_uniform_buffer_raw(binding as u32, &uniform_buffers[binding].buffer_per_frame[frame].buffer().descriptor_info());
                         }
                     }
                 }

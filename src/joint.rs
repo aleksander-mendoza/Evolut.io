@@ -20,6 +20,21 @@ pub struct JointResources<A:Resources,B:Resources> {
     b: B
 }
 
+impl <A:Resources,B:Resources> JointResources<A,B>{
+    pub fn a(&self)->&A{
+        &self.a
+    }
+    pub fn b(&self)->&B{
+        &self.b
+    }
+    pub fn a_mut(&mut self)->&mut A{
+        &mut self.a
+    }
+    pub fn b_mut(&mut self)->&mut B{
+        &mut self.b
+    }
+}
+
 impl <A:Resources,B:Resources> Resources for JointResources<A,B> {
     type Render = Joint<A::Render,B::Render>;
 
@@ -66,7 +81,10 @@ impl <A:Renderable,B:Renderable> Renderable for Joint<A,B> {
         self.a.record_cmd_buffer(cmd,image_idx,descriptors,render_pass)?;
         self.b.record_cmd_buffer(cmd,image_idx,descriptors,render_pass)
     }
-
+    fn record_compute_cmd_buffer(&self, cmd: &mut CommandBuffer) -> Result<(), Error> {
+        self.a.record_compute_cmd_buffer(cmd)?;
+        self.b.record_compute_cmd_buffer(cmd)
+    }
     fn update_uniforms(&mut self, image_idx: SwapchainImageIdx) {
         self.a.update_uniforms(image_idx);
         self.b.update_uniforms(image_idx);

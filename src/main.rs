@@ -27,6 +27,8 @@ use crate::render::shader_module::ShaderModule;
 use ash::vk::ShaderStageFlags;
 use crate::particles::ParticleResources;
 use crate::joint::{Joint, JointResources};
+use crate::render::compute::ComputePipelineBuilder;
+use crate::game::GameResources;
 
 mod block_world;
 mod display;
@@ -39,6 +41,7 @@ mod triangles;
 mod particle;
 mod particles;
 mod joint;
+mod game;
 
 
 fn main() -> Result<(), failure::Error> {
@@ -60,12 +63,8 @@ fn run() -> Result<(),failure::Error>{
     sdl.mouse().set_relative_mouse_mode(true);
     let mut  mvp_uniforms = MvpUniforms::new();
     let vulkan = VulkanContext::new(window)?;
-    let mut display = Display::<MvpUniforms,JointResources<BlockWorldResources,ParticleResources>>::new(vulkan,&mvp_uniforms)?;
+    let mut display = Display::<MvpUniforms,GameResources>::new(vulkan,&mvp_uniforms)?;
 
-    // let comp_shader = ShaderModule::new(include_glsl!("assets/shaders/test.comp", kind: comp) as &[u32], ShaderStageFlags::COMPUTE, display.device())?;
-    // println!("{:?}", display.device().get_physical_device_subgroup_properties());
-    // display.cmd_pool().create_command_buffer();
-    // return Ok(());
     let event_pump = sdl.event_pump().map_err(err_msg)?;
     let mut input = Input::new(event_pump);
     let mut fps_counter = FpsCounter::new(timer, 60);
@@ -113,7 +112,7 @@ fn run() -> Result<(),failure::Error>{
         if input.has_mouse_left_click() || input.has_mouse_right_click() {
             let ray_trace_vector = glm::vec4(0f32, 0., -player_reach, 0.);
             let ray_trace_vector = glm::quat_rotate_vec(&inverse_rotation, &ray_trace_vector);
-            let world = display.pipeline_mut().a_mut().world_mut();
+            let world = display.pipeline_mut().block_world_mut().world_mut();
             if input.has_mouse_left_click() {
                 world.ray_cast_remove_block(location.as_slice(), ray_trace_vector.as_slice());
             } else {

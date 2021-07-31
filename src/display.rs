@@ -34,6 +34,7 @@ pub trait Resources:Sized{
 }
 pub trait Renderable:Sized{
     fn record_cmd_buffer(&self, cmd: &mut CommandBuffer, image_idx:SwapchainImageIdx,descriptors:&Descriptors, render_pass:&SingleRenderPass)->Result<(),Error>;
+    fn record_compute_cmd_buffer(&self, cmd: &mut CommandBuffer)->Result<(),Error>;
     fn update_uniforms(&mut self, image_idx:SwapchainImageIdx);
     fn recreate(&mut self, render_pass: &SingleRenderPass, ) -> Result<(), Error>;
 }
@@ -107,7 +108,9 @@ impl <U:Copy,P:Resources> Display<U,P> {
         let Self{ command_buffers, pipeline, render_pass,descriptors, .. } = self;
         let command_buffer = &mut command_buffers[image_idx.get_usize()];
         command_buffer.reset()?
-            .begin(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE)?
+            .begin(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE)?;
+        pipeline.record_compute_cmd_buffer(command_buffer)?;
+        command_buffer
             .render_pass(render_pass, render_pass.framebuffer(image_idx), render_pass.swapchain().render_area(), &Self::CLEAR_VALUES);
         pipeline.record_cmd_buffer(command_buffer,image_idx,descriptors,render_pass)?;
         command_buffer

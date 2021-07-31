@@ -17,6 +17,7 @@ use crate::render::imageview::{Color, Aspect};
 use std::rc::Rc;
 use crate::render::util::any_as_u8_slice;
 use crate::render::stage_buffer::StageBuffer;
+use crate::render::compute::{ComputePipelineBuilder, ComputePipeline};
 
 pub struct CommandBuffer {
     raw: vk::CommandBuffer,
@@ -238,6 +239,38 @@ impl CommandBuffer {
                 vk::PipelineBindPoint::GRAPHICS,
                 pipeline.raw(),
             )
+        }
+        self
+    }
+    pub fn bind_compute_pipeline(&mut self, pipeline: &ComputePipeline) -> &mut Self {
+        unsafe {
+            self.device.inner().cmd_bind_pipeline(
+                self.raw,
+                vk::PipelineBindPoint::COMPUTE,
+                pipeline.raw(),
+            );
+            self.device.inner().cmd_bind_descriptor_sets(
+                self.raw,
+                vk::PipelineBindPoint::COMPUTE,
+                pipeline.layout(),
+                0,
+                &[pipeline.descriptor_set().raw()],
+                &[],
+            );
+        }
+        self
+    }
+    pub fn dispatch_1d(&mut self, x:u32) -> &mut Self {
+        self.dispatch_2d(x,1)
+    }
+    pub fn dispatch_2d(&mut self, x:u32,y:u32) -> &mut Self {
+        self.dispatch_3d(x,y,1)
+    }
+    pub fn dispatch_3d(&mut self, x:u32,y:u32,z:u32) -> &mut Self {
+        unsafe {
+            self.device.inner().cmd_dispatch(
+                self.raw, x,y, z
+            );
         }
         self
     }

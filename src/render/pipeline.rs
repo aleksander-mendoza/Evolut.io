@@ -1,4 +1,4 @@
-use crate::render::shader_module::ShaderModule;
+use crate::render::shader_module::{ShaderModule, AnyShaderModule, Fragment, Vertex};
 use ash::vk;
 use crate::render::device::Device;
 use ash::version::DeviceV1_0;
@@ -53,7 +53,7 @@ pub struct PipelineBuilder {
     viewport: Vec<vk::Viewport>,
     scissors: Vec<vk::Rect2D>,
     push_constants: Vec<vk::PushConstantRange>,
-    shaders: Vec<(String, ShaderModule)>,
+    shaders: Vec<(String, AnyShaderModule)>,
     rasterizer: vk::PipelineRasterizationStateCreateInfo,
     multisample_state_create_info: vk::PipelineMultisampleStateCreateInfo,
     depth_state_create_info: vk::PipelineDepthStencilStateCreateInfo,
@@ -180,12 +180,16 @@ impl PipelineBuilder {
         self.rasterizer.polygon_mode = polygon_mode;
         self
     }
-
-    pub fn shader(&mut self, main_func: impl ToString, shader: ShaderModule) -> &mut Self {
-        self.shaders.push((main_func.to_string(), shader.clone()));
+    fn any_shader(&mut self, main_func: impl ToString, shader: AnyShaderModule) -> &mut Self {
+        self.shaders.push((main_func.to_string(), shader));
         self
     }
-
+    pub fn fragment_shader(&mut self, main_func: impl ToString, shader: ShaderModule<Fragment>) -> &mut Self {
+        self.any_shader(main_func,unsafe{shader.into_any()})
+    }
+    pub fn vertex_shader(&mut self, main_func: impl ToString, shader: ShaderModule<Vertex>) -> &mut Self {
+        self.any_shader(main_func,unsafe{shader.into_any()})
+    }
     pub fn topology(&mut self,topology:vk::PrimitiveTopology)->&mut Self{
         self.topology = topology;
         self

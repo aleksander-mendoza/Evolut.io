@@ -22,6 +22,10 @@ pub trait CpuWriteable: Type {}
 
 pub trait GpuWriteable: Type {}
 
+pub trait AsDescriptor: Type {}
+
+impl AsDescriptor for Uniform{}
+
 pub struct Uniform {}
 
 impl Type for Uniform {
@@ -41,6 +45,18 @@ impl Type for Gpu {
     const USAGE: vk::BufferUsageFlags = vk::BufferUsageFlags::from_raw(vk::BufferUsageFlags::VERTEX_BUFFER.as_raw() | vk::BufferUsageFlags::TRANSFER_DST.as_raw());
 }
 
+impl AsDescriptor for Storage{}
+
+pub struct Storage {}
+
+impl Type for Storage {
+    const SHARING_MODE: vk::SharingMode = vk::SharingMode::EXCLUSIVE;
+    const REQUIRED_MEMORY_FLAGS: vk::MemoryPropertyFlags = vk::MemoryPropertyFlags::DEVICE_LOCAL;
+    const USAGE: vk::BufferUsageFlags = vk::BufferUsageFlags::from_raw(vk::BufferUsageFlags::STORAGE_BUFFER.as_raw() | vk::BufferUsageFlags::VERTEX_BUFFER.as_raw() | vk::BufferUsageFlags::TRANSFER_DST.as_raw());
+}
+
+
+impl GpuWriteable for Storage {}
 impl GpuWriteable for Gpu {}
 
 pub struct GpuIndirect {}
@@ -98,6 +114,7 @@ impl<V: Copy, T: Type> Buffer<V, T> {
     pub fn len(&self) -> usize {
         self.capacity()
     }
+
     pub fn mem_capacity(&self) -> vk::DeviceSize {
         (std::mem::size_of::<V>() * self.capacity) as u64
     }
@@ -131,7 +148,8 @@ impl<V: Copy, T: Type> Buffer<V, T> {
     }
 }
 
-impl<V: Copy> Buffer<V, Uniform> {
+
+impl<V: Copy, T: AsDescriptor> Buffer<V, T> {
     pub fn descriptor_info(&self) -> vk::DescriptorBufferInfo {
         vk::DescriptorBufferInfo {
             buffer: self.raw(),

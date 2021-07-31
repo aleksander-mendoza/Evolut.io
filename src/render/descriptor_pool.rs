@@ -3,12 +3,13 @@ use crate::render::swap_chain::SwapChain;
 use crate::render::device::Device;
 use ash::version::DeviceV1_0;
 use crate::render::descriptor_layout::DescriptorLayout;
-use crate::render::buffer::{Buffer, Uniform};
+use crate::render::buffer::{Buffer, Uniform, Gpu, Storage};
 use crate::render::data::VertexSource;
 use crate::render::sampler::Sampler;
 use crate::render::imageview::{ImageView, Color};
 use ash::vk::{DescriptorImageInfo, DescriptorBufferInfo};
 use crate::render::host_buffer::HostBuffer;
+use crate::render::compute::ComputePipeline;
 
 pub struct DescriptorPool{
     raw:vk::DescriptorPool,
@@ -25,15 +26,21 @@ impl DescriptorPool{
         &self.device
     }
     pub fn new(descriptor_layout:&DescriptorLayout, swapchain: &SwapChain) -> Result<Self, ash::vk::Result> {
-        let pool_sizes = descriptor_layout.pool_sizes(swapchain);
+        Self::manual_new(descriptor_layout, swapchain.len() as u32, swapchain.device())
+    }
+    pub fn new_for_compute(descriptor_layout:&DescriptorLayout, compute: &ComputePipeline) -> Result<Self, ash::vk::Result> {
+        Self::manual_new(descriptor_layout, 1, compute.device())
+    }
+    pub fn manual_new(descriptor_layout:&DescriptorLayout, size:u32, device:&Device) -> Result<Self, ash::vk::Result> {
+        let pool_sizes = descriptor_layout.manual_pool_sizes(size);
 
         let descriptor_pool_create_info = vk::DescriptorPoolCreateInfo::builder()
-            .max_sets(swapchain.len() as u32)
+            .max_sets(size)
             .pool_sizes(&pool_sizes);
 
         unsafe {
-            swapchain.device().inner().create_descriptor_pool(&descriptor_pool_create_info, None)
-        }.map(|raw|Self{raw,device:swapchain.device().clone()})
+            device.inner().create_descriptor_pool(&descriptor_pool_create_info, None)
+        }.map(|raw|Self{raw,device:device.clone()})
     }
 
     pub fn create_sets_with_same_layout(&self, layout:DescriptorLayout, num:usize)->Result<Vec<DescriptorSet>,vk::Result>{
@@ -62,17 +69,26 @@ impl DescriptorSet{
     pub fn raw(&self)->vk::DescriptorSet{
         self.raw
     }
-    pub  fn update_buffer<T:Copy>(&self,binding:u32,buffer:&HostBuffer<T,Uniform>){
-        unsafe { self.update_buffer_raw(binding,&buffer.buffer().descriptor_info()) }
+    pub  fn update_uniform_buffer<T:Copy>(&self,binding:u32,buffer:&HostBuffer<T,Uniform>){
+        unsafe { self.update_uniform_buffer_raw(binding,&buffer.buffer().descriptor_info()) }
     }
-    pub unsafe fn update_buffer_raw(&self,binding:u32,descriptor_info:&DescriptorBufferInfo){
-        assert_eq!(self.layout.layout(binding).descriptor_type, vk::DescriptorType::UNIFORM_BUFFER, "Tried to bind buffer to {} ",binding);
+    pub unsafe fn update_uniform_buffer_raw(&self,binding:u32,descriptor_info:&DescriptorBufferInfo){
+        unsafe { self.update_buffer_raw(binding,descriptor_info, vk::DescriptorType::UNIFORM_BUFFER) }
+    }
+    pub fn update_storage_buffer<T:Copy>(&self,binding:u32,buffer:&Buffer<T,Storage>) {
+        unsafe { self.update_storage_buffer_raw(binding,&buffer.descriptor_info()) }
+    }
+    pub unsafe fn update_storage_buffer_raw(&self,binding:u32,descriptor_info:&DescriptorBufferInfo) {
+        unsafe { self.update_buffer_raw(binding,descriptor_info, vk::DescriptorType::STORAGE_BUFFER) }
+    }
+    pub unsafe fn update_buffer_raw(&self,binding:u32,descriptor_info:&DescriptorBufferInfo,descriptor_type:vk::DescriptorType){
+        assert_eq!(self.layout.layout(binding).descriptor_type, descriptor_type, "Tried to bind buffer to {} ",binding);
 
         let descriptor_write_sets = vk::WriteDescriptorSet::builder()
             .dst_set(self.raw())
             .dst_binding(binding)
             .dst_array_element(0)
-            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .descriptor_type(descriptor_type)
             .buffer_info(std::slice::from_ref(descriptor_info));
 
         unsafe {
