@@ -25,14 +25,25 @@ pub struct GameResources {
     comp_shader: ShaderModule<Compute>,
     collision_grid: Submitter<Buffer<u32, Storage>>,
     previous_positions: Submitter<StageBuffer<glm::Vec3, Cpu, Storage>>,
-    particle_constants_uniform: HostBuffer<ParticleConstants, Uniform>,
+    particle_constants_uniform: Submitter<StageBuffer<ParticleConstants, Cpu, Storage>>,
+    constraints_buffer: Buffer<Constraint, Storage>
 }
 
+#[repr(C, packed)]
 #[derive(Copy, Clone, Debug)]
 pub struct ParticleConstants {
     predefined_constraints: u32,
+    collision_constraints: u32,
     chunks_x: u32,
     chunks_z: u32,
+}
+
+#[derive(Copy, Clone, Debug)]
+#[repr(C, packed)]
+pub struct Constraint {
+    particle1: u32,
+    particle2: u32,
+    constant_param: f32,
 }
 
 impl Resources for GameResources {
@@ -46,12 +57,14 @@ impl Resources for GameResources {
         let shifted_particles: Vec<glm::Vec3> = res.b().particles().as_slice().iter().map(|w| Particle::rand_vec3() * 0.1).collect();
         let previous_positions = StageBuffer::new(cmd_pool, &shifted_particles)?;
         let world_size = res.a().world().size();
-        let particle_constants_uniform = HostBuffer::new(cmd_pool.device(), &[ParticleConstants {
+        let particle_constants_uniform = StageBuffer::new(cmd_pool, &[ParticleConstants {
             predefined_constraints: 0,
+            collision_constraints: 0,
             chunks_x: world_size.width() as u32,
             chunks_z: world_size.depth() as u32,
         }])?;
-        Ok(Self { res, comp_shader, collision_grid, previous_positions, particle_constants_uniform })
+        let constraints_buffer = Buffer::with_capacity(cmd_pool.device(), 128)?;
+        Ok(Self { res, comp_shader, collision_grid, previous_positions, particle_constants_uniform , constraints_buffer})
     }
 
     fn create_descriptors(&self, descriptors: &mut DescriptorsBuilder) -> Result<(), Error> {
@@ -64,34 +77,40 @@ impl Resources for GameResources {
             comp_shader,
             collision_grid,
             previous_positions,
-            particle_constants_uniform
+            mut particle_constants_uniform,
+            constraints_buffer
         } = self;
         let global = res.make_renderable(cmd_pool, render_pass, descriptors)?;
         let mut compute_pipeline = ComputePipelineBuilder::new();
         compute_pipeline.shader("main", comp_shader);
-        let uniform_binding = compute_pipeline.uniform_buffer(particle_constants_uniform.buffer());
+        let uniform_binding = compute_pipeline.storage_buffer(particle_constants_uniform.gpu());
         let particles_binding = compute_pipeline.storage_buffer(global.b().particles().gpu());
         let prev_pos_binding = compute_pipeline.storage_buffer(previous_positions.gpu());
         let collision_grid_binding = compute_pipeline.storage_buffer(&collision_grid);
+        let constraint_binding = compute_pipeline.storage_buffer(&constraints_buffer);
         let compute_pipeline = compute_pipeline.build(cmd_pool.device())?;
         let collision_grid = collision_grid.take()?;
+        particle_constants_uniform.reset()?;
         Ok(Game { global, compute_pipeline, particles_binding, prev_pos_binding, collision_grid_binding,
-            collision_grid, previous_positions , uniform_binding, particle_constants_uniform})
+            collision_grid, previous_positions , uniform_binding, particle_constants_uniform,
+            constraints_buffer, constraint_binding})
     }
 }
 
 
 pub struct Game {
     //The order matters because of drop!
-    uniform_binding: UniformBufferBinding<ParticleConstants>,
+    uniform_binding: StorageBufferBinding<ParticleConstants>,
     particles_binding: StorageBufferBinding<Particle>,
+    constraint_binding: StorageBufferBinding<Constraint>,
     collision_grid_binding: StorageBufferBinding<u32>,
     prev_pos_binding: StorageBufferBinding<glm::Vec3>,
     compute_pipeline: ComputePipeline,
     global: Joint<BlockWorld, Particles>,
     collision_grid: Buffer<u32, Storage>,
     previous_positions: Submitter<StageBuffer<glm::Vec3, Cpu, Storage>>,
-    particle_constants_uniform: HostBuffer<ParticleConstants, Uniform>,
+    particle_constants_uniform: Submitter<StageBuffer<ParticleConstants, Cpu, Storage>>,
+    constraints_buffer: Buffer<Constraint, Storage>,
 }
 
 impl Game {

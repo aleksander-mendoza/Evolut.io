@@ -1,5 +1,24 @@
 #version 450
+//#extension GL_EXT_debug_printf : enable
 
+#define CHUNK_WIDTH 16
+#define CHUNK_DEPTH 16
+#define CHUNK_HEIGHT 256
+#define GRID_GRANULARITY 4 // the total number of cells in a block is GRID_GRANULARITY raised to the power of 3
+#define CELL_SIZE 1./(GRID_GRANULARITY)
+#define CELL_DIAGONAL sqrt(3.)*(CELL_SIZE)
+#define PARTICLE_RADIUS (CELL_DIAGONAL)/2 //the is the minimum possible particle size that still guarantees
+// only one particle will fall into each grid cell. Here we assume that the center of particle decides,
+// which cell a particel falls into. The particles should normally never overlap... well... sporadically it may happen
+// that they do, especially if they are moving with high speeds and suddenly collide. But such events should be rare
+// and if they do occur, only one fo them will be randomly picked to occupy the grid cell, while the other one will
+// be ignored. But in the next simulation step, the particle positions will almost surely change and the two particles
+// should at some point fall into different cells and then collision will be detected.
+#define PARTICLE_DIAMETER (PARTICLE_RADIUS)*2
+#define CHUNK_WIDTH_IN_CELLS CHUNK_WIDTH*GRID_GRANULARITY
+#define CHUNK_DEPTH_IN_CELLS CHUNK_DEPTH*GRID_GRANULARITY
+#define CHUNK_HEIGHT_IN_CELLS CHUNK_HEIGHT*GRID_GRANULARITY
+#define PARTICLE_COLLISION_DISTANCE_SQUARE (PARTICLE_DIAMETER)*(PARTICLE_DIAMETER)
 
 layout (local_size_x = 32) in;
 
@@ -9,8 +28,15 @@ struct Particle{
     vec4 color;
 };
 
-layout(set = 0, binding = 0) uniform Config{
+struct Constraint{
+    uint particle1;
+    uint particle2;
+    float constant_param;
+};
+
+layout(set = 0, binding = 0) buffer ParticleConstants{
     int predefined_constraints;
+    int collision_constraints;
     int chunks_x;
     int chunks_z;
 };
@@ -26,47 +52,109 @@ layout(set = 0, binding = 2) buffer Velocity{
 layout(set = 0, binding = 3) buffer CollisionGrid{
     uint collision_grid[];
 };
+
+layout(set = 0, binding = 4) buffer Constraints{
+    Constraint constraints[];
+};
+
+int cell_position_to_idx(ivec3 cell_position){
+    return cell_position.x+(cell_position.y+cell_position.z*CHUNK_HEIGHT_IN_CELLS)*CHUNK_WIDTH_IN_CELLS;
+}
+
 void main()
 {
     //grab global ID
     uint gID = gl_GlobalInvocationID.x;
-    vec3 position = particles[gID].position;
+    if(gID==0){
+        collision_constraints = 0; //First we zero-out the number of computed collision constraints
+    }
+    const vec3 position = particles[gID].position;
     vec3 velocity = velocities[gID];
     vec3 candidate_position = position + velocity;
-    vec3 new_position = candidate_position - 2*min(candidate_position,vec3(0,0,0)) + 2*min(vec3(16*chunks_x,16,16*chunks_z)-candidate_position,vec3(0,0,0));
-
-//    //grab global ID
-//    for(int chunk_x=0;chunk_x<chunks_x;chunk_x++){
-//        for(int chunk_z=0;chunk_z<chunks_z;chunk_z++){
-//            vec4 particle = particles[gID];
-//            vec3 particle_position = particle.xyz;
-//            float particle_weight = particle.w;
-//            if(int(particle.x)/CHUNK_WIDTH==chunk_x && int(particle.z)/CHUNK_DEPTH==chunk_z){
-//                particle.x -= chunk_x*CHUNK_WIDTH; //now we will be working in coordinate system
-//                particle.z -= chunk_z*CHUNK_DEPTH; //that is relative to this particular chunk
-//                ivec3 cell_position = ivec3(particle.xyz/CELL_SIZE);
-//                grid[cell_position_to_idx(cell_position)] = gID;
-//                ivec2 x_range=(cell_position.x+ivec2(-1,2)).clamp(0,CHUNK_WIDTH_IN_CELLS);
-//                ivec2 y_range=(cell_position.y+ivec2(-1,2)).clamp(0,CHUNK_HEIGHT_IN_CELLS);
-//                ivec2 z_range=(cell_position.z+ivec2(-1,2)).clamp(0,CHUNK_DEPTH_IN_CELLS);
-//                for(int x=x_range.x;x<x_range.y;x++) {
-//                    for(int y=y_range.x;y<y_range.y;y++) {
-//                        for(int z=z_range.x;z<z_range.y;z++) {
-//                            int cell_idx = cell_position_to_idx(ivec3(x,y,z));
-//                            uint neighbour_particle_idx = grid[cell_idx];
-//                            vec4 neighbour_particle = particles[neighbour_particle_idx];
-//                            vec3 neighbour_particle_position = neighbour_particle.xyz;
-//                            if(dot(particle_position,neighbour_particle_position)<=PARTICLE_COLLISION_DISTANCE_SQUARE){
-//                                atomicAdd( );
-//                            }
-//                        }
-//                    }
-//                }
-//            }
-//        }
-//    }
-
+    //The below code is a branchless test for bounding-box collision. It's equivalent to the code
+    // if(candidate_position.x<0){candidate_position.x=-candidate_position.x;}
+    // if(candidate_position.x>16*chunks_x){candidate_position.x=16*chunks_x-(candidate_position.x-16*chunks_x);}
+    // and so on for each x,y,z coordinate.
+    vec3 new_position = candidate_position - 2*min(candidate_position,vec3(0,0,0)) + 2*min(vec3(16,16,16)-candidate_position,vec3(0,0,0));
     particles[gID].position = new_position;
+    //grab global ID
+    for(int chunk_x=0;chunk_x<chunks_x;chunk_x++){
+        for(int chunk_z=0;chunk_z<chunks_z;chunk_z++){
+            if(int(new_position.x)/CHUNK_WIDTH==chunk_x && int(new_position.z)/CHUNK_DEPTH==chunk_z){
+                vec3 chunk_relative_pos = new_position - vec3(chunk_x*CHUNK_WIDTH,0,chunk_z*CHUNK_DEPTH);
+                const ivec3 cell_position = ivec3(chunk_relative_pos/CELL_SIZE);
+                const int cell_idx = cell_position_to_idx(cell_position);
+                collision_grid[cell_idx] = gID;
+                //Comment explaining what happens below:
+                //Notice that PARTICLE_DIAMETER is so large that it's possible for two cells, one contained in cell (x,y,z)
+                //and another one in cell (x+2,y,z) to collide. Hence we need to check for collisions not only with neighbouring cells,
+                //but also with heighbours of those reighbours. This gives us 5x5x5=125 cells to check. It's a lot!
+                // A substantial optimsiation can be made if we notice that particle in cell (x,y,z) can callide with particle in
+                // call (x+2,y,z) only under the condition that the center of first particle is close to the left side of its cell
+                // and the center of second particle is closer to the right side of its cell. For example particle at
+                // (4.89,y,z) may potentially collide with particle at (6.13,y,z), but it cannot collide with (6.51,y,z)
+                // or (2.90,y,z). Hence we can narrow down the search area to 4x4x4=64 cells. It's 50% speedup!
+                // cell_position.x+ivec2(-1,3) -- this is the range spanning once cell to the left and two cells to the right
+                // int(particle.x)==int(particle.x-0.5)  -- this checks whether particle is on the right side of the cell
+                // If the particle is on the right side of the cell, then the expresion evaluates to false, which gives us 0 after casting to int and
+                // subtraction becomes a no-op. If the particle is one the left side, then the bool becomes 1 and we subtract it from both ends of range, which
+                // leaves us with a range spanning two cells to the left and one cell to the right.
+                // ivec3 is_on_the_left = ivec3(equal(ivec3(particle),ivec3(particle+0.5)));
+                /* The final code could look like this:
+                ivec2 x_range=clamp(cell_position.x+ivec2(-1,3)-is_on_the_left.x,0,CHUNK_WIDTH_IN_CELLS); //r_range is inclusive on the left and exclusive on the right
+                ivec2 y_range=clamp(cell_position.y+ivec2(-1,3)-is_on_the_left.y,0,CHUNK_HEIGHT_IN_CELLS);
+                ivec2 z_range=clamp(cell_position.z+ivec2(-1,3)-is_on_the_left.z,0,CHUNK_DEPTH_IN_CELLS);
+                */
+                //However, notice that we are running collision detection for every particle. In means that if particle
+                // A collides with particle B, the collision will be detected twice by two different threads. One detecting that
+                // A collides with B and the other that B collides with A. But it's only enough to detect the collision once. Hence
+                // we don't need to check the entire range ivec2(-1,3)-is_on_the_left.x . Instead we can clamp it on one side
+                // and obtain range ivec2(-1-is_on_the_left.x,1) . This further narrows down the search area from 4x4x4 to
+                // 2x2x2 or 2x3x2 or 3x3x2 .. and so on, depending on the values of is_on_the_left. And since the right bound of the range
+                // is constant we can factor it out
+                /*
+                int from_x_inclusive=max(0, cell_position.x-1-is_on_the_left.x); // to_x_inclusive=cell_position.x<CHUNK_WIDTH_IN_CELLS
+                int from_y_inclusive=max(0, cell_position.y-1-is_on_the_left.y); // to_y_inclusive=cell_position.y<CHUNK_HEIGHT_IN_CELLS
+                int from_z_inclusive=max(0, cell_position.z-1-is_on_the_left.z); // to_z_inclusive=cell_position.z<CHUNK_DEPTH_IN_CELLS
+                */
+                //This can be further reduced to
+                /*
+                ivec3 is_on_the_left = ivec3(equal(ivec3(chunk_relative_pos),ivec3(chunk_relative_pos+0.5)));
+                ivec3 from_inclusive = max(cell_position-1-is_on_the_left, 0);
+                */
+                // Which can be reduced even further:
+                const ivec3 from_inclusive = max(ivec3(chunk_relative_pos/CELL_SIZE+0.5)-2, 0); // that's a beautiful and very efficient result, isn't it?
+                // now we are ready to check collisions
+                for(int x=from_inclusive.x;x<=cell_position.y;x++) {
+                    for(int y=from_inclusive.x;y<=cell_position.y;y++) {
+                        for(int z=from_inclusive.x;z<=cell_position.y;z++) {
+                            const int cell_idx = cell_position_to_idx(ivec3(x,y,z));
+                            const uint neighbour_particle_idx = collision_grid[cell_idx];
+                            const vec3 neighbour_particle = particles[neighbour_particle_idx].position;
+                            new_position = particles[gID].position;
+                            const vec3 distance_vector = new_position - neighbour_particle;
+                            const float distance_square = dot(distance_vector, distance_vector);//will be zero if neighbour_particle_idx==gID
+                            if(0< distance_square && distance_square<=PARTICLE_COLLISION_DISTANCE_SQUARE){
+//                                uint my_collision_constraint_index = atomicAdd(collision_constraints, 1);
+//                                Constraint c;
+//                                c.particle1 = gID;
+//                                c.particle2 = neighbour_particle_idx;
+//                                constraints[my_collision_constraint_index] = c;
+                                const float distance = sqrt(distance_square);
+                                const vec3 collision_projection_delta = (distance - PARTICLE_DIAMETER)*distance_vector/distance;
+                                new_position += collision_projection_delta;
+                                particles[neighbour_particle_idx].position = neighbour_particle - collision_projection_delta;
+                                particles[gID].position = new_position;
+                            }
+                        }
+                    }
+                }
+                collision_grid[cell_idx] = 0; // Cleanup after we're donw with collision detection.
+                // This ensures that the grid is kept zeroed-out and ready for the next iteration
+            }
+        }
+    }
+
     velocities[gID] = new_position - position;
 
 }

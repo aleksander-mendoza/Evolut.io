@@ -46,7 +46,7 @@ const REQUIRED_VALIDATION_LAYERS: [*const i8; 1] = [VK_LAYER_KHRONOS_VALIDATION]
 pub fn populate_debug_messenger_create_info(mut builder: vk::DebugUtilsMessengerCreateInfoEXTBuilder) -> vk::DebugUtilsMessengerCreateInfoEXTBuilder {
     builder.message_severity = vk::DebugUtilsMessageSeverityFlagsEXT::WARNING |
         // vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE |
-        // vk::DebugUtilsMessageSeverityFlagsEXT::INFO |
+        vk::DebugUtilsMessageSeverityFlagsEXT::INFO |
         vk::DebugUtilsMessageSeverityFlagsEXT::ERROR;
     builder.message_type = vk::DebugUtilsMessageTypeFlagsEXT::GENERAL
         | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE

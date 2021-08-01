@@ -17,7 +17,7 @@ impl Particle{
     }
     pub fn random()->Self{
         Self{
-            pos: glm::vec3(random::<f32>()*32.,3.+random::<f32>()*8.,random::<f32>()*32.),
+            pos: glm::vec3(random::<f32>()*16.,3.+random::<f32>()*8.,random::<f32>()*16.),
             size: random::<f32>()*100.,
             color: glm::vec4(random::<f32>(),random::<f32>(),random::<f32>(), 1.)
         }
