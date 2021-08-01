@@ -12,6 +12,7 @@ use failure::Error;
 use crate::render::single_render_pass::SingleRenderPass;
 use crate::render::swap_chain::SwapchainImageIdx;
 use crate::render::submitter::Submitter;
+use crate::player::Player;
 
 pub struct ParticleResources {
     particles: Submitter<StageBuffer<Particle, Cpu, Storage>>,
@@ -116,7 +117,7 @@ impl Renderable for Particles {
         Ok(())
     }
 
-    fn update_uniforms(&mut self, image_idx: SwapchainImageIdx) {
+    fn update_uniforms(&mut self, image_idx: SwapchainImageIdx, player:&Player) {
     }
     fn recreate(&mut self, render_pass: &SingleRenderPass) -> Result<(), Error> {
         self.particle_compiled = self.particle_builder.create_pipeline(render_pass)?;

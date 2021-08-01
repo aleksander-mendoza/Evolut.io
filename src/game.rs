@@ -19,13 +19,15 @@ use crate::render::compute::{ComputePipelineBuilder, ComputePipeline, StorageBuf
 use crate::blocks::world_size::{CHUNK_WIDTH, CHUNK_HEIGHT, CHUNK_DEPTH, CHUNK_WIDTH_IN_CELLS, CHUNK_DEPTH_IN_CELLS, CHUNK_HEIGHT_IN_CELLS};
 use crate::render::vector::Vector;
 use crate::render::host_buffer::HostBuffer;
+use crate::player::Player;
 
 pub struct GameResources {
     res: JointResources<BlockWorldResources, ParticleResources>,
     comp_shader: ShaderModule<Compute>,
     collision_grid: Submitter<Buffer<u32, Storage>>,
     previous_positions: Submitter<StageBuffer<glm::Vec3, Cpu, Storage>>,
-    particle_constants_uniform: Submitter<StageBuffer<ParticleConstants, Cpu, Storage>>,
+    particle_constants: Submitter<StageBuffer<ParticleConstants, Cpu, Storage>>,
+    particle_uniform: HostBuffer<ThrowUniform, Uniform>,
     constraints_buffer: Buffer<Constraint, Storage>
 }
 
@@ -46,6 +48,14 @@ pub struct Constraint {
     constant_param: f32,
 }
 
+#[derive(Copy, Clone, Debug)]
+#[repr(C, packed)]
+pub struct ThrowUniform{
+    position:glm::Vec3,
+    dummy:f32,
+    velocity:glm::Vec3
+}
+
 impl Resources for GameResources {
     type Render = Game;
 
@@ -57,14 +67,19 @@ impl Resources for GameResources {
         let shifted_particles: Vec<glm::Vec3> = res.b().particles().as_slice().iter().map(|w| Particle::rand_vec3() * 0.1).collect();
         let previous_positions = StageBuffer::new(cmd_pool, &shifted_particles)?;
         let world_size = res.a().world().size();
-        let particle_constants_uniform = StageBuffer::new(cmd_pool, &[ParticleConstants {
+        let particle_constants = StageBuffer::new(cmd_pool, &[ParticleConstants {
             predefined_constraints: 0,
             collision_constraints: 0,
             chunks_x: world_size.width() as u32,
             chunks_z: world_size.depth() as u32,
         }])?;
         let constraints_buffer = Buffer::with_capacity(cmd_pool.device(), 128)?;
-        Ok(Self { res, comp_shader, collision_grid, previous_positions, particle_constants_uniform , constraints_buffer})
+        let particle_uniform = HostBuffer::new(cmd_pool.device(), &[ThrowUniform{
+            position:glm::vec3(0.,0.,0.),
+            dummy: 73.0,
+            velocity:glm::vec3(0., 0., 0.)
+        }])?;
+        Ok(Self { res, comp_shader, collision_grid, previous_positions, particle_constants, particle_uniform , constraints_buffer})
     }
 
     fn create_descriptors(&self, descriptors: &mut DescriptorsBuilder) -> Result<(), Error> {
@@ -77,22 +92,24 @@ impl Resources for GameResources {
             comp_shader,
             collision_grid,
             previous_positions,
-            mut particle_constants_uniform,
+            mut particle_constants,
+            particle_uniform,
             constraints_buffer
         } = self;
         let global = res.make_renderable(cmd_pool, render_pass, descriptors)?;
         let mut compute_pipeline = ComputePipelineBuilder::new();
         compute_pipeline.shader("main", comp_shader);
-        let uniform_binding = compute_pipeline.storage_buffer(particle_constants_uniform.gpu());
+        let uniform_binding = compute_pipeline.uniform_buffer(particle_uniform.buffer());
+        let constant_binding = compute_pipeline.storage_buffer(particle_constants.gpu());
         let particles_binding = compute_pipeline.storage_buffer(global.b().particles().gpu());
         let prev_pos_binding = compute_pipeline.storage_buffer(previous_positions.gpu());
         let collision_grid_binding = compute_pipeline.storage_buffer(&collision_grid);
         let constraint_binding = compute_pipeline.storage_buffer(&constraints_buffer);
         let compute_pipeline = compute_pipeline.build(cmd_pool.device())?;
         let collision_grid = collision_grid.take()?;
-        particle_constants_uniform.reset()?;
+        particle_constants.reset()?;
         Ok(Game { global, compute_pipeline, particles_binding, prev_pos_binding, collision_grid_binding,
-            collision_grid, previous_positions , uniform_binding, particle_constants_uniform,
+            collision_grid, previous_positions , uniform_binding, constant_binding, particle_constants, particle_uniform,
             constraints_buffer, constraint_binding})
     }
 }
@@ -100,7 +117,8 @@ impl Resources for GameResources {
 
 pub struct Game {
     //The order matters because of drop!
-    uniform_binding: StorageBufferBinding<ParticleConstants>,
+    uniform_binding: UniformBufferBinding<ThrowUniform>,
+    constant_binding: StorageBufferBinding<ParticleConstants>,
     particles_binding: StorageBufferBinding<Particle>,
     constraint_binding: StorageBufferBinding<Constraint>,
     collision_grid_binding: StorageBufferBinding<u32>,
@@ -109,8 +127,9 @@ pub struct Game {
     global: Joint<BlockWorld, Particles>,
     collision_grid: Buffer<u32, Storage>,
     previous_positions: Submitter<StageBuffer<glm::Vec3, Cpu, Storage>>,
-    particle_constants_uniform: Submitter<StageBuffer<ParticleConstants, Cpu, Storage>>,
+    particle_constants: Submitter<StageBuffer<ParticleConstants, Cpu, Storage>>,
     constraints_buffer: Buffer<Constraint, Storage>,
+    particle_uniform: HostBuffer<ThrowUniform, Uniform>,
 }
 
 impl Game {
@@ -140,8 +159,12 @@ impl Renderable for Game {
         Ok(())
     }
 
-    fn update_uniforms(&mut self, image_idx: SwapchainImageIdx) {
-        self.global.update_uniforms(image_idx)
+    fn update_uniforms(&mut self, image_idx: SwapchainImageIdx, player:&Player) {
+        self.global.update_uniforms(image_idx, player);
+        let throw_uniform = &mut self.particle_uniform.as_slice_mut()[0];
+        throw_uniform.position = player.location().clone();
+        throw_uniform.velocity = player.throw_velocity().clone();
+        // println!("{:?}", throw_uniform);
     }
 
     fn recreate(&mut self, render_pass: &SingleRenderPass) -> Result<(), Error> {

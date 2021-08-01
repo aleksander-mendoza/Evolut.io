@@ -14,6 +14,7 @@ use crate::render::single_render_pass::SingleRenderPass;
 use crate::render::swap_chain::SwapchainImageIdx;
 use crate::particles::ParticleResources;
 use crate::block_world::BlockWorldResources;
+use crate::player::Player;
 
 pub struct JointResources<A:Resources,B:Resources> {
     a: A,
@@ -85,9 +86,9 @@ impl <A:Renderable,B:Renderable> Renderable for Joint<A,B> {
         self.a.record_compute_cmd_buffer(cmd)?;
         self.b.record_compute_cmd_buffer(cmd)
     }
-    fn update_uniforms(&mut self, image_idx: SwapchainImageIdx) {
-        self.a.update_uniforms(image_idx);
-        self.b.update_uniforms(image_idx);
+    fn update_uniforms(&mut self, image_idx: SwapchainImageIdx, player:&Player) {
+        self.a.update_uniforms(image_idx, player);
+        self.b.update_uniforms(image_idx, player);
     }
 
     fn recreate(&mut self, render_pass: &SingleRenderPass) -> Result<(), Error> {

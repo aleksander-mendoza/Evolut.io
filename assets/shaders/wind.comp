@@ -34,26 +34,31 @@ struct Constraint{
     float constant_param;
 };
 
-layout(set = 0, binding = 0) buffer ParticleConstants{
+layout (set = 0, binding = 0) uniform Throw{
+    vec3 position;
+    vec3 velocity;
+}throw;
+
+layout(set = 0, binding = 1) buffer ParticleConstants{
     int predefined_constraints;
     int collision_constraints;
     int chunks_x;
     int chunks_z;
 };
 
-layout(set = 0, binding = 1) buffer Particles{
+layout(set = 0, binding = 2) buffer Particles{
     Particle particles[];
 };
 
-layout(set = 0, binding = 2) buffer Velocity{
+layout(set = 0, binding = 3) buffer Velocity{
     vec3 velocities[];
 };
 
-layout(set = 0, binding = 3) buffer CollisionGrid{
+layout(set = 0, binding = 4) buffer CollisionGrid{
     uint collision_grid[];
 };
 
-layout(set = 0, binding = 4) buffer Constraints{
+layout(set = 0, binding = 5) buffer Constraints{
     Constraint constraints[];
 };
 
@@ -67,6 +72,10 @@ void main()
     uint gID = gl_GlobalInvocationID.x;
     if(gID==0){
         collision_constraints = 0; //First we zero-out the number of computed collision constraints
+        if(throw.velocity!=vec3(0,0,0)){
+            particles[0].position = throw.position;
+            velocities[0] = throw.velocity;
+        }
     }
     const vec3 position = particles[gID].position;
     vec3 velocity = velocities[gID];
@@ -142,8 +151,8 @@ void main()
 //                                constraints[my_collision_constraint_index] = c;
                                 const float distance = sqrt(distance_square);
                                 const vec3 collision_projection_delta = (distance - PARTICLE_DIAMETER)*distance_vector/distance;
-                                new_position += collision_projection_delta;
-                                particles[neighbour_particle_idx].position = neighbour_particle - collision_projection_delta;
+                                new_position -= collision_projection_delta;
+                                particles[neighbour_particle_idx].position = neighbour_particle + collision_projection_delta;
                                 particles[gID].position = new_position;
                             }
                         }
@@ -155,6 +164,6 @@ void main()
         }
     }
 
-    velocities[gID] = new_position - position;
+    velocities[gID] = particles[gID].position - position;
 
 }

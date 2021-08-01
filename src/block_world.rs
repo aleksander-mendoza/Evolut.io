@@ -17,6 +17,7 @@ use crate::mvp_uniforms::MvpUniforms;
 use crate::render::imageview::Color;
 use crate::render::swap_chain::SwapchainImageIdx;
 use crate::display::{Renderable, Resources};
+use crate::player::Player;
 
 pub struct BlockWorldResources {
     texture: Submitter<StageTexture<Dim2D>>,
@@ -152,7 +153,7 @@ impl Renderable for BlockWorld {
         Ok(())
     }
 
-    fn update_uniforms(&mut self, image_idx: SwapchainImageIdx) {
+    fn update_uniforms(&mut self, image_idx: SwapchainImageIdx, player:&Player) {
     }
     fn recreate(&mut self, render_pass: &SingleRenderPass) -> Result<(), Error> {
         self.block_world_compiled = self.block_world_builder.create_pipeline(render_pass)?;

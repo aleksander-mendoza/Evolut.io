@@ -24,6 +24,8 @@ use crate::blocks::Face;
 use crate::render::single_render_pass::SingleRenderPass;
 use crate::render::descriptors::{Descriptors, DescriptorsBuilder, UniformBufferBinding, DescriptorsBuilderLocked};
 use std::marker::PhantomData;
+use crate::player::Player;
+use crate::mvp_uniforms::MvpUniforms;
 
 pub trait Resources:Sized{
     type Render:Renderable;
@@ -35,21 +37,21 @@ pub trait Resources:Sized{
 pub trait Renderable:Sized{
     fn record_cmd_buffer(&self, cmd: &mut CommandBuffer, image_idx:SwapchainImageIdx,descriptors:&Descriptors, render_pass:&SingleRenderPass)->Result<(),Error>;
     fn record_compute_cmd_buffer(&self, cmd: &mut CommandBuffer)->Result<(),Error>;
-    fn update_uniforms(&mut self, image_idx:SwapchainImageIdx);
+    fn update_uniforms(&mut self, image_idx:SwapchainImageIdx, player:&Player);
     fn recreate(&mut self, render_pass: &SingleRenderPass, ) -> Result<(), Error>;
 }
 
-pub struct Display<U:Copy,P:Resources>{
+pub struct Display<P:Resources>{
     command_buffers: Vec<CommandBuffer>,
     pipeline:P::Render,
     render_pass:SingleRenderPass,
     descriptors:Descriptors,
     descriptors_builder:DescriptorsBuilderLocked,
     cmd_pool: CommandPool,
-    uniforms_binding:UniformBufferBinding<U,1>,
+    uniforms_binding:UniformBufferBinding<MvpUniforms,1>,
     vulkan: VulkanContext,
 }
-impl <U:Copy,P:Resources> Display<U,P> {
+impl <P:Resources> Display<P> {
     const CLEAR_VALUES: [vk::ClearValue; 2] = [vk::ClearValue {
         color: vk::ClearColorValue {
             float32: [0.0, 0.0, 0.0, 1.0],
@@ -67,11 +69,11 @@ impl <U:Copy,P:Resources> Display<U,P> {
     pub fn pipeline_mut(&mut self) -> &mut P::Render{
         &mut self.pipeline
     }
-    pub fn new(vulkan: VulkanContext, uniform_data:&U) -> Result<Self, failure::Error> {
+    pub fn new(vulkan: VulkanContext, player:&Player) -> Result<Self, failure::Error> {
         let render_pass = vulkan.create_single_render_pass()?;
         let cmd_pool = CommandPool::new(vulkan.device(),true)?;
         let mut descriptors_builder = DescriptorsBuilder::new();
-        let uniforms_binding = descriptors_builder.singleton_uniform_buffer(uniform_data);
+        let uniforms_binding = descriptors_builder.singleton_uniform_buffer(player.mvp_uniforms());
         let resources = P::new(&cmd_pool)?;
         resources.create_descriptors(&mut descriptors_builder)?;
         let descriptors_builder = descriptors_builder.make_layout(cmd_pool.device())?;
@@ -141,7 +143,7 @@ impl <U:Copy,P:Resources> Display<U,P> {
         Ok(())
     }
 
-    pub fn render(&mut self, rerecord_cmd:bool, uniform_data:&U) -> Result<bool, failure::Error> {
+    pub fn render(&mut self, rerecord_cmd:bool, player:&Player) -> Result<bool, failure::Error> {
         let Self{ command_buffers, pipeline, render_pass, vulkan,descriptors, uniforms_binding, .. } = self;
         let fence = vulkan.frames_in_flight().current_fence();
         fence.wait(None)?;
@@ -153,8 +155,8 @@ impl <U:Copy,P:Resources> Display<U,P> {
         if rerecord_cmd{
             pipeline.record_cmd_buffer(command_buffer,image_idx,descriptors, render_pass)?
         }
-        descriptors.uniform_as_slice_mut(image_idx, *uniforms_binding).copy_from_slice(std::slice::from_ref(uniform_data));
-        pipeline.update_uniforms(image_idx);
+        descriptors.uniform_as_slice_mut(image_idx, *uniforms_binding).copy_from_slice(std::slice::from_ref(player.mvp_uniforms()));
+        pipeline.update_uniforms(image_idx, player);
 
         command_buffer.submit(&[(image_available, vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)],
                               std::slice::from_ref(render_finished),
