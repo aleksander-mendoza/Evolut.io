@@ -30,4 +30,5 @@ pub mod vector;
 pub mod stage_buffer;
 pub mod host_buffer;
 pub mod compute;
+pub mod uniform_types;
 

@@ -1,5 +1,5 @@
 #version 450
-//#extension GL_EXT_debug_printf : enable
+#extension GL_EXT_debug_printf : enable
 
 #define CHUNK_WIDTH 16
 #define CHUNK_DEPTH 16
@@ -20,8 +20,13 @@
 #define CHUNK_HEIGHT_IN_CELLS CHUNK_HEIGHT*GRID_GRANULARITY
 #define PARTICLE_COLLISION_DISTANCE_SQUARE (PARTICLE_DIAMETER)*(PARTICLE_DIAMETER)
 
-layout (local_size_x = 32) in;
+layout (local_size_x = 2) in;
 
+struct Vec3{
+    float x;
+    float y;
+    float z;
+};
 struct Particle{
     vec3 position;
     float size;
@@ -39,7 +44,7 @@ layout (set = 0, binding = 0) uniform Throw{
     vec3 velocity;
 }throw;
 
-layout(set = 0, binding = 1) buffer ParticleConstants{
+layout (set = 0, binding = 1) buffer ParticleConstants{
     int predefined_constraints;
     int collision_constraints;
     int chunks_x;
@@ -51,7 +56,7 @@ layout(set = 0, binding = 2) buffer Particles{
 };
 
 layout(set = 0, binding = 3) buffer Velocity{
-    vec3 velocities[];
+    Vec3 velocities[];
 };
 
 layout(set = 0, binding = 4) buffer CollisionGrid{
@@ -65,20 +70,32 @@ layout(set = 0, binding = 5) buffer Constraints{
 int cell_position_to_idx(ivec3 cell_position){
     return cell_position.x+(cell_position.y+cell_position.z*CHUNK_HEIGHT_IN_CELLS)*CHUNK_WIDTH_IN_CELLS;
 }
-
+vec3 to_vec3(Vec3 v){
+    return vec3(v.x,v.y,v.z);
+}
+Vec3 from_vec3(vec3 v){
+    Vec3 v3;
+    v3.x = v.x;
+    v3.y = v.y;
+    v3.z = v.z;
+    return v3;
+}
 void main()
 {
+
     //grab global ID
     uint gID = gl_GlobalInvocationID.x;
+//    debugPrintfEXT("%d",gl_GlobalInvocationID.x);
     if(gID==0){
         collision_constraints = 0; //First we zero-out the number of computed collision constraints
         if(throw.velocity!=vec3(0,0,0)){
             particles[0].position = throw.position;
-            velocities[0] = throw.velocity;
+            velocities[0] = from_vec3(throw.velocity);
         }
+
     }
     const vec3 position = particles[gID].position;
-    vec3 velocity = velocities[gID];
+    vec3 velocity = to_vec3(velocities[gID]);
     vec3 candidate_position = position + velocity;
     //The below code is a branchless test for bounding-box collision. It's equivalent to the code
     // if(candidate_position.x<0){candidate_position.x=-candidate_position.x;}
@@ -158,12 +175,13 @@ void main()
                         }
                     }
                 }
-                collision_grid[cell_idx] = 0; // Cleanup after we're donw with collision detection.
+                collision_grid[cell_idx] = 0; // Cleanup after we're done with collision detection.
                 // This ensures that the grid is kept zeroed-out and ready for the next iteration
             }
         }
     }
-
-    velocities[gID] = particles[gID].position - position;
+    vec3 new_velocity = particles[gID].position - position;
+    velocities[gID] = from_vec3(new_velocity);
 
 }
+
