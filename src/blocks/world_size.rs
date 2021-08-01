@@ -3,7 +3,7 @@ use crate::blocks::face_orientation::FaceOrientation;
 pub const CHUNK_WIDTH: usize = 16;
 pub const CHUNK_DEPTH: usize = 16;
 pub const CHUNK_HEIGHT: usize = 256;
-pub const GRID_GRANULARITY:usize = 4; // the total number of cells in a block is GRID_GRANULARITY raised to the power of 3
+pub const GRID_GRANULARITY:usize = 8; // the total number of cells in a block is GRID_GRANULARITY raised to the power of 3
 pub const CELL_SIZE:f32 = 1./GRID_GRANULARITY as f32;
 pub const CELL_DIAGONAL:f32 = 1.73205080757*CELL_SIZE; // sqrt(3)=1.73205080757
 pub const PARTICLE_RADIUS:f32 = CELL_DIAGONAL/2.; //the is the minimum possible particle size that still guarantees

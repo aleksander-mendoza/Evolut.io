@@ -64,7 +64,7 @@ impl Resources for GameResources {
         let res = JointResources::<BlockWorldResources, ParticleResources>::new(cmd_pool)?;
         let comp_shader = ShaderModule::new(include_glsl!("assets/shaders/wind.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let mut collision_grid = Submitter::new(Buffer::with_capacity(cmd_pool.device(), CHUNK_WIDTH_IN_CELLS * CHUNK_HEIGHT_IN_CELLS * CHUNK_DEPTH_IN_CELLS)?, cmd_pool)?;
-        collision_grid.fill_zeros_submit()?;
+        collision_grid.fill_submit(u32::MAX)?;
         let mut  shifted_particles: Vec<glm::Vec3> = res.b().particles().as_slice().iter().map(|w| Particle::rand_vec3() * 0.1).collect();
         let velocities = StageBuffer::new(cmd_pool, &shifted_particles)?;
         let world_size = res.a().world().size();
@@ -157,7 +157,7 @@ impl Renderable for Game {
 
     fn record_compute_cmd_buffer(&self, cmd: &mut CommandBuffer) -> Result<(), Error> {
         cmd.bind_compute_pipeline(&self.compute_pipeline)
-            .dispatch_1d(self.particles().particles().len() as u32/2);
+            .dispatch_1d(self.particles().particles().len() as u32/32);
         Ok(())
     }
 

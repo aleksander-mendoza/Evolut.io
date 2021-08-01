@@ -30,7 +30,7 @@ impl Resources for ParticleResources {
     type Render = Particles;
 
     fn new(cmd_pool: &CommandPool) -> Result<Self, failure::Error> {
-        let particles_data:Vec<Particle> = std::iter::repeat_with(Particle::random).take(64).collect();
+        let particles_data:Vec<Particle> = std::iter::repeat_with(Particle::random).take(512).collect();
         let particles = StageBuffer::new(cmd_pool, &particles_data)?;
         let frag = ShaderModule::new(include_glsl!("assets/shaders/particles.frag", kind: frag) as &[u32],  cmd_pool.device())?;
         let vert = ShaderModule::new(include_glsl!("assets/shaders/particles.vert") as &[u32],  cmd_pool.device())?;

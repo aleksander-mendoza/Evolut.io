@@ -109,6 +109,13 @@ impl <T> Submitter<T>{
     }
 }
 
+impl <T:Type> Submitter<Buffer<u32,T>>{
+    pub fn fill_submit(&mut self, val:u32) -> VkResult<()> {
+        let (inner,buff) = self.inner_val();
+        inner.cmd().begin(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)?.fill(buff,val).end()?;
+        inner.submit()
+    }
+}
 impl <V:Copy,T:Type> Submitter<Buffer<V,T>>{
     pub fn fill_zeros_submit(&mut self) -> VkResult<()> {
         let (inner,val) = self.inner_val();
