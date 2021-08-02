@@ -1,43 +1,10 @@
 #version 450
-//#extension GL_EXT_debug_printf : enable
 
-#define CHUNK_WIDTH 16
-#define CHUNK_DEPTH 16
-#define CHUNK_HEIGHT 256
-#define GRID_GRANULARITY 8 // the total number of cells in a block is GRID_GRANULARITY raised to the power of 3
-#define CELL_SIZE 1./float(GRID_GRANULARITY)
-#define CELL_DIAGONAL sqrt(3.)*(CELL_SIZE)
-#define PARTICLE_RADIUS (CELL_DIAGONAL)/2 //the is the minimum possible particle size that still guarantees
-// only one particle will fall into each grid cell. Here we assume that the center of particle decides,
-// which cell a particel falls into. The particles should normally never overlap... well... sporadically it may happen
-// that they do, especially if they are moving with high speeds and suddenly collide. But such events should be rare
-// and if they do occur, only one fo them will be randomly picked to occupy the grid cell, while the other one will
-// be ignored. But in the next simulation step, the particle positions will almost surely change and the two particles
-// should at some point fall into different cells and then collision will be detected.
-#define PARTICLE_DIAMETER (PARTICLE_RADIUS)*2
-#define CHUNK_WIDTH_IN_CELLS CHUNK_WIDTH*GRID_GRANULARITY
-#define CHUNK_DEPTH_IN_CELLS CHUNK_DEPTH*GRID_GRANULARITY
-#define CHUNK_HEIGHT_IN_CELLS CHUNK_HEIGHT*GRID_GRANULARITY
-#define PARTICLE_COLLISION_DISTANCE_SQUARE (PARTICLE_DIAMETER)*(PARTICLE_DIAMETER)
-#define MAX_UINT 4294967295
+#include "constants.comp"
+#include "data.comp"
+
 layout (local_size_x = 32) in;
 
-struct Vec3{
-    float x;
-    float y;
-    float z;
-};
-struct Particle{
-    vec3 position;
-    float size;
-    vec4 color;
-};
-
-struct Constraint{
-    uint particle1;
-    uint particle2;
-    float constant_param;
-};
 
 layout (set = 0, binding = 0) uniform Throw{
     vec3 position;
@@ -67,19 +34,6 @@ layout(std430, set = 0, binding = 5) buffer Constraints{
     Constraint constraints[];
 };
 
-int cell_position_to_idx(ivec3 cell_position){
-    return cell_position.x+(cell_position.y+cell_position.z*CHUNK_HEIGHT_IN_CELLS)*CHUNK_WIDTH_IN_CELLS;
-}
-vec3 to_vec3(Vec3 v){
-    return vec3(v.x,v.y,v.z);
-}
-Vec3 from_vec3(vec3 v){
-    Vec3 v3;
-    v3.x = v.x;
-    v3.y = v.y;
-    v3.z = v.z;
-    return v3;
-}
 void main()
 {
     //grab global ID
@@ -97,7 +51,7 @@ void main()
     //The below code is a branchless test for bounding-box collision. It's equivalent to the code
     // if(candidate_position.x<0){candidate_position.x=-candidate_position.x;}
     // if(candidate_position.x>16*chunks_x){candidate_position.x=16*chunks_x-(candidate_position.x-16*chunks_x);}
-    // and so on for each x,y,z coordinate.
+    //and so on for each x,y,z coordinate.
     vec3 new_position = candidate_position - 2*min(candidate_position,vec3(0,0,0)) + 2*min(vec3(16,16,16)-candidate_position,vec3(0,0,0));
     particles[gID].position = new_position;
     //grab global ID
@@ -107,12 +61,7 @@ void main()
                 vec3 chunk_relative_pos = new_position; //- vec3(chunk_x*CHUNK_WIDTH,0,chunk_z*CHUNK_DEPTH);
                 const ivec3 cell_position = ivec3(chunk_relative_pos/(CELL_SIZE));
                 const int cell_idx = cell_position_to_idx(cell_position);
-//                debugPrintfEXT("%d := %d",cell_idx, gID);
                 collision_grid[cell_idx] = gID;
-//                uint tmp = collision_grid[cell_idx];
-//                if(tmp  != gID){
-//                    debugPrintfEXT("%d > %d != %d -- %f",cell_idx, tmp, gID, distance(particles[gID].position,particles[tmp].position));
-//                }
                 //Comment explaining what happens below:
                 //Notice that PARTICLE_DIAMETER is so large that it's possible for two cells, one contained in cell (x,y,z)
                 //and another one in cell (x+2,y,z) to collide. Hence we need to check for collisions not only with neighbouring cells,
@@ -160,7 +109,14 @@ void main()
                             loops += 1;
                             const int cell_idx = cell_position_to_idx(ivec3(x,y,z));
                             const uint neighbour_particle_id = collision_grid[cell_idx];
-                            if(neighbour_particle_id!=gID && neighbour_particle_id<(MAX_UINT)){
+                            if(neighbour_particle_id!=gID && neighbour_particle_id<(MAX_UINT)){//look! If somehow there
+                                // happen to be two particles that fall into the same grid cell, then one will override the other
+                                // but it doesn't matter! They will both visit this cell and one of them will fail
+                                // the neighbour_particle_id!=gID test, while the other one will not. Hence the collision
+                                // will be detected anyway. This holds true even if there are three or more particles crammed
+                                // in the same cell. They won't all collide with each other, but there will always be one
+                                // arbitrarily chosen particle, that will collide with all of the other (because they will
+                                // pass the neighbour_particle_id!=gID test).
                                 const vec3 neighbour_particle = particles[neighbour_particle_id].position;
                                 new_position = particles[gID].position;
                                 const vec3 distance_vector = new_position - neighbour_particle;
@@ -172,11 +128,10 @@ void main()
     //                                c.particle2 = neighbour_particle_idx;
     //                                constraints[my_collision_constraint_index] = c;
                                     const float distance = sqrt(distance_square);
-                                    const vec3 collision_projection_delta = (distance - (PARTICLE_DIAMETER))*distance_vector/distance;
+                                    const vec3 collision_projection_delta = 0.5 * (distance - (PARTICLE_DIAMETER))*distance_vector/distance;
                                     new_position -= collision_projection_delta;
                                     particles[neighbour_particle_id].position = neighbour_particle + collision_projection_delta;
                                     particles[gID].position = new_position;
-//                                    debugPrintfEXT("%d <-> %d %f %f", gID, neighbour_particle_id, distance, PARTICLE_DIAMETER);
                                 }
                             }
                         }

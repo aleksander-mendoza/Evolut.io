@@ -1,0 +1,53 @@
+
+struct Vec3{
+    float x;
+    float y;
+    float z;
+};
+struct Particle{
+    vec3 position;
+    float size;
+    vec4 color;
+};
+
+struct Constraint{
+    int particle1; // if negative, then the actual particle ID is obtained by negating this value. Moreover,
+        // negative numbers are used to specify that the constraint is an inequality:
+        // dist(particles[-particle1].position, particles[particle2].position) <= constant_param
+        // If the value is positive, then the constraint is an equality
+        // dist(particles[particle1].position, particles[particle2].position) == constant_param
+    int particle2;
+    float constant_param; // If this value is negative, then the constraint is an inequality
+        // that keeps the particles away from one another
+        // dist(particles[particle1].position, particles[particle2].position) >= -constant_param
+};
+
+struct Bone{ // There are two types of bones. Ones that are composed of two particles, and ones that are made up of 4
+    uint parent;
+    uint bone_type;
+    // if bone_type % 2==1 then the bone has 2 particles
+    // if bone_type % 2==0 then the bone has 4 particles
+    // if bone_type==1 then it's the left arm of a zombie character
+    // if bone_type==3 then it's the right arm of a zombie character
+    // if bone_type==5 then it's the left leg of a zombie character
+    // if bone_type==7 then it's the right leg of a zombie character
+    // if bone_type==2 then it's the torso of a zombie character
+    // if bone_type==4 then it's the head of a zombie character
+    int particle_offset;
+};
+
+
+
+int cell_position_to_idx(ivec3 cell_position){
+    return cell_position.x+(cell_position.y+cell_position.z*CHUNK_HEIGHT_IN_CELLS)*CHUNK_WIDTH_IN_CELLS;
+}
+vec3 to_vec3(Vec3 v){
+    return vec3(v.x,v.y,v.z);
+}
+Vec3 from_vec3(vec3 v){
+    Vec3 v3;
+    v3.x = v.x;
+    v3.y = v.y;
+    v3.z = v.z;
+    return v3;
+}
