@@ -22,15 +22,11 @@ layout(std430, set = 0, binding = 2) buffer Particles{
     Particle particles[];
 };
 
-layout(std430, set = 0, binding = 3) buffer Velocity{
-    Vec3 velocities[];
-};
-
-layout(std430, set = 0, binding = 4) buffer CollisionGrid{
+layout(std430, set = 0, binding = 3) buffer CollisionGrid{
     uint collision_grid[];
 };
 
-layout(std430, set = 0, binding = 5) buffer Constraints{
+layout(std430, set = 0, binding = 4) buffer Constraints{
     Constraint constraints[];
 };
 
@@ -42,11 +38,11 @@ void main()
         collision_constraints = 0; //First we zero-out the number of computed collision constraints
         if(throw.velocity!=vec3(0,0,0)){
             particles[0].position = throw.position;
-            velocities[0] = from_vec3(throw.velocity);
+            particles[0].velocity = throw.velocity;
         }
     }
     const vec3 position = particles[gID].position;
-    vec3 velocity = to_vec3(velocities[gID]);
+    vec3 velocity = particles[gID].velocity;
     vec3 candidate_position = position + velocity;
     //The below code is a branchless test for bounding-box collision. It's equivalent to the code
     // if(candidate_position.x<0){candidate_position.x=-candidate_position.x;}
@@ -122,11 +118,8 @@ void main()
                                 const vec3 distance_vector = new_position - neighbour_particle;
                                 const float distance_square = dot(distance_vector, distance_vector);
                                 if(0< distance_square && distance_square<=(PARTICLE_COLLISION_DISTANCE_SQUARE)){
-    //                                uint my_collision_constraint_index = atomicAdd(collision_constraints, 1);
-    //                                Constraint c;
-    //                                c.particle1 = gID;
-    //                                c.particle2 = neighbour_particle_idx;
-    //                                constraints[my_collision_constraint_index] = c;
+//                                    uint my_collision_constraint_index = atomicAdd(collision_constraints, 1);
+//                                    constraints[my_collision_constraint_index] = collision_constraint(gID, neighbour_particle_idx);
                                     const float distance = sqrt(distance_square);
                                     const vec3 collision_projection_delta = 0.5 * (distance - (PARTICLE_DIAMETER))*distance_vector/distance;
                                     new_position -= collision_projection_delta;
@@ -142,8 +135,10 @@ void main()
             }
         }
     }
+
+
+
     vec3 new_velocity = particles[gID].position - position;
-    velocities[gID] = from_vec3(new_velocity);
+    particles[gID].velocity = new_velocity;
 
 }
-

@@ -1,8 +1,8 @@
 #version 450
 layout (location = 0) in vec3 point;
 layout (location = 1) in float point_size;
-layout (location = 2) in vec4 color;
-layout (location = 0) out vec4 frag_color;
+layout (location = 2) in float color;
+layout (location = 0) out float frag_color;
 layout (binding = 0) uniform Matrices{
     mat4 MVP;
     mat4 MV;

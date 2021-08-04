@@ -1,0 +1,30 @@
+#version 450
+
+#include "constants.comp"
+#include "data.comp"
+
+layout (local_size_x = 32) in;
+
+layout(std430, set = 0, binding = 2) buffer Particles{
+    Particle particles[];
+};
+
+layout(std430, set = 0, binding = 5) buffer Bones{
+    Bone bones[];
+};
+
+void main() {
+    //grab global ID
+    uint gID = gl_GlobalInvocationID.x;
+
+    Bone bone = bones[gID];
+    Particle particle = particles[bone.particle];
+    if (bone.parent > -1){
+        Particle parent = particles[bone.parent];
+        parent.position + bone.direction;
+
+    }
+    particles[bone.particle].velocity = vec3(0,0,0);
+
+
+}

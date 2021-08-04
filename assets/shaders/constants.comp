@@ -5,14 +5,14 @@
 #define GRID_GRANULARITY 8 // the total number of cells in a block is GRID_GRANULARITY raised to the power of 3
 #define CELL_SIZE 1./float(GRID_GRANULARITY)
 #define CELL_DIAGONAL sqrt(3.)*(CELL_SIZE)
-#define PARTICLE_RADIUS (CELL_DIAGONAL)/2 //the is the minimum possible particle size that still guarantees
+#define PARTICLE_RADIUS (CELL_DIAGONAL)/2. //the is the minimum possible particle size that still guarantees
 // only one particle will fall into each grid cell. Here we assume that the center of particle decides,
 // which cell a particel falls into. The particles should normally never overlap... well... sporadically it may happen
 // that they do, especially if they are moving with high speeds and suddenly collide. But such events should be rare
 // and if they do occur, only one fo them will be randomly picked to occupy the grid cell, while the other one will
 // be ignored. But in the next simulation step, the particle positions will almost surely change and the two particles
 // should at some point fall into different cells and then collision will be detected.
-#define PARTICLE_DIAMETER (PARTICLE_RADIUS)*2
+#define PARTICLE_DIAMETER (PARTICLE_RADIUS)*2.
 #define CHUNK_WIDTH_IN_CELLS CHUNK_WIDTH*GRID_GRANULARITY
 #define CHUNK_DEPTH_IN_CELLS CHUNK_DEPTH*GRID_GRANULARITY
 #define CHUNK_HEIGHT_IN_CELLS CHUNK_HEIGHT*GRID_GRANULARITY
