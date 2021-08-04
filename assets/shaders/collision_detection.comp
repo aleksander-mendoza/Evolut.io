@@ -30,27 +30,38 @@ layout(std430, set = 0, binding = 4) buffer Constraints{
     Constraint constraints[];
 };
 
+layout(std430, set = 0, binding = 5) buffer Indirect{
+    uint    x;
+    uint    y;
+    uint    z;
+} indirect;
+
 void main()
 {
-    //grab global ID
     uint gID = gl_GlobalInvocationID.x;
     if(gID==0){
-        collision_constraints = 0; //First we zero-out the number of computed collision constraints
+        collision_constraints = predefined_constraints; //First we reset the number of computed collision constraints
         if(throw.velocity!=vec3(0,0,0)){
-            particles[0].position = throw.position;
-            particles[0].velocity = throw.velocity;
+            particles[0].old_position = throw.position;
+            particles[0].new_position = throw.position + throw.velocity;
         }
     }
-    const vec3 position = particles[gID].position;
-    vec3 velocity = particles[gID].velocity;
-    vec3 candidate_position = position + velocity;
+    const vec3 old_position = particles[gID].old_position;
+    const vec3 current_position = particles[gID].new_position;
+    vec3 velocity = current_position - old_position;
+    vec3 candidate_position = current_position + velocity;
+    //TODO: implement damping, drag, friction, gravity etc. The velocity variable might be useful here
     //The below code is a branchless test for bounding-box collision. It's equivalent to the code
     // if(candidate_position.x<0){candidate_position.x=-candidate_position.x;}
     // if(candidate_position.x>16*chunks_x){candidate_position.x=16*chunks_x-(candidate_position.x-16*chunks_x);}
     //and so on for each x,y,z coordinate.
-    vec3 new_position = candidate_position - 2*min(candidate_position,vec3(0,0,0)) + 2*min(vec3(16,16,16)-candidate_position,vec3(0,0,0));
-    particles[gID].position = new_position;
-    //grab global ID
+    const vec3 new_position = candidate_position - 2*min(candidate_position,vec3(0,0,0)) + 2*min(vec3(16,16,16)-candidate_position,vec3(0,0,0));
+    particles[gID].old_position = current_position;
+    particles[gID].new_position = new_position; // We temporarily store the new position in the velocity field.
+    // We won't need to read velocity anymore (at least not until next iteration of physics engine. But we will fill this
+    // field with new value of velocity after solving all the constraints, so it's ok). Repurposing this field allows us to save space.
+    // Notice that we cannot just overwrite the old value of position, becuase it will be necessary after constraint solver,
+    // By comparing old position with new (after solving constraints) position, we will be able to calculate new value of velocity.
     for(int chunk_x=0;chunk_x<chunks_x;chunk_x++){
         for(int chunk_z=0;chunk_z<chunks_z;chunk_z++){
             if(int(new_position.x)/CHUNK_WIDTH==chunk_x && int(new_position.z)/CHUNK_DEPTH==chunk_z){
@@ -98,11 +109,9 @@ void main()
                 // Which can be reduced even further:
                 const ivec3 from_inclusive = max(ivec3(chunk_relative_pos/(CELL_SIZE)+0.5)-2, 0); // that's a beautiful and very efficient result, isn't it?
                 // now we are ready to check collisions
-                uint loops = 0;
                 for(int x=from_inclusive.x;x<=cell_position.x;x++) {
                     for(int y=from_inclusive.y;y<=cell_position.y;y++) {
                         for(int z=from_inclusive.z;z<=cell_position.z;z++) {
-                            loops += 1;
                             const int cell_idx = cell_position_to_idx(ivec3(x,y,z));
                             const uint neighbour_particle_id = collision_grid[cell_idx];
                             if(neighbour_particle_id!=gID && neighbour_particle_id<(MAX_UINT)){//look! If somehow there
@@ -113,18 +122,13 @@ void main()
                                 // in the same cell. They won't all collide with each other, but there will always be one
                                 // arbitrarily chosen particle, that will collide with all of the other (because they will
                                 // pass the neighbour_particle_id!=gID test).
-                                const vec3 neighbour_particle = particles[neighbour_particle_id].position;
-                                new_position = particles[gID].position;
+                                const vec3 neighbour_particle = particles[neighbour_particle_id].new_position;
                                 const vec3 distance_vector = new_position - neighbour_particle;
                                 const float distance_square = dot(distance_vector, distance_vector);
-                                if(0< distance_square && distance_square<=(PARTICLE_COLLISION_DISTANCE_SQUARE)){
-//                                    uint my_collision_constraint_index = atomicAdd(collision_constraints, 1);
-//                                    constraints[my_collision_constraint_index] = collision_constraint(gID, neighbour_particle_idx);
-                                    const float distance = sqrt(distance_square);
-                                    const vec3 collision_projection_delta = 0.5 * (distance - (PARTICLE_DIAMETER))*distance_vector/distance;
-                                    new_position -= collision_projection_delta;
-                                    particles[neighbour_particle_id].position = neighbour_particle + collision_projection_delta;
-                                    particles[gID].position = new_position;
+                                if(0 < distance_square && // we need to check this, because division by zero leads to algorithm instability
+                                distance_square<=(PARTICLE_COLLISION_DISTANCE_SQUARE)){
+                                    uint my_collision_constraint_index = atomicAdd(collision_constraints, 1);
+                                    constraints[my_collision_constraint_index] = collision_constraint(gID, neighbour_particle_id);
                                 }
                             }
                         }
@@ -135,10 +139,8 @@ void main()
             }
         }
     }
-
-
-
-    vec3 new_velocity = particles[gID].position - position;
-    particles[gID].velocity = new_velocity;
-
+    if(gID==0){
+        indirect.x = uint(ceil(float(collision_constraints)/32.));
+    }
 }
+

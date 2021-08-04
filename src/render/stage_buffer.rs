@@ -93,6 +93,10 @@ impl<V: Copy, C: CpuWriteable, G: GpuWriteable> StageBuffer<V, C, G> {
     pub fn gpu(&self) -> &Buffer<V, G> {
         &self.gpu
     }
+    pub fn take_gpu(self) -> Buffer<V, G> {
+        let Self{gpu, ..} = self;
+        gpu
+    }
     pub fn with_capacity(device: &Device, capacity: usize) -> Result<Self, vk::Result> {
         let cpu = Vector::with_capacity(device, capacity)?;
         let gpu = Buffer::with_capacity(device, capacity)?;
@@ -145,6 +149,15 @@ pub type IndirectBuffer = StageBuffer<vk::DrawIndirectCommand, Cpu, GpuIndirect>
 
 impl IndirectBuffer {
     pub fn new_indirect_buffer(cmd: &CommandPool, data: &[vk::DrawIndirectCommand]) -> Result<Submitter<Self>, vk::Result> {
+        Self::new(cmd, data)
+    }
+}
+
+
+pub type IndirectDispatchBuffer = StageBuffer<vk::DispatchIndirectCommand, Cpu, GpuIndirect>;
+
+impl IndirectDispatchBuffer {
+    pub fn new_indirect_dispatch_buffer(cmd: &CommandPool, data: &[vk::DispatchIndirectCommand]) -> Result<Submitter<Self>, vk::Result> {
         Self::new(cmd, data)
     }
 }

@@ -1,0 +1,56 @@
+#version 450
+
+#include "constants.comp"
+#include "data.comp"
+
+layout (local_size_x = 32) in;
+
+
+layout (set = 0, binding = 0) uniform Throw{
+    vec3 position;
+    vec3 velocity;
+}throw;
+
+layout (set = 0, binding = 1) buffer ParticleConstants{
+    int predefined_constraints;
+    int collision_constraints;
+    int chunks_x;
+    int chunks_z;
+};
+
+layout(std430, set = 0, binding = 2) buffer Particles{
+    Particle particles[];
+};
+
+layout(std430, set = 0, binding = 3) buffer CollisionGrid{
+    uint collision_grid[];
+};
+
+layout(std430, set = 0, binding = 4) buffer Constraints{
+    Constraint constraints[];
+};
+
+
+void main(){
+    const uint gID = gl_GlobalInvocationID.x;
+    if(gID < collision_constraints){
+        const Constraint c = constraints[gID];
+
+        for (int pass=0;pass<GAUSS_SEIDEL_PASSES;pass++){
+            vec3 p1 = particles[c.particle1].new_position;
+            vec3 p2 = particles[c.particle2].new_position;
+            const vec3 distance_vector = p1 - p2;
+            const float distance_square = dot(distance_vector, distance_vector);
+            if (0 < distance_square &&// we need to check this, because division by zero leads to algorithm instability
+            distance_square<=(PARTICLE_COLLISION_DISTANCE_SQUARE)){
+                const float distance = sqrt(distance_square);//TODO: maybe I should approximate sqrt with less expensive function?
+                const vec3 collision_projection_delta = 0.5 * (distance - (PARTICLE_DIAMETER))*distance_vector/distance;
+                p1 -= collision_projection_delta;
+                p2 += collision_projection_delta;
+                particles[c.particle1].new_position = p1;
+                particles[c.particle2].new_position = p2;
+            }
+        }
+    }
+
+}

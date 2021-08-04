@@ -7,9 +7,9 @@ use crate::render::data::VertexAttrib;
 #[repr(C, packed)]
 #[derive(Copy,Clone,Debug)]
 pub struct Particle{
-    pub pos:glm::Vec3,
+    pub old_position:glm::Vec3,
     pub size:f32,
-    pub velocity:glm::Vec3,
+    pub new_position:glm::Vec3,
     pub color:f32,
 }
 impl Particle{
@@ -20,10 +20,11 @@ impl Particle{
         glm::vec3(Self::rand_f32(),Self::rand_f32(),Self::rand_f32())
     }
     pub fn random()->Self{
+        let new_position = glm::vec3(random::<f32>()*16.,3.+random::<f32>()*8.,random::<f32>()*16.);
         Self{
-            pos: glm::vec3(random::<f32>()*16.,3.+random::<f32>()*8.,random::<f32>()*16.),
+            new_position,
             size: random::<f32>()*100.,
-            velocity: Self::rand_vec3()*0.1,
+            old_position: new_position + Self::rand_vec3()*0.1,
             color: random::<f32>(),
         }
     }
@@ -35,7 +36,7 @@ impl VertexSource for Particle{
                 binding,
                 location: 0,
                 format:  glm::Vec3::FORMAT,
-                offset: offset_of!(Self, pos) as u32,
+                offset: offset_of!(Self, new_position) as u32,
             },
             vk::VertexInputAttributeDescription {
                 binding,

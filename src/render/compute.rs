@@ -29,6 +29,10 @@ impl ComputePipelineBuilder {
         Self { bindings: Vec::new(), descriptors: Vec::new(), shader: None }
     }
 
+    pub fn change_shader_function(&mut self, name: &str) -> &mut Self {
+        self.shader.as_mut().unwrap().0 = CString::new(name).expect("Compute shader's function name contains null character");
+        self
+    }
     pub fn shader(&mut self, name: &str, shader: ShaderModule<ShCompute>) -> &mut Self {
         self.shader.insert((CString::new(name).expect("Compute shader's function name contains null character"), shader));
         self

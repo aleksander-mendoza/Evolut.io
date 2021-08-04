@@ -8,7 +8,7 @@ use crate::render::pipeline::{Pipeline, PushConstant, BufferBinding};
 use crate::render::semaphore::Semaphore;
 use ash::prelude::VkResult;
 use crate::render::fence::Fence;
-use crate::render::buffer::{Buffer, Type, Gpu, Cpu, GpuIndirect, CpuWriteable, GpuWriteable};
+use crate::render::buffer::{Buffer, Type, Gpu, Cpu, GpuIndirect, CpuWriteable, GpuWriteable, DeviceLocal};
 use crate::render::data::{VertexSource, VertexAttrib};
 use crate::render::descriptor_pool::DescriptorSet;
 use crate::render::texture::{Dim, Texture};
@@ -82,7 +82,7 @@ impl CommandBuffer {
         }
         self
     }
-    pub fn barrier<D: Dim, A: Aspect>(&mut self, src_access_mask: vk::AccessFlags, dst_access_mask: vk::AccessFlags,source_stage: vk::PipelineStageFlags, destination_stage: vk::PipelineStageFlags) -> &mut Self{
+    pub fn buffer_barrier<V:Copy,T:Type>(&mut self, buffer:&Buffer<V,T>, src_access_mask: vk::AccessFlags, dst_access_mask: vk::AccessFlags,source_stage: vk::PipelineStageFlags, destination_stage: vk::PipelineStageFlags) -> &mut Self{
         unsafe {
             self.device.inner().cmd_pipeline_barrier(
                 self.raw,
@@ -90,7 +90,13 @@ impl CommandBuffer {
                 destination_stage,
                 vk::DependencyFlags::empty(),
                 &[],
-                &[],
+                &[vk::BufferMemoryBarrier::builder()
+                    .src_access_mask(src_access_mask)
+                    .dst_access_mask(dst_access_mask)
+                    .buffer(buffer.raw())
+                    .offset(0)
+                    .size(buffer.len() as u64)
+                    .build()],
                 &[],
             )
         }
@@ -270,6 +276,14 @@ impl CommandBuffer {
         unsafe {
             self.device.inner().cmd_dispatch(
                 self.raw, x,y, z
+            );
+        }
+        self
+    }
+    pub fn dispatch_indirect(&mut self,indirect_buffer:&Buffer<vk::DispatchIndirectCommand,GpuIndirect>, offset:usize) -> &mut Self {
+        unsafe {
+            self.device.inner().cmd_dispatch_indirect(
+                self.raw, indirect_buffer.raw(), (std::mem::size_of::<vk::DispatchIndirectCommand>()*offset) as u64
             );
         }
         self

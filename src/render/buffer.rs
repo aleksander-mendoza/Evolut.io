@@ -22,6 +22,8 @@ pub trait CpuWriteable: Type {}
 
 pub trait GpuWriteable: Type {}
 
+pub trait DeviceLocal: Type {}
+
 pub trait AsDescriptor: Type {}
 
 pub trait AsStorage: AsDescriptor {}
@@ -41,11 +43,15 @@ impl CpuWriteable for Uniform {}
 
 pub struct Gpu {}
 
+impl DeviceLocal for Gpu{}
+
 impl Type for Gpu {
     const SHARING_MODE: vk::SharingMode = vk::SharingMode::EXCLUSIVE;
     const REQUIRED_MEMORY_FLAGS: vk::MemoryPropertyFlags = vk::MemoryPropertyFlags::DEVICE_LOCAL;
     const USAGE: vk::BufferUsageFlags = vk::BufferUsageFlags::from_raw(vk::BufferUsageFlags::VERTEX_BUFFER.as_raw() | vk::BufferUsageFlags::TRANSFER_DST.as_raw());
 }
+
+impl DeviceLocal for Storage{}
 
 impl AsDescriptor for Storage{}
 
@@ -78,10 +84,13 @@ pub struct GpuIndirect {}
 impl Type for GpuIndirect {
     const SHARING_MODE: vk::SharingMode = vk::SharingMode::EXCLUSIVE;
     const REQUIRED_MEMORY_FLAGS: vk::MemoryPropertyFlags = vk::MemoryPropertyFlags::DEVICE_LOCAL;
-    const USAGE: vk::BufferUsageFlags = vk::BufferUsageFlags::from_raw(vk::BufferUsageFlags::INDIRECT_BUFFER.as_raw() | vk::BufferUsageFlags::TRANSFER_DST.as_raw());
+    const USAGE: vk::BufferUsageFlags = vk::BufferUsageFlags::from_raw(vk::BufferUsageFlags::INDIRECT_BUFFER.as_raw() | vk::BufferUsageFlags::STORAGE_BUFFER.as_raw()  | vk::BufferUsageFlags::TRANSFER_DST.as_raw());
 }
 
 impl GpuWriteable for GpuIndirect {}
+impl DeviceLocal for GpuIndirect {}
+impl AsDescriptor for GpuIndirect{}
+impl AsStorage for GpuIndirect {}
 
 pub struct Cpu {}
 

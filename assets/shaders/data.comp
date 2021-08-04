@@ -1,8 +1,8 @@
 
 struct Particle{
-    vec3 position;
+    vec3 old_position;
     float size;
-    vec3 velocity;
+    vec3 new_position;
     float color;
 };
 
