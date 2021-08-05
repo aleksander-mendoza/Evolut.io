@@ -19,8 +19,12 @@ struct Constraint{
 };
 
 struct Bone{
-    vec3 rotation;
-    uint particle;
+    vec3 phantom; // position of phantom particle, relative to the particle1.
+    // The phantom particle does not participate in collision detection. It's merely used
+    // for the purpose of rendering (so that we know where the front of the bone is) and
+    // as an extra anchor for building distance constraints
+    uint particle1;
+    uint particle2;
     vec3 direction;
     int parent; // -1 if no parent
 };

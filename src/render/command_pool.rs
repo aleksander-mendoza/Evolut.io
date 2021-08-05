@@ -90,19 +90,40 @@ impl CommandBuffer {
                 destination_stage,
                 vk::DependencyFlags::empty(),
                 &[],
-                &[vk::BufferMemoryBarrier::builder()
-                    .src_access_mask(src_access_mask)
-                    .dst_access_mask(dst_access_mask)
-                    .buffer(buffer.raw())
-                    .offset(0)
-                    .size(buffer.len() as u64)
-                    .build()],
+                &[buffer.make_buffer_barrier(src_access_mask, dst_access_mask)],
                 &[],
             )
         }
         self
     }
-
+    pub fn buffer_barriers(&mut self, source_stage: vk::PipelineStageFlags, destination_stage: vk::PipelineStageFlags, barriers: &[vk::BufferMemoryBarrier]) -> &mut Self{
+        unsafe {
+            self.device.inner().cmd_pipeline_barrier(
+                self.raw,
+                source_stage,
+                destination_stage,
+                vk::DependencyFlags::empty(),
+                &[],
+                barriers,
+                &[],
+            )
+        }
+        self
+    }
+    pub fn execution_barrier(&mut self, source_stage: vk::PipelineStageFlags, destination_stage: vk::PipelineStageFlags) -> &mut Self{
+        unsafe {
+            self.device.inner().cmd_pipeline_barrier(
+                self.raw,
+                source_stage,
+                destination_stage,
+                vk::DependencyFlags::empty(),
+                &[],
+                &[],
+                &[],
+            )
+        }
+        self
+    }
     pub fn layout_barrier<D: Dim, A: Aspect>(&mut self, image: &Texture<D, A>, old_layout: vk::ImageLayout, new_layout: vk::ImageLayout) -> &mut Self{
         let src_access_mask;
         let dst_access_mask;

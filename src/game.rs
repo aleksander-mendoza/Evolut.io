@@ -30,7 +30,7 @@ pub struct GameResources {
     indirect_buffer: Submitter<IndirectDispatchBuffer>,
     particle_constants: Submitter<StageBuffer<ParticleConstants, Cpu, Storage>>,
     particle_uniform: HostBuffer<ThrowUniform, Uniform>,
-    constraints_buffer: Buffer<Constraint, Storage>,
+    constraints_buffer: Submitter<StageBuffer<Constraint, Cpu, Storage>>,
 }
 
 #[repr(C, packed)]
@@ -68,13 +68,35 @@ impl Resources for GameResources {
         let mut collision_grid = Submitter::new(Buffer::with_capacity(cmd_pool.device(), CHUNK_WIDTH_IN_CELLS * CHUNK_HEIGHT_IN_CELLS * CHUNK_DEPTH_IN_CELLS)?, cmd_pool)?;
         collision_grid.fill_submit(u32::MAX)?;
         let world_size = res.a().world().size();
+        let d = 0.4;
+        let constraints_buffer = StageBuffer::new_with_capacity(cmd_pool, &[Constraint{
+            particle1: 1,
+            particle2: 2,
+            constant_param: d
+        }, Constraint{
+            particle1: 2,
+            particle2: 3,
+            constant_param: d
+        }, Constraint{
+            particle1: 3,
+            particle2: 4,
+            constant_param: d
+        }, Constraint{
+            particle1: 4,
+            particle2: 1,
+            constant_param: d
+        }, Constraint{
+            particle1: 4,
+            particle2: 2,
+            constant_param: d*2f32.sqrt()
+        }], 128)?;
         let particle_constants = StageBuffer::new(cmd_pool, &[ParticleConstants {
-            predefined_constraints: 0,
+            predefined_constraints: constraints_buffer.len() as u32,
             collision_constraints: 0,
             chunks_x: world_size.width() as u32,
             chunks_z: world_size.depth() as u32,
         }])?;
-        let constraints_buffer = Buffer::with_capacity(cmd_pool.device(), 128)?;
+
         let particle_uniform = HostBuffer::new(cmd_pool.device(), &[ThrowUniform {
             position: Vec3(glm::vec3(0., 0., 0.)),
             velocity: Vec3(glm::vec3(0., 0., 0.)),
@@ -108,13 +130,14 @@ impl Resources for GameResources {
         let constant_binding = compute_pipeline.storage_buffer(particle_constants.gpu());
         let particles_binding = compute_pipeline.storage_buffer(global.b().particles().gpu());
         let collision_grid_binding = compute_pipeline.storage_buffer(&collision_grid);
-        let constraint_binding = compute_pipeline.storage_buffer(&constraints_buffer);
+        let constraint_binding = compute_pipeline.storage_buffer(constraints_buffer.gpu());
         let indirect_binding = compute_pipeline.storage_buffer(indirect_buffer.gpu());
         compute_pipeline.shader("main", collision_detection);
         let collision_detection = compute_pipeline.build(cmd_pool.device())?;
         compute_pipeline.shader("main", solve_constraints);
         let solve_constraints = compute_pipeline.build(cmd_pool.device())?;
         let collision_grid = collision_grid.take()?;
+        let constraints_buffer = constraints_buffer.take()?.take_gpu();
         let indirect_buffer = indirect_buffer.take()?.take_gpu();
         particle_constants.reset()?;
         Ok(Game {
@@ -177,8 +200,10 @@ impl Renderable for Game {
     fn record_compute_cmd_buffer(&self, cmd: &mut CommandBuffer) -> Result<(), Error> {
         cmd.bind_compute_pipeline(&self.collision_detection)
             .dispatch_1d(self.particles().particles().len() as u32 / 32)
-            .buffer_barrier(&self.constraints_buffer,vk::AccessFlags::SHADER_READ,vk::AccessFlags::SHADER_WRITE,
-                            vk::PipelineStageFlags::COMPUTE_SHADER,vk::PipelineStageFlags::COMPUTE_SHADER)
+            .buffer_barriers(vk::PipelineStageFlags::COMPUTE_SHADER,vk::PipelineStageFlags::COMPUTE_SHADER, &[
+                self.particles().particles().gpu().make_shader_buffer_barrier(),
+                self.constraints_buffer.make_shader_buffer_barrier()
+            ])
             .bind_compute_pipeline(&self.solve_constraints)
             .dispatch_indirect(&self.indirect_buffer,0);
         Ok(())

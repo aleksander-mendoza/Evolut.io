@@ -1,5 +1,5 @@
 #version 450
-
+#extension GL_EXT_shader_atomic_float : enable
 #include "constants.comp"
 #include "data.comp"
 
@@ -34,23 +34,27 @@ layout(std430, set = 0, binding = 4) buffer Constraints{
 void main(){
     const uint gID = gl_GlobalInvocationID.x;
     if(gID < collision_constraints){
-        const Constraint c = constraints[gID];
-
+        Constraint c = constraints[gID];
+        const float min_dist = 0;
+        const float max_dist = c.constant_param < 0 ? c.constant_param*c.constant_param : uintBitsToFloat(0x7F800000); // 0x7F800000 is infinity
+        c.constant_param = abs(c.constant_param);
         for (int pass=0;pass<GAUSS_SEIDEL_PASSES;pass++){
             vec3 p1 = particles[c.particle1].new_position;
             vec3 p2 = particles[c.particle2].new_position;
             const vec3 distance_vector = p1 - p2;
             const float distance_square = dot(distance_vector, distance_vector);
-            if (0 < distance_square &&// we need to check this, because division by zero leads to algorithm instability
-            distance_square<=(PARTICLE_COLLISION_DISTANCE_SQUARE)){
+            if (min_dist < distance_square && distance_square <= max_dist ) {
                 const float distance = sqrt(distance_square);//TODO: maybe I should approximate sqrt with less expensive function?
-                const vec3 collision_projection_delta = 0.5 * (distance - (PARTICLE_DIAMETER))*distance_vector/distance;
-                p1 -= collision_projection_delta;
-                p2 += collision_projection_delta;
-                particles[c.particle1].new_position = p1;
-                particles[c.particle2].new_position = p2;
+                const vec3 collision_projection_delta =  0.5 * (distance - c.constant_param)*distance_vector/distance;
+//                p1 -= 0.1*collision_projection_delta;
+//                p2 += 0.1*collision_projection_delta;
+                atomicAdd(particles[c.particle1].new_position.x, -collision_projection_delta.x);
+                atomicAdd(particles[c.particle1].new_position.y, -collision_projection_delta.y);
+                atomicAdd(particles[c.particle1].new_position.z, -collision_projection_delta.z);
+                atomicAdd(particles[c.particle2].new_position.x, collision_projection_delta.x);
+                atomicAdd(particles[c.particle2].new_position.y, collision_projection_delta.y);
+                atomicAdd(particles[c.particle2].new_position.z, collision_projection_delta.z);
             }
         }
     }
-
 }

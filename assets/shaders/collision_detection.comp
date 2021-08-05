@@ -57,11 +57,7 @@ void main()
     //and so on for each x,y,z coordinate.
     const vec3 new_position = candidate_position - 2*min(candidate_position,vec3(0,0,0)) + 2*min(vec3(16,16,16)-candidate_position,vec3(0,0,0));
     particles[gID].old_position = current_position;
-    particles[gID].new_position = new_position; // We temporarily store the new position in the velocity field.
-    // We won't need to read velocity anymore (at least not until next iteration of physics engine. But we will fill this
-    // field with new value of velocity after solving all the constraints, so it's ok). Repurposing this field allows us to save space.
-    // Notice that we cannot just overwrite the old value of position, becuase it will be necessary after constraint solver,
-    // By comparing old position with new (after solving constraints) position, we will be able to calculate new value of velocity.
+    particles[gID].new_position = new_position;
     for(int chunk_x=0;chunk_x<chunks_x;chunk_x++){
         for(int chunk_z=0;chunk_z<chunks_z;chunk_z++){
             if(int(new_position.x)/CHUNK_WIDTH==chunk_x && int(new_position.z)/CHUNK_DEPTH==chunk_z){

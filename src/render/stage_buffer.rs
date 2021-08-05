@@ -102,9 +102,12 @@ impl<V: Copy, C: CpuWriteable, G: GpuWriteable> StageBuffer<V, C, G> {
         let gpu = Buffer::with_capacity(device, capacity)?;
         Ok(Self { cpu, gpu, has_unflushed_changes: false })
     }
-
     pub fn new(cmd: &CommandPool, data: &[V]) -> Result<Submitter<Self>, vk::Result> {
-        let mut slf = Submitter::new(Self::with_capacity(cmd.device(), data.len())?,cmd)?;
+        Self::new_with_capacity(cmd,data,data.len())
+    }
+    pub fn new_with_capacity(cmd: &CommandPool, data: &[V], capacity:usize) -> Result<Submitter<Self>, vk::Result> {
+        assert!(capacity>=data.len());
+        let mut slf = Submitter::new(Self::with_capacity(cmd.device(), capacity)?,cmd)?;
         unsafe { slf.set_len(data.len()) }
         slf.as_slice_mut().copy_from_slice(data);
         slf.flush_to_gpu()?;

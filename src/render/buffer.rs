@@ -122,6 +122,18 @@ impl<V: Copy, T: Type> Drop for Buffer<V, T> {
 }
 
 impl<V: Copy, T: Type> Buffer<V, T> {
+    pub fn make_shader_buffer_barrier(&self)->vk::BufferMemoryBarrier{
+        self.make_buffer_barrier(vk::AccessFlags::SHADER_WRITE, vk::AccessFlags::SHADER_READ)
+    }
+    pub fn make_buffer_barrier(&self, src_access_mask: vk::AccessFlags, dst_access_mask: vk::AccessFlags)->vk::BufferMemoryBarrier{
+        vk::BufferMemoryBarrier::builder()
+            .src_access_mask(src_access_mask)
+            .dst_access_mask(dst_access_mask)
+            .buffer(self.raw())
+            .offset(0)
+            .size(self.len() as u64)
+            .build()
+    }
     pub fn device(&self) -> &Device {
         &self.device
     }
