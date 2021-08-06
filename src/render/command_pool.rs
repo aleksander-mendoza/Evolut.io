@@ -43,7 +43,7 @@ impl CommandBuffer {
     }
 
     pub fn copy<V:Copy, T1: BufferType, T2: BufferType>(&mut self, src: &impl Buffer<V, T1>, dst: &impl Buffer<V, T2>) -> &mut Self {
-        assert!(src.len() <= dst.len());
+        assert!(src.bytes() <= dst.bytes());
         unsafe {
             self.device.inner().cmd_copy_buffer(
                 self.raw,
@@ -52,7 +52,7 @@ impl CommandBuffer {
                 &[vk::BufferCopy {
                     src_offset: src.offset(),
                     dst_offset: dst.offset(),
-                    size: src.len(),
+                    size: src.bytes(),
                 }],
             )
         }
@@ -314,7 +314,7 @@ impl CommandBuffer {
     pub fn fill<T:BufferType>(&mut self, buffer:&impl Buffer<u32,T>, value:u32) -> &mut Self {
         unsafe {
             self.device.inner().cmd_fill_buffer(
-                self.raw, buffer.raw(),buffer.offset(),buffer.len(),value
+                self.raw, buffer.raw(), buffer.offset(), buffer.bytes(), value
             );
         }
         self
@@ -322,7 +322,7 @@ impl CommandBuffer {
     pub fn fill_zeros<V:Copy, T:BufferType>(&mut self, buffer:&impl Buffer<V,T>) -> &mut Self {
         unsafe {
             self.device.inner().cmd_fill_buffer(
-                self.raw, buffer.raw(),buffer.offset(),buffer.len(),0
+                self.raw, buffer.raw(), buffer.offset(), buffer.bytes(), 0
             );
         }
         self
@@ -381,8 +381,8 @@ impl CommandBuffer {
             self.device.inner().cmd_draw_indirect(
                 self.raw,
                 buffer.raw(),
-                buffer.offset() ,
-                buffer.len() as u32,
+                buffer.offset(),
+                buffer.bytes() as u32,
                 std::mem::size_of::<vk::DrawIndirectCommand>() as u32,
             )
         }

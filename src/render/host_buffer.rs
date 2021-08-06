@@ -16,10 +16,10 @@ impl<V: Copy, C: CpuWriteable> HostBuffer<V, C> {
         &self.cpu
     }
     pub fn len(&self) -> vk::DeviceSize {
-        self.cpu.len()
+        self.cpu.bytes()
     }
     pub fn elements(&self) -> vk::DeviceSize {
-        self.cpu.elements()
+        self.cpu.len()
     }
     pub fn device(&self) -> &Device {
         self.cpu.device()

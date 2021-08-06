@@ -99,7 +99,7 @@ impl<V: Copy, C: CpuWriteable, G: GpuWriteable, B:Buffer<V, G>> StageBuffer<V, C
 }
 impl<V: Copy, C: CpuWriteable, G: GpuWriteable> StageBuffer<V, C, G, SubBuffer<V,G>> {
     pub fn wrap(cmd: &CommandPool, data: &[V], gpu:SubBuffer<V,G>)->Result<Submitter<Self>, vk::Result>{
-        assert!((data.len()*std::mem::size_of::<V>()) as u64 <= gpu.len() );
+        assert!((data.len()*std::mem::size_of::<V>()) as u64 <= gpu.bytes() );
         let cpu = Vector::with_capacity(cmd.device(), data.len() as u64)?;
         let mut slf = Submitter::new(Self{cpu,gpu,has_unflushed_changes:false, _g:PhantomData},cmd)?;
         unsafe { slf.set_len(data.len() as u64) }

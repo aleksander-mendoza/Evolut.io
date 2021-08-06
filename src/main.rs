@@ -46,6 +46,7 @@ mod game;
 mod player;
 mod bone;
 mod constraint;
+mod particle_constants;
 
 
 fn main() -> Result<(), failure::Error> {
@@ -67,7 +68,7 @@ fn run() -> Result<(),failure::Error>{
     sdl.mouse().set_relative_mouse_mode(true);
     let vulkan = VulkanContext::new(window)?;
     let mut player = Player::new();
-    let mut display = Display::<GameResources>::new(vulkan,&player)?;
+    let mut display = Display::new(vulkan,&player, GameResources::new)?;
 
     let event_pump = sdl.event_pump().map_err(err_msg)?;
     let mut input = Input::new(event_pump);

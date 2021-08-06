@@ -57,7 +57,7 @@ impl ComputePipelineBuilder {
         self.bindings.push(vk::DescriptorSetLayoutBinding {
             binding: new_index,
             descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
-            descriptor_count: buffer.elements() as u32,
+            descriptor_count: buffer.len() as u32,
             stage_flags: vk::ShaderStageFlags::COMPUTE,
             p_immutable_samplers: std::ptr::null(),
         });

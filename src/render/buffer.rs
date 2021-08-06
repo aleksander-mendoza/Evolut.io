@@ -7,12 +7,12 @@ pub trait Buffer<V: Copy, T: BufferType>:Sized {
     fn device(&self) -> &Device;
     fn raw(&self) -> vk::Buffer;
     fn offset(&self) -> vk::DeviceSize;
-    fn elements(&self) -> vk::DeviceSize{
-        self.len() / self.element_size() as u64
+    fn len(&self) -> vk::DeviceSize{
+        self.bytes() / self.element_size() as u64
     }
-    fn len(&self) -> vk::DeviceSize;
+    fn bytes(&self) -> vk::DeviceSize;
     fn element_offset(&self, idx:u64) -> vk::DeviceSize {
-        assert!(idx<self.elements());
+        assert!(idx<self.len());
         self.offset()+self.element_size() as u64 * idx
     }
     fn raw_mem(&self) -> vk::DeviceMemory;
@@ -26,13 +26,13 @@ pub fn descriptor_info<V: Copy, T: AsDescriptor>(buff: &impl Buffer<V, T>) -> vk
     vk::DescriptorBufferInfo {
         buffer: buff.raw(),
         offset: buff.offset(),
-        range: buff.len(),
+        range: buff.bytes(),
     }
 }
 
 
 pub fn map_unmap_whole<V: Copy, T: CpuWriteable>(buff: &mut impl Buffer<V, T>, f: impl FnOnce(&mut [V])) -> Result<(), vk::Result> {
-    map_unmap(buff, buff.offset(), buff.len(), f)
+    map_unmap(buff, buff.offset(), buff.bytes(), f)
 }
 
 pub fn map_copy_unmap<V: Copy, T: CpuWriteable>(buff: &mut impl Buffer<V, T>, offset: vk::DeviceSize, data: &[V]) -> Result<(), vk::Result> {
@@ -48,11 +48,11 @@ pub fn map_unmap<V: Copy, T: CpuWriteable>(buff: &mut impl Buffer<V, T>, offset:
 }
 
 pub unsafe fn map_whole<V: Copy, T: CpuWriteable>(buff: &mut impl Buffer<V, T>) -> Result<*mut V, vk::Result> {
-    map(buff, buff.offset(), buff.len())
+    map(buff, buff.offset(), buff.bytes())
 }
 
 pub unsafe fn map<V: Copy, T: CpuWriteable>(buff: &mut impl Buffer<V, T>, offset: vk::DeviceSize, len: vk::DeviceSize) -> Result<*mut V, vk::Result> {
-    assert!(offset + len <= buff.len());
+    assert!(offset + len <= buff.bytes());
     assert_eq!(len % buff.element_size() as u64,0,"Len: {} Type: {}",len, std::any::type_name::<V>() );
     buff.device().inner().map_memory(
         buff.raw_mem(),
@@ -82,6 +82,6 @@ pub fn make_buffer_barrier<V: Copy, T: AsStorage>(buff: &impl Buffer<V, T>, src_
         .dst_access_mask(dst_access_mask)
         .buffer(buff.raw())
         .offset(buff.offset() as u64)
-        .size(buff.len() as u64)
+        .size(buff.bytes() as u64)
         .build()
 }

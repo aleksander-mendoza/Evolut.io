@@ -29,7 +29,6 @@ use crate::mvp_uniforms::MvpUniforms;
 
 pub trait Resources:Sized{
     type Render:Renderable;
-    fn new(cmd_pool:&CommandPool)->Result<Self,failure::Error>;
     fn create_descriptors(&self,descriptors:&mut DescriptorsBuilder)->Result<(),failure::Error>;
     fn make_renderable(self, cmd_pool: &CommandPool, render_pass: &SingleRenderPass, descriptors:&DescriptorsBuilderLocked) -> Result<Self::Render, failure::Error>;
 
@@ -69,12 +68,12 @@ impl <P:Resources> Display<P> {
     pub fn pipeline_mut(&mut self) -> &mut P::Render{
         &mut self.pipeline
     }
-    pub fn new(vulkan: VulkanContext, player:&Player) -> Result<Self, failure::Error> {
+    pub fn new(vulkan: VulkanContext, player:&Player, f:impl FnOnce(&CommandPool)->Result<P,failure::Error>) -> Result<Self, failure::Error> {
         let render_pass = vulkan.create_single_render_pass()?;
         let cmd_pool = CommandPool::new(vulkan.device(),true)?;
         let mut descriptors_builder = DescriptorsBuilder::new();
         let uniforms_binding = descriptors_builder.singleton_uniform_buffer(player.mvp_uniforms());
-        let resources = P::new(&cmd_pool)?;
+        let resources = f(&cmd_pool)?;
         resources.create_descriptors(&mut descriptors_builder)?;
         let descriptors_builder = descriptors_builder.make_layout(cmd_pool.device())?;
         let pipeline = resources.make_renderable(&cmd_pool,&render_pass,&descriptors_builder)?;

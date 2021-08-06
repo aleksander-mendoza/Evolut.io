@@ -45,7 +45,7 @@ impl <V: Copy, T: BufferType> Buffer<V, T> for OwnedBuffer<V, T>{
     fn offset(&self) -> vk::DeviceSize {
         0
     }
-    fn len(&self) -> vk::DeviceSize {
+    fn bytes(&self) -> vk::DeviceSize {
         self.capacity_bytes
     }
     fn raw_mem(&self) -> vk::DeviceMemory{

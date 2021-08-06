@@ -30,16 +30,12 @@ impl BlockWorldResources{
     pub fn world(&self) -> &Submitter<World>{
         &self.world
     }
-}
-impl Resources for BlockWorldResources{
-    type Render = BlockWorld;
-
-    fn new(cmd_pool: &CommandPool)-> Result<Self, failure::Error>{
+    pub fn new(cmd_pool: &CommandPool) -> Result<Self, failure::Error> {
         let texture = StageTexture::new("assets/img/blocks.png".as_ref(), cmd_pool, true)?;
         let sampler = Sampler::new(cmd_pool.device(), vk::Filter::NEAREST, true)?;
-        let frag = ShaderModule::new(include_glsl!("assets/shaders/block.frag", kind: frag) as &[u32],  cmd_pool.device())?;
-        let vert = ShaderModule::new(include_glsl!("assets/shaders/block.vert") as &[u32],  cmd_pool.device())?;
-        let mut world = World::new(2,2, cmd_pool)?;
+        let frag = ShaderModule::new(include_glsl!("assets/shaders/block.frag", kind: frag) as &[u32], cmd_pool.device())?;
+        let vert = ShaderModule::new(include_glsl!("assets/shaders/block.vert") as &[u32], cmd_pool.device())?;
+        let mut world = World::new(2, 2, cmd_pool)?;
         world.blocks_mut().no_update_fill_level(0, 1, BEDROCK);
         world.blocks_mut().no_update_fill_level(1, 1, DIRT);
         world.blocks_mut().no_update_fill_level(2, 1, GRASS);
@@ -47,7 +43,7 @@ impl Resources for BlockWorldResources{
         world.blocks_mut().no_update_outline(5, 2, 5, 5, 5, 5, PLANK);
         world.compute_faces();
         world.flush_all_chunks()?;
-        Ok(Self{
+        Ok(Self {
             texture,
             sampler,
             world,
@@ -55,7 +51,9 @@ impl Resources for BlockWorldResources{
             vert,
         })
     }
-
+}
+impl Resources for BlockWorldResources{
+    type Render = BlockWorld;
     fn create_descriptors(&self,descriptors:&mut DescriptorsBuilder)->Result<(),failure::Error>{
         descriptors.sampler(&self.sampler, self.texture.imageview());
         Ok(())

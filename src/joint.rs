@@ -34,13 +34,13 @@ impl <A:Resources,B:Resources> JointResources<A,B>{
         &mut self.b
     }
 }
-
+impl <A:Resources,B:Resources> JointResources<A,B> {
+    pub fn new(a: A, b: B) -> Self {
+        Self { a, b }
+    }
+}
 impl <A:Resources,B:Resources> Resources for JointResources<A,B> {
     type Render = Joint<A::Render,B::Render>;
-
-    fn new(cmd_pool: &CommandPool) -> Result<Self, failure::Error> {
-        Ok(Self { a: A::new(cmd_pool)?, b: B::new(cmd_pool)? })
-    }
 
     fn create_descriptors(&self, descriptors: &mut DescriptorsBuilder) -> Result<(), Error> {
         self.a.create_descriptors(descriptors)?;

@@ -37,7 +37,7 @@ impl <V: Copy, T: BufferType> SubBuffer<V,T>{
             Bound::Unbounded => self.size
         };
         assert!(from<=to);
-        assert!(to<=self.len());
+        assert!(to<=self.bytes());
         Self{buff:self.buff.clone(), offset:self.offset+from, size:to-from}
     }
 
@@ -46,7 +46,7 @@ impl <V: Copy, T: BufferType> SubBuffer<V,T>{
 
 impl <V: Copy, T: BufferType> From<OwnedBuffer<V,T>> for SubBuffer<V,T>{
     fn from(b: OwnedBuffer<V, T>) -> Self {
-        let size = b.len();
+        let size = b.bytes();
         Self{buff:Rc::new(b), offset: 0, size }
     }
 }
@@ -63,7 +63,7 @@ impl <V: Copy, T: BufferType> Buffer<V,T> for SubBuffer<V,T> {
         self.offset
     }
 
-    fn len(&self) -> vk::DeviceSize {
+    fn bytes(&self) -> vk::DeviceSize {
         self.size
     }
 
