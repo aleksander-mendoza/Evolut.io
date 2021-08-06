@@ -1,3 +1,6 @@
+#ifndef DATA_COMP
+#define DATA_COMP
+#include "constants.comp"
 
 struct Particle{
     vec3 old_position;
@@ -19,14 +22,11 @@ struct Constraint{
 };
 
 struct Bone{
-    vec3 phantom; // position of phantom particle, relative to the particle1.
-    // The phantom particle does not participate in collision detection. It's merely used
-    // for the purpose of rendering (so that we know where the front of the bone is) and
-    // as an extra anchor for building distance constraints
-    uint particle1;
-    uint particle2;
-    vec3 direction;
-    int parent; // -1 if no parent
+    uvec4 particle_ids;
+    uint texture_variant;
+    uint part_variant;
+    uint dummy_field0;
+    uint dummy_field1;
 };
 
 int cell_position_to_idx(ivec3 cell_position){
@@ -40,3 +40,5 @@ Constraint collision_constraint(uint particle1, uint particle2){
     c.constant_param = -PARTICLE_DIAMETER;
     return c;
 }
+
+#endif // DATA_COMP

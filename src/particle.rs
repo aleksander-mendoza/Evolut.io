@@ -23,7 +23,7 @@ impl Particle{
         let new_position = glm::vec3(random::<f32>()*16.,3.+random::<f32>()*8.,random::<f32>()*16.);
         Self{
             new_position,
-            size: random::<f32>()*100.,
+            size: 50.+random::<f32>()*50.,
             old_position: new_position + Self::rand_vec3()*0.1,
             color: random::<f32>(),
         }

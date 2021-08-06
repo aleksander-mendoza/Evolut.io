@@ -44,7 +44,7 @@ mod particles;
 mod joint;
 mod game;
 mod player;
-mod bodies;
+mod bone;
 
 
 fn main() -> Result<(), failure::Error> {

@@ -21,6 +21,17 @@ impl VertexAttrib for glm::Vec4{
     const FORMAT: Format = vk::Format::R32G32B32A32_SFLOAT;
 }
 
+impl VertexAttrib for glm::UVec2{
+    const FORMAT: Format = vk::Format::R32G32_UINT;
+}
+
+impl VertexAttrib for glm::UVec3{
+    const FORMAT: Format = vk::Format::R32G32B32_UINT;
+}
+
+impl VertexAttrib for glm::UVec4{
+    const FORMAT: Format = vk::Format::R32G32B32A32_UINT;
+}
 impl VertexAttrib for u8{
     const FORMAT: Format = vk::Format::R8_UINT;
 }

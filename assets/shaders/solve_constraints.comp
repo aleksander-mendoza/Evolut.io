@@ -46,8 +46,6 @@ void main(){
             if (min_dist < distance_square && distance_square <= max_dist ) {
                 const float distance = sqrt(distance_square);//TODO: maybe I should approximate sqrt with less expensive function?
                 const vec3 collision_projection_delta =  0.5 * (distance - c.constant_param)*distance_vector/distance;
-//                p1 -= 0.1*collision_projection_delta;
-//                p2 += 0.1*collision_projection_delta;
                 atomicAdd(particles[c.particle1].new_position.x, -collision_projection_delta.x);
                 atomicAdd(particles[c.particle1].new_position.y, -collision_projection_delta.y);
                 atomicAdd(particles[c.particle1].new_position.z, -collision_projection_delta.z);

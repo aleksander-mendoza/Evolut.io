@@ -55,6 +55,7 @@ pub struct ShaderModule<T:ShaderStage>{
 impl <T:ShaderStage> ShaderModule<T> {
     pub fn new(src: &[u32], device: &Device) -> VkResult<Self> {
         let shader_module_create_info = vk::ShaderModuleCreateInfo::builder().code(src.into());
+
         unsafe { device.inner().create_shader_module(&shader_module_create_info, None) }
             .map(|m| Self { inner:Rc::new(ShaderModuleInner{m,device:device.clone() }),_p:PhantomData})
     }

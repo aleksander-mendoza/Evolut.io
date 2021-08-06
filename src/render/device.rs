@@ -9,13 +9,17 @@ use std::ffi::CStr;
 use std::rc::Rc;
 use ash::prelude::VkResult;
 
-const DEBUG_DEVICE_EXTENSIONS:[*const i8;2] = [
+
+
+const DEBUG_DEVICE_EXTENSIONS:[*const i8;3] = [
     b"VK_KHR_swapchain\0".as_ptr() as *const i8,
-    b"VK_KHR_shader_non_semantic_info\0".as_ptr() as *const i8
+    b"VK_KHR_shader_non_semantic_info\0".as_ptr() as *const i8,
+    b"VK_EXT_shader_atomic_float\0".as_ptr() as *const i8,
 ];
 
-const DEVICE_EXTENSIONS:[*const i8;1] = [
+const DEVICE_EXTENSIONS:[*const i8;2] = [
     b"VK_KHR_swapchain\0".as_ptr() as *const i8,
+    b"VK_EXT_shader_atomic_float\0".as_ptr() as *const i8,
 ];
 
 #[cfg(not(target_os = "macos"))]
@@ -143,13 +147,14 @@ impl Device {
         let features = vk::PhysicalDeviceFeatures::builder();
 
         let layers = get_validation_layer_support(entry)?;
-
+        let mut float_features = vk::PhysicalDeviceShaderAtomicFloatFeaturesEXT::builder().shader_buffer_float32_atomic_add(true);
         let extensions = device_extensions(debug);
         let device_create_info = vk::DeviceCreateInfo::builder()
             .queue_create_infos(std::slice::from_ref(&queue_create_info))
             .enabled_layer_names(layers)
             .enabled_features(&features)
-            .enabled_extension_names(&extensions);
+            .enabled_extension_names(&extensions)
+            .push_next(&mut float_features);
 
         let device = unsafe { instance.raw().create_device(physical_device, &device_create_info, None) }?;
 
