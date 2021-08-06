@@ -7,18 +7,18 @@ use crate::render::owned_buffer::{OwnedBuffer};
 use ash::vk;
 use crate::render::command_pool::CommandBuffer;
 use failure::err_msg;
-use crate::render::stage_buffer::VertexBuffer;
+use crate::render::stage_buffer::{VertexBuffer, VertexOwnedBuffer};
 
 pub struct ChunkFaces {
-    opaque_faces: VertexBuffer<Face>,
-    transparent_faces: VertexBuffer<Face>,
+    opaque_faces: VertexOwnedBuffer<Face>,
+    transparent_faces: VertexOwnedBuffer<Face>,
 }
 
 impl ChunkFaces {
-    pub fn opaque(&self) -> &VertexBuffer<Face> {
+    pub fn opaque(&self) -> &VertexOwnedBuffer<Face> {
         &self.opaque_faces
     }
-    pub fn transparent(&self) -> &VertexBuffer<Face> {
+    pub fn transparent(&self) -> &VertexOwnedBuffer<Face> {
         &self.transparent_faces
     }
     pub fn flush_opaque(&mut self, cmd:&mut CommandBuffer) {
@@ -34,10 +34,10 @@ impl ChunkFaces {
         self.transparent_faces.as_slice()
     }
     pub fn len_opaque(&self) -> usize {
-        self.opaque_faces.len()
+        self.opaque_faces.len() as usize
     }
     pub fn len_transparent(&self) -> usize {
-        self.transparent_faces.len()
+        self.transparent_faces.len() as usize
     }
     pub fn new(device:&Device) -> Result<Self,failure::Error> {
         Ok(Self {
@@ -86,7 +86,7 @@ impl ChunkFaces {
         let mut i = 0;
         debug_assert!(self.find_opaque(x, y, z).is_none());
         debug_assert!(self.find_transparent(x, y, z).is_some());
-        while i < self.transparent_faces.len() {
+        while i < self.len_transparent() {
             if self.transparent_faces[i].matches_coords(x, y, z) {
                 self.remove_transparent_at(i);
             } else {
@@ -102,7 +102,7 @@ impl ChunkFaces {
         debug_assert!(self.find_opaque(x, y, z).is_some());
         debug_assert!(self.find_transparent(x, y, z).is_none());
         let mut i = 0;
-        while i < self.opaque_faces.len() {
+        while i < self.len_opaque() {
             if self.opaque_faces[i].matches_coords(x, y, z) {
                 self.remove_opaque_at(i);
             } else {
@@ -133,7 +133,7 @@ impl ChunkFaces {
             }
         }
     }
-    fn borrow_transparent_and_opaque_mut(&mut self) -> (&mut VertexBuffer<Face>, &mut VertexBuffer<Face>) {
+    fn borrow_transparent_and_opaque_mut(&mut self) -> (&mut VertexOwnedBuffer<Face>, &mut VertexOwnedBuffer<Face>) {
         let Self { transparent_faces, opaque_faces, .. } = self;
         (transparent_faces, opaque_faces)
     }
@@ -156,7 +156,7 @@ impl ChunkFaces {
         };
 
         let mut i = 0;
-        while i < from.len() {
+        while i < from.len() as usize {
             if from[i].matches_coords(x, y, z) {
                 to.push(from.swap_remove(i))?;
             } else {

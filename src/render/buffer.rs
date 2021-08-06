@@ -3,23 +3,30 @@ use crate::render::device::Device;
 use ash::vk;
 use ash::version::DeviceV1_0;
 
-pub trait Buffer<V: Copy, T: BufferType> {
+pub trait Buffer<V: Copy, T: BufferType>:Sized {
     fn device(&self) -> &Device;
     fn raw(&self) -> vk::Buffer;
-    fn capacity(&self) -> usize;
-    fn offset(&self) -> usize;
-    fn len(&self) -> usize;
-    fn mem_capacity(&self) -> vk::DeviceSize {
-        (std::mem::size_of::<V>() * self.capacity()) as u64
+    fn offset(&self) -> vk::DeviceSize;
+    fn elements(&self) -> vk::DeviceSize{
+        self.len() / self.element_size() as u64
+    }
+    fn len(&self) -> vk::DeviceSize;
+    fn element_offset(&self, idx:u64) -> vk::DeviceSize {
+        assert!(idx<self.elements());
+        self.offset()+self.element_size() as u64 * idx
     }
     fn raw_mem(&self) -> vk::DeviceMemory;
+    fn with_capacity(device: &Device, max_elements: vk::DeviceSize) -> Result<Self, vk::Result>;
+    fn element_size(&self)->usize{
+        std::mem::size_of::<V>()
+    }
 }
 
 pub fn descriptor_info<V: Copy, T: AsDescriptor>(buff: &impl Buffer<V, T>) -> vk::DescriptorBufferInfo {
     vk::DescriptorBufferInfo {
         buffer: buff.raw(),
-        offset: buff.offset() as u64,
-        range: buff.mem_capacity(),
+        offset: buff.offset(),
+        range: buff.len(),
     }
 }
 
@@ -28,28 +35,29 @@ pub fn map_unmap_whole<V: Copy, T: CpuWriteable>(buff: &mut impl Buffer<V, T>, f
     map_unmap(buff, buff.offset(), buff.len(), f)
 }
 
-pub fn map_copy_unmap<V: Copy, T: CpuWriteable>(buff: &mut impl Buffer<V, T>, offset: usize, data: &[V]) -> Result<(), vk::Result> {
+pub fn map_copy_unmap<V: Copy, T: CpuWriteable>(buff: &mut impl Buffer<V, T>, offset: vk::DeviceSize, data: &[V]) -> Result<(), vk::Result> {
     unsafe {
-        unsafe_map_unmap(buff, offset, data.len(), |ptr| ptr.copy_from_nonoverlapping(data.as_ptr(), data.len()))
+        unsafe_map_unmap(buff, offset, data.len() as u64, |ptr| ptr.copy_from_nonoverlapping(data.as_ptr(), data.len()))
     }
 }
 
-pub fn map_unmap<V: Copy, T: CpuWriteable>(buff: &mut impl Buffer<V, T>, offset: usize, len: usize, f: impl FnOnce(&mut [V])) -> Result<(), vk::Result> {
+pub fn map_unmap<V: Copy, T: CpuWriteable>(buff: &mut impl Buffer<V, T>, offset: vk::DeviceSize, len: vk::DeviceSize, f: impl FnOnce(&mut [V])) -> Result<(), vk::Result> {
     unsafe {
-        unsafe_map_unmap(buff, offset, len, |ptr| f(std::slice::from_raw_parts_mut(ptr, len)))
+        unsafe_map_unmap(buff, offset, len, |ptr| f(std::slice::from_raw_parts_mut(ptr, len as usize)))
     }
 }
 
 pub unsafe fn map_whole<V: Copy, T: CpuWriteable>(buff: &mut impl Buffer<V, T>) -> Result<*mut V, vk::Result> {
-    map(buff, buff.offset(), buff.capacity())
+    map(buff, buff.offset(), buff.len())
 }
 
-pub unsafe fn map<V: Copy, T: CpuWriteable>(buff: &mut impl Buffer<V, T>, offset: usize, len: usize) -> Result<*mut V, vk::Result> {
-    assert!(offset + len <= buff.capacity());
+pub unsafe fn map<V: Copy, T: CpuWriteable>(buff: &mut impl Buffer<V, T>, offset: vk::DeviceSize, len: vk::DeviceSize) -> Result<*mut V, vk::Result> {
+    assert!(offset + len <= buff.len());
+    assert_eq!(len % buff.element_size() as u64,0,"Len: {} Type: {}",len, std::any::type_name::<V>() );
     buff.device().inner().map_memory(
         buff.raw_mem(),
-        (buff.offset() + offset) as u64,
-        len as u64,
+        buff.offset() + offset,
+        len,
         vk::MemoryMapFlags::empty(),
     ).map(|v| v as *mut V)
 }
@@ -58,7 +66,7 @@ pub unsafe fn unmap<V: Copy, T: CpuWriteable>(buff: &mut impl Buffer<V, T>) {
     buff.device().inner().unmap_memory(buff.raw_mem())
 }
 
-unsafe fn unsafe_map_unmap<V: Copy, T: CpuWriteable>(buff: &mut impl Buffer<V, T>, offset: usize, len: usize, f: impl FnOnce(*mut V)) -> Result<(), vk::Result> {
+unsafe fn unsafe_map_unmap<V: Copy, T: CpuWriteable>(buff: &mut impl Buffer<V, T>, offset: vk::DeviceSize, len: vk::DeviceSize, f: impl FnOnce(*mut V)) -> Result<(), vk::Result> {
     f(map(buff,offset, len)?);
     unmap(buff);
     Ok(())

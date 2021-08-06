@@ -29,7 +29,7 @@ impl CommandBuffer {
     pub fn raw(&self) -> vk::CommandBuffer{
         self.raw
     }
-    pub fn copy_from_staged_if_has_changes<V:Copy, C:CpuWriteable, G:GpuWriteable>(&mut self, staged: &mut StageBuffer<V, C, G>) -> &mut Self {
+    pub fn copy_from_staged_if_has_changes<V:Copy, C:CpuWriteable, G:GpuWriteable, B:Buffer<V,G>>(&mut self, staged: &mut StageBuffer<V, C, G, B>) -> &mut Self {
         if staged.has_unflushed_changes(){
             staged.mark_with_no_changes();
             self.copy_from_staged(staged)
@@ -37,22 +37,22 @@ impl CommandBuffer {
             self
         }
     }
-    pub fn copy_from_staged<V:Copy, C:CpuWriteable, G:GpuWriteable>(&mut self, staged: &StageBuffer<V, C, G>) -> &mut Self {
+    pub fn copy_from_staged<V:Copy, C:CpuWriteable, G:GpuWriteable, B:Buffer<V,G>>(&mut self, staged: &StageBuffer<V, C, G, B>) -> &mut Self {
         self.copy(staged.cpu(), staged.gpu())
 
     }
 
-    pub fn copy<V:Copy, T1: BufferType, T2: BufferType>(&mut self, src: &OwnedBuffer<V, T1>, dst: &OwnedBuffer<V, T2>) -> &mut Self {
-        assert_eq!(src.capacity(), dst.capacity());
+    pub fn copy<V:Copy, T1: BufferType, T2: BufferType>(&mut self, src: &impl Buffer<V, T1>, dst: &impl Buffer<V, T2>) -> &mut Self {
+        assert!(src.len() <= dst.len());
         unsafe {
             self.device.inner().cmd_copy_buffer(
                 self.raw,
                 src.raw(),
                 dst.raw(),
                 &[vk::BufferCopy {
-                    src_offset: 0,
-                    dst_offset: 0,
-                    size: src.mem_capacity(),
+                    src_offset: src.offset(),
+                    dst_offset: dst.offset(),
+                    size: src.len(),
                 }],
             )
         }
@@ -303,26 +303,26 @@ impl CommandBuffer {
         }
         self
     }
-    pub fn dispatch_indirect(&mut self, indirect_buffer:&OwnedBuffer<vk::DispatchIndirectCommand,GpuIndirect>, offset:usize) -> &mut Self {
+    pub fn dispatch_indirect(&mut self, indirect_buffer:&impl Buffer<vk::DispatchIndirectCommand,GpuIndirect>, offset:vk::DeviceSize) -> &mut Self {
         unsafe {
             self.device.inner().cmd_dispatch_indirect(
-                self.raw, indirect_buffer.raw(), (std::mem::size_of::<vk::DispatchIndirectCommand>()*offset) as u64
+                self.raw, indirect_buffer.raw(), indirect_buffer.element_offset(offset) as u64
             );
         }
         self
     }
-    pub fn fill<T:BufferType>(&mut self, buffer:&OwnedBuffer<u32,T>, value:u32) -> &mut Self {
+    pub fn fill<T:BufferType>(&mut self, buffer:&impl Buffer<u32,T>, value:u32) -> &mut Self {
         unsafe {
             self.device.inner().cmd_fill_buffer(
-                self.raw, buffer.raw(),0,(std::mem::size_of::<u32>()*buffer.len()) as u64,value
+                self.raw, buffer.raw(),buffer.offset(),buffer.len(),value
             );
         }
         self
     }
-    pub fn fill_zeros<V:Copy, T:BufferType>(&mut self, buffer:&OwnedBuffer<V,T>) -> &mut Self {
+    pub fn fill_zeros<V:Copy, T:BufferType>(&mut self, buffer:&impl Buffer<V,T>) -> &mut Self {
         unsafe {
             self.device.inner().cmd_fill_buffer(
-                self.raw, buffer.raw(),0,(std::mem::size_of::<V>()*buffer.len()) as u64,0
+                self.raw, buffer.raw(),buffer.offset(),buffer.len(),0
             );
         }
         self
@@ -340,7 +340,7 @@ impl CommandBuffer {
         }
         self
     }
-    pub fn vertex_input<V: VertexSource, T: BufferType>(&mut self, binding:BufferBinding<V>, buffer: &OwnedBuffer<V, T>) -> &mut Self{
+    pub fn vertex_input<V: VertexSource, T: BufferType>(&mut self, binding:BufferBinding<V>, buffer: &impl Buffer<V, T>) -> &mut Self{
         unsafe {
             self.device.inner().cmd_bind_vertex_buffers(
                 self.raw,
@@ -381,7 +381,7 @@ impl CommandBuffer {
             self.device.inner().cmd_draw_indirect(
                 self.raw,
                 buffer.raw(),
-                buffer.offset() as u64,
+                buffer.offset() ,
                 buffer.len() as u32,
                 std::mem::size_of::<vk::DrawIndirectCommand>() as u32,
             )

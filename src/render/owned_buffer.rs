@@ -18,7 +18,7 @@ use crate::render::buffer::Buffer;
 
 
 pub struct OwnedBuffer<V: Copy, T: BufferType> {
-    capacity: usize,
+    capacity_bytes: vk::DeviceSize,
     raw: vk::Buffer,
     mem: vk::DeviceMemory,
     device: Device,
@@ -42,26 +42,20 @@ impl <V: Copy, T: BufferType> Buffer<V, T> for OwnedBuffer<V, T>{
     fn raw(&self) -> vk::Buffer {
         self.raw
     }
-    fn capacity(&self) -> usize {
-        self.capacity
-    }
-    fn offset(&self) -> usize {
+    fn offset(&self) -> vk::DeviceSize {
         0
     }
-    fn len(&self) -> usize {
-        self.capacity()
+    fn len(&self) -> vk::DeviceSize {
+        self.capacity_bytes
     }
     fn raw_mem(&self) -> vk::DeviceMemory{
         self.mem
     }
-}
 
-
-impl<V: Copy, T: BufferType> OwnedBuffer<V, T> {
-
-    pub fn with_capacity(device: &Device, capacity: usize) -> Result<Self, vk::Result> {
+    fn with_capacity(device: &Device, max_elements: vk::DeviceSize) -> Result<Self, vk::Result> {
+        let capacity_bytes = std::mem::size_of::<V>() as u64 * max_elements;
         let vertex_buffer_create_info = vk::BufferCreateInfo::builder()
-            .size((std::mem::size_of::<V>() * capacity) as u64)
+            .size(capacity_bytes)
             .usage(T::USAGE)
             .sharing_mode(T::SHARING_MODE);
 
@@ -79,7 +73,7 @@ impl<V: Copy, T: BufferType> OwnedBuffer<V, T> {
             device.inner().bind_buffer_memory(vertex_buffer, vertex_buffer_memory, 0)?;
         }
         Ok(Self {
-            capacity,
+            capacity_bytes,
             raw: vertex_buffer,
             mem: vertex_buffer_memory,
             device: device.clone(),
@@ -93,15 +87,15 @@ impl<V: Copy, T: BufferType> OwnedBuffer<V, T> {
 
 impl<V: Copy, T: CpuWriteable> OwnedBuffer<V, T> {
     pub fn new(device: &Device, data: &[V]) -> Result<Self, vk::Result> {
-        let mut slf = Self::with_capacity(device, data.len())?;
+        let mut slf = Self::with_capacity(device, data.len() as u64)?;
         slf.map_copy_unmap(0, data);
         Ok(slf)
     }
-    pub fn map_copy_unmap(&mut self, offset: usize, data: &[V]) -> Result<(), vk::Result> {
-        super::buffer::map_copy_unmap(self, offset, data)
+    pub fn map_copy_unmap(&mut self, offset: vk::DeviceSize, data: &[V]) -> Result<(), vk::Result> {
+        super::buffer::map_copy_unmap(self, offset , data)
     }
-    pub fn map_unmap(&mut self, offset: usize, len: usize, f: impl FnOnce(&mut [V])) -> Result<(), vk::Result> {
-        super::buffer::map_unmap(self, offset, len, f)
+    pub fn map_unmap(&mut self, offset: vk::DeviceSize, len: vk::DeviceSize, f: impl FnOnce(&mut [V])) -> Result<(), vk::Result> {
+        super::buffer::map_unmap(self, offset , len, f)
     }
 
 }

@@ -45,6 +45,7 @@ mod joint;
 mod game;
 mod player;
 mod bone;
+mod constraint;
 
 
 fn main() -> Result<(), failure::Error> {

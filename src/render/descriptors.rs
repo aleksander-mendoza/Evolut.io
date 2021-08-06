@@ -17,7 +17,7 @@ use crate::render::buffer::descriptor_info;
 
 enum DescriptorUniform {
     Sampler(DescriptorImageInfo),
-    Buffer(/*type size*/usize, /*element count*/usize),
+    Buffer(/*size in bytes*/usize),
 }
 
 pub struct DescriptorsBuilder {
@@ -59,7 +59,7 @@ impl DescriptorsBuilder {
     pub fn array_uniform_buffer<T: Copy, const size: usize>(&mut self, buffer: &[T; size]) -> UniformBufferBinding<T, size> {
         let new_idx = self.descriptors.len();
         self.bindings.push(buffer.create_binding(new_idx as u32));
-        self.descriptors.push(DescriptorUniform::Buffer(std::mem::size_of::<T>(), size));
+        self.descriptors.push(DescriptorUniform::Buffer(std::mem::size_of::<[T; size]>()));
         UniformBufferBinding::new(new_idx)
     }
 
@@ -89,7 +89,7 @@ impl DescriptorsBuilderLocked {
                         DescriptorUniform::Sampler(sampler_info) => {
                             descriptor_set.update_sampler_raw(binding as u32, sampler_info);
                         }
-                        &DescriptorUniform::Buffer(type_size, elem_count) => {
+                        &DescriptorUniform::Buffer(size) => {
                             descriptor_set.update_uniform_buffer_raw(binding as u32, &descriptor_info(uniform_buffers[binding].buffer_per_frame[frame].buffer()));
                         }
                     }
@@ -114,17 +114,17 @@ impl UniformBuffers {
             DescriptorUniform::Sampler(_) => {
                 Ok(Self::sampler())
             }
-            &DescriptorUniform::Buffer(type_size, elem_count) => {
-                Self::buffer(swapchain, type_size, elem_count)
+            &DescriptorUniform::Buffer(size) => {
+                Self::buffer(swapchain, size as u64)
             }
         }
     }
     fn sampler() -> Self {
         Self { buffer_per_frame: Vec::new() }
     }
-    fn buffer(swapchain: &SwapChain, type_size: usize, elem_count: usize) -> Result<Self,vk::Result> {
+    fn buffer(swapchain: &SwapChain, size: vk::DeviceSize) -> Result<Self,vk::Result> {
         let buffers: Result<Vec<HostBuffer<u8, Uniform>>, vk::Result> = (0..swapchain.len()).into_iter()
-            .map(|_| HostBuffer::with_capacity(swapchain.device(), type_size * elem_count)).collect();
+            .map(|_| HostBuffer::with_capacity(swapchain.device(), size)).collect();
         Ok(Self { buffer_per_frame: buffers? })
     }
 }

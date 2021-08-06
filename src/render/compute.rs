@@ -39,7 +39,7 @@ impl ComputePipelineBuilder {
         self.shader.insert((CString::new(name).expect("Compute shader's function name contains null character"), shader));
         self
     }
-    pub fn storage_buffer<T: Copy>(&mut self, buffer: &OwnedBuffer<T, impl AsStorage>) -> StorageBufferBinding<T> {
+    pub fn storage_buffer<V: Copy, T:AsStorage>(&mut self, buffer: &impl Buffer<V, T>) -> StorageBufferBinding<V> {
         let new_index = self.bindings.len() as u32;
         self.bindings.push(vk::DescriptorSetLayoutBinding {
             binding: new_index,
@@ -52,12 +52,12 @@ impl ComputePipelineBuilder {
         StorageBufferBinding(new_index, PhantomData)
     }
 
-    pub fn uniform_buffer<T: Copy>(&mut self, buffer: &OwnedBuffer<T, Uniform>) -> UniformBufferBinding<T> {
+    pub fn uniform_buffer<V: Copy>(&mut self, buffer: &impl Buffer<V,Uniform> ) -> UniformBufferBinding<V> {
         let new_index = self.bindings.len() as u32;
         self.bindings.push(vk::DescriptorSetLayoutBinding {
             binding: new_index,
             descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
-            descriptor_count: buffer.len() as u32,
+            descriptor_count: buffer.elements() as u32,
             stage_flags: vk::ShaderStageFlags::COMPUTE,
             p_immutable_samplers: std::ptr::null(),
         });

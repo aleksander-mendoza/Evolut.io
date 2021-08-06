@@ -9,46 +9,49 @@ use crate::render::buffer_type::CpuWriteable;
 
 pub struct Vector<V: Copy, C: CpuWriteable> {
     cpu: HostBuffer<V, C>,
-    len: usize,
+    len: vk::DeviceSize,
 }
 impl<V: Copy, C: CpuWriteable> Vector<V, C> {
 
     pub fn buffer(&self) -> &OwnedBuffer<V, C> {
         &self.cpu.buffer()
     }
-    pub fn capacity(&self) -> usize {
-        self.cpu.capacity()
+    pub fn capacity(&self) -> vk::DeviceSize {
+        self.cpu.elements()
+    }
+    pub fn len(&self) -> vk::DeviceSize {
+        self.len
     }
     pub fn device(&self) -> &Device {
         self.cpu.device()
     }
-    pub fn with_capacity(device: &Device, capacity: usize) -> Result<Self, vk::Result> {
-        let mut cpu = HostBuffer::with_capacity(device, capacity)?;
+    pub fn with_capacity(device: &Device, max_elements: vk::DeviceSize) -> Result<Self, vk::Result> {
+        let mut cpu = HostBuffer::with_capacity(device, max_elements)?;
         Ok(Self { cpu, len: 0 })
     }
-    pub unsafe fn set_len(&mut self, len: usize) {
+    pub unsafe fn set_len(&mut self, len: vk::DeviceSize) {
         assert!(len <= self.capacity());
         self.len = len;
     }
     pub fn as_slice_mut(&mut self) -> &mut [V] {
-        debug_assert!(self.len <= self.cpu.capacity());
-        unsafe { std::slice::from_raw_parts_mut(self.cpu.as_mut_ptr(), self.len) }
+        debug_assert!(self.len() <= self.capacity());
+        unsafe { std::slice::from_raw_parts_mut(self.cpu.as_mut_ptr(), self.len() as usize) }
     }
     pub fn as_slice(&self) -> &[V] {
-        debug_assert!(self.len <= self.cpu.capacity());
-        unsafe { std::slice::from_raw_parts(self.cpu.as_ptr(), self.len) }
+        debug_assert!(self.len() <= self.capacity());
+        unsafe { std::slice::from_raw_parts(self.cpu.as_ptr(), self.len() as usize) }
     }
     pub fn new(device: &Device, data: &[V]) -> Result<Self, vk::Result> {
-        let mut slf = Self::with_capacity(device, data.len())?;
-        unsafe { slf.set_len(data.len()) }
+        let mut slf = Self::with_capacity(device, data.len() as u64)?;
+        unsafe { slf.set_len(data.len() as u64) }
         slf.as_slice_mut().copy_from_slice(data);
         Ok(slf)
     }
-    pub fn reallocate(&mut self, new_capacity: usize) -> Result<(), vk::Result> {
-        let mut cpu = HostBuffer::<V, C>::with_capacity(self.device(), new_capacity)?;
-        self.len = self.len.min(new_capacity);
+    pub fn reallocate(&mut self, new_max_elements: vk::DeviceSize) -> Result<(), vk::Result> {
+        let mut cpu = HostBuffer::<V, C>::with_capacity(self.device(), new_max_elements)?;
+        self.len = self.len.min(new_max_elements);
         unsafe {
-            cpu.as_mut_ptr().copy_from_nonoverlapping(self.as_ptr(), self.len)
+            cpu.as_mut_ptr().copy_from_nonoverlapping(self.as_ptr(), self.len() as usize)
         }
         self.cpu = cpu;
         Ok(())
@@ -59,7 +62,7 @@ impl<V: Copy, C: CpuWriteable> Vector<V, C> {
     }
     pub fn swap_remove(&mut self, idx:usize) -> V{
         let last = self.len()-1;
-        self.swap(idx,last);
+        self.swap(idx,last as usize);
         unsafe{self.set_len(last)}
         unsafe{self.as_ptr().offset(last as isize).read()}
     }

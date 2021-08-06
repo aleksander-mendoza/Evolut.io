@@ -8,18 +8,24 @@ use crate::render::data::VertexSource;
 use crate::render::vector::Vector;
 use std::collections::btree_map::IterMut;
 use crate::render::buffer_type::{GpuWriteable, CpuWriteable, GpuIndirect, Cpu, Gpu};
+use crate::render::buffer::Buffer;
+use crate::render::subbuffer::SubBuffer;
+use std::marker::PhantomData;
 
-pub struct StageBuffer<V: Copy, C: CpuWriteable, G: GpuWriteable> {
-    gpu: OwnedBuffer<V, G>,
+pub type StageOwnedBuffer<V: Copy, C: CpuWriteable, G: GpuWriteable> = StageBuffer<V,C,G,OwnedBuffer<V,G>>;
+pub type StageSubBuffer<V: Copy, C: CpuWriteable, G: GpuWriteable> = StageBuffer<V,C,G,SubBuffer<V,G>>;
+pub struct StageBuffer<V: Copy, C: CpuWriteable, G: GpuWriteable, B:Buffer<V, G>> {
+    gpu: B,
     cpu: Vector<V, C>,
-    has_unflushed_changes:bool
+    has_unflushed_changes:bool,
+    _g:PhantomData<G>
 }
 
-impl<V: Copy, C: CpuWriteable, G: GpuWriteable> StageBuffer<V, C, G> {
-    pub fn len(&self) -> usize {
+impl<V: Copy, C: CpuWriteable, G: GpuWriteable, B:Buffer<V, G>> StageBuffer<V, C, G, B> {
+    pub fn len(&self) -> vk::DeviceSize {
         self.cpu.len()
     }
-    pub fn capacity(&self) -> usize {
+    pub fn capacity(&self) -> vk::DeviceSize {
         self.cpu.capacity()
     }
     pub fn device(&self) -> &Device {
@@ -28,6 +34,82 @@ impl<V: Copy, C: CpuWriteable, G: GpuWriteable> StageBuffer<V, C, G> {
     pub fn cpu(&self) -> &OwnedBuffer<V, C> {
         self.cpu.buffer()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.cpu.is_empty()
+    }
+    pub fn has_unflushed_changes(&self) -> bool {
+        self.has_unflushed_changes
+    }
+    pub fn mark_with_unflushed_changes(&mut self) {
+        self.has_unflushed_changes = true
+    }
+    pub fn mark_with_no_changes(&mut self) {
+        self.has_unflushed_changes = false
+    }
+
+
+    pub fn swap(&mut self, idx1:usize, idx2:usize) {
+        self.cpu.swap(idx1,idx2);
+        self.has_unflushed_changes = true;
+    }
+
+    pub fn as_slice_mut(&mut self) -> &mut [V] {
+        self.cpu.as_slice_mut()
+    }
+    pub fn as_slice(&self) -> &[V] {
+        self.cpu.as_slice()
+    }
+    pub fn iter(&self) -> std::slice::Iter<V> {
+        self.cpu.iter()
+    }
+    pub fn iter_mut(&mut self) -> std::slice::IterMut<V> {
+        self.cpu.iter_mut()
+    }
+
+    pub fn gpu(&self) -> &B {
+        &self.gpu
+    }
+    pub fn take_gpu(self) -> B {
+        let Self{gpu, ..} = self;
+        gpu
+    }
+    pub fn with_capacity(device: &Device, max_elements: vk::DeviceSize) -> Result<Self, vk::Result> {
+        let cpu = Vector::with_capacity(device, max_elements)?;
+        let gpu = B::with_capacity(device, max_elements)?;
+        Ok(Self { cpu, gpu, has_unflushed_changes: false,_g:PhantomData })
+    }
+    pub fn new(cmd: &CommandPool, data: &[V]) -> Result<Submitter<Self>, vk::Result> {
+        Self::new_with_capacity(cmd,data,data.len() as u64)
+    }
+    pub fn new_with_capacity(cmd: &CommandPool, data: &[V], max_elements:vk::DeviceSize) -> Result<Submitter<Self>, vk::Result> {
+        assert!(max_elements>=data.len() as u64);
+        let mut slf = Submitter::new(Self::with_capacity(cmd.device(), max_elements)?,cmd)?;
+        unsafe { slf.set_len(data.len() as u64) }
+        slf.as_slice_mut().copy_from_slice(data);
+        slf.flush_to_gpu()?;
+        Ok(slf)
+    }
+    pub unsafe fn set_len(&mut self, len: vk::DeviceSize) {
+        if len != self.len(){
+            self.cpu.set_len(len);
+            self.has_unflushed_changes = true;
+        }
+    }
+}
+impl<V: Copy, C: CpuWriteable, G: GpuWriteable> StageBuffer<V, C, G, SubBuffer<V,G>> {
+    pub fn wrap(cmd: &CommandPool, data: &[V], gpu:SubBuffer<V,G>)->Result<Submitter<Self>, vk::Result>{
+        assert!((data.len()*std::mem::size_of::<V>()) as u64 <= gpu.len() );
+        let cpu = Vector::with_capacity(cmd.device(), data.len() as u64)?;
+        let mut slf = Submitter::new(Self{cpu,gpu,has_unflushed_changes:false, _g:PhantomData},cmd)?;
+        unsafe { slf.set_len(data.len() as u64) }
+        slf.as_slice_mut().copy_from_slice(data);
+        slf.flush_to_gpu()?;
+        Ok(slf)
+    }
+}
+
+impl<V: Copy, C: CpuWriteable, G: GpuWriteable> StageBuffer<V, C, G, OwnedBuffer<V,G>> {
     /**Returns true if the backing buffer need to be reallocated. In such cases the GPU memory becomes invalidated, and you need to re-record all command buffers that make use of it.
     Whether any reallocation occurred or not, the GPU is never flushed automatically. You need to decide when the most optimal time for flush is*/
     pub fn push(&mut self, v: V) -> Result<bool, vk::Result> {
@@ -42,81 +124,25 @@ impl<V: Copy, C: CpuWriteable, G: GpuWriteable> StageBuffer<V, C, G> {
         self.has_unflushed_changes = true;
         out
     }
-    pub fn is_empty(&self) -> bool {
-        self.cpu.is_empty()
-    }
-    pub fn has_unflushed_changes(&self) -> bool {
-        self.has_unflushed_changes
-    }
-    pub fn mark_with_unflushed_changes(&mut self) {
-        self.has_unflushed_changes = true
-    }
-    pub fn mark_with_no_changes(&mut self) {
-        self.has_unflushed_changes = false
-    }
     pub fn pop(&mut self) -> V {
         self.has_unflushed_changes = true;
         self.cpu.pop()
-    }
-    pub unsafe fn set_len(&mut self, len: usize) {
-        if len != self.len(){
-            self.cpu.set_len(len);
-            self.has_unflushed_changes = true;
-        }
-    }
-    pub fn swap(&mut self, idx1:usize, idx2:usize) {
-        self.cpu.swap(idx1,idx2);
-        self.has_unflushed_changes = true;
     }
     pub fn swap_remove(&mut self, idx:usize) -> V {
         self.has_unflushed_changes = true;
         self.cpu.swap_remove(idx)
     }
-    pub fn as_slice_mut(&mut self) -> &mut [V] {
-        self.cpu.as_slice_mut()
-    }
-    pub fn as_slice(&self) -> &[V] {
-        self.cpu.as_slice()
-    }
-    pub fn iter(&self) -> std::slice::Iter<V> {
-        self.cpu.iter()
-    }
-    pub fn iter_mut(&mut self) -> std::slice::IterMut<V> {
-        self.cpu.iter_mut()
-    }
     /**The GPU memory becomes invalidated and needs to be flushed again manually. You also need to re-record all command buffers that make use of it.*/
-    pub fn reallocate(&mut self, new_capacity: usize) -> Result<(), vk::Result> {
-        self.cpu.reallocate(new_capacity)?;
-        self.gpu = OwnedBuffer::with_capacity(self.device(), new_capacity)?;
+    pub fn reallocate(&mut self, new_max_elements: vk::DeviceSize) -> Result<(), vk::Result> {
+        self.cpu.reallocate(new_max_elements)?;
+        self.gpu = OwnedBuffer::with_capacity(self.device(), new_max_elements)?;
         self.has_unflushed_changes = true;
         Ok(())
     }
-    pub fn gpu(&self) -> &OwnedBuffer<V, G> {
-        &self.gpu
-    }
-    pub fn take_gpu(self) -> OwnedBuffer<V, G> {
-        let Self{gpu, ..} = self;
-        gpu
-    }
-    pub fn with_capacity(device: &Device, capacity: usize) -> Result<Self, vk::Result> {
-        let cpu = Vector::with_capacity(device, capacity)?;
-        let gpu = OwnedBuffer::with_capacity(device, capacity)?;
-        Ok(Self { cpu, gpu, has_unflushed_changes: false })
-    }
-    pub fn new(cmd: &CommandPool, data: &[V]) -> Result<Submitter<Self>, vk::Result> {
-        Self::new_with_capacity(cmd,data,data.len())
-    }
-    pub fn new_with_capacity(cmd: &CommandPool, data: &[V], capacity:usize) -> Result<Submitter<Self>, vk::Result> {
-        assert!(capacity>=data.len());
-        let mut slf = Submitter::new(Self::with_capacity(cmd.device(), capacity)?,cmd)?;
-        unsafe { slf.set_len(data.len()) }
-        slf.as_slice_mut().copy_from_slice(data);
-        slf.flush_to_gpu()?;
-        Ok(slf)
-    }
+
 }
 
-impl <V:Copy,C:CpuWriteable,G:GpuWriteable> Submitter<StageBuffer<V,C,G>>{
+impl <V:Copy,C:CpuWriteable,G:GpuWriteable,B:Buffer<V, G>> Submitter<StageBuffer<V,C,G,B>>{
     pub fn flush_to_gpu(&mut self) -> Result<(), vk::Result> {
         let (cmd,buff) = self.inner_val();
         cmd.reset()?
@@ -128,7 +154,7 @@ impl <V:Copy,C:CpuWriteable,G:GpuWriteable> Submitter<StageBuffer<V,C,G>>{
     }
 }
 
-impl<V: Copy, C: CpuWriteable, G: GpuWriteable> Index<usize> for StageBuffer<V, C, G> {
+impl<V: Copy, C: CpuWriteable, G: GpuWriteable,B:Buffer<V, G>> Index<usize> for StageBuffer<V, C, G,B> {
     type Output = V;
 
     fn index(&self, index: usize) -> &Self::Output {
@@ -136,31 +162,35 @@ impl<V: Copy, C: CpuWriteable, G: GpuWriteable> Index<usize> for StageBuffer<V, 
     }
 }
 
-impl<V: Copy, C: CpuWriteable, G: GpuWriteable> IndexMut<usize> for StageBuffer<V, C, G> {
+impl<V: Copy, C: CpuWriteable, G: GpuWriteable,B:Buffer<V, G>> IndexMut<usize> for StageBuffer<V, C, G,B> {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         &mut self.cpu[index]
     }
 }
-pub type VertexBuffer<V: VertexSource> = StageBuffer<V, Cpu, Gpu>;
+pub type VertexBuffer<V: VertexSource,B:Buffer<V, Gpu>> = StageBuffer<V, Cpu, Gpu,B>;
+pub type VertexOwnedBuffer<V: VertexSource> = VertexBuffer<V,OwnedBuffer<V,Gpu>>;
+pub type VertexSubBuffer<V: VertexSource> = VertexBuffer<V,SubBuffer<V,Gpu>>;
 
-impl<V: Copy> VertexBuffer<V> {
+impl<V: Copy,B:Buffer<V, Gpu>> VertexBuffer<V,B> {
     pub fn new_vertex_buffer(cmd: &CommandPool, data: &[V]) -> Result<Submitter<Self>, vk::Result> {
         Self::new(cmd, data)
     }
 }
 
-pub type IndirectBuffer = StageBuffer<vk::DrawIndirectCommand, Cpu, GpuIndirect>;
-
-impl IndirectBuffer {
+pub type IndirectBuffer<B:Buffer<Cpu, GpuIndirect>> = StageBuffer<vk::DrawIndirectCommand, Cpu, GpuIndirect,B>;
+pub type IndirectOwnedBuffer = IndirectBuffer<OwnedBuffer<vk::DrawIndirectCommand, GpuIndirect>>;
+pub type IndirectSubBuffer = IndirectBuffer<SubBuffer<vk::DrawIndirectCommand, GpuIndirect>>;
+impl <B:Buffer<vk::DrawIndirectCommand, GpuIndirect>> IndirectBuffer<B> {
     pub fn new_indirect_buffer(cmd: &CommandPool, data: &[vk::DrawIndirectCommand]) -> Result<Submitter<Self>, vk::Result> {
         Self::new(cmd, data)
     }
 }
 
 
-pub type IndirectDispatchBuffer = StageBuffer<vk::DispatchIndirectCommand, Cpu, GpuIndirect>;
-
-impl IndirectDispatchBuffer {
+pub type IndirectDispatchBuffer<B:Buffer<Cpu, GpuIndirect>> = StageBuffer<vk::DispatchIndirectCommand, Cpu, GpuIndirect, B>;
+pub type IndirectDispatchOwnedBuffer = IndirectDispatchBuffer<OwnedBuffer<vk::DispatchIndirectCommand, GpuIndirect>>;
+pub type IndirectDispatchSubBuffer = IndirectDispatchBuffer<SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>>;
+impl <B:Buffer<vk::DispatchIndirectCommand, GpuIndirect>> IndirectDispatchBuffer<B> {
     pub fn new_indirect_dispatch_buffer(cmd: &CommandPool, data: &[vk::DispatchIndirectCommand]) -> Result<Submitter<Self>, vk::Result> {
         Self::new(cmd, data)
     }
