@@ -1,16 +1,18 @@
-use crate::render::buffer::{Buffer, CpuWriteable};
+use crate::render::owned_buffer::{OwnedBuffer};
 use std::ptr::NonNull;
 use crate::render::device::Device;
 use ash::vk;
 use std::ops::{Deref, DerefMut};
+use crate::render::buffer_type::CpuWriteable;
+use crate::render::buffer::{Buffer, map};
 
 pub struct HostBuffer<V: Copy, C: CpuWriteable> {
-    cpu: Buffer<V, C>,
+    cpu: OwnedBuffer<V, C>,
     data_ptr: NonNull<V>,
 }
 impl<V: Copy, C: CpuWriteable> HostBuffer<V, C> {
 
-    pub fn buffer(&self) -> &Buffer<V, C> {
+    pub fn buffer(&self) -> &OwnedBuffer<V, C> {
         &self.cpu
     }
     pub fn capacity(&self) -> usize {
@@ -20,8 +22,8 @@ impl<V: Copy, C: CpuWriteable> HostBuffer<V, C> {
         self.cpu.device()
     }
     pub fn with_capacity(device: &Device, capacity: usize) -> Result<Self, vk::Result> {
-        let mut cpu = Buffer::with_capacity(device, capacity)?;
-        let data_ptr = unsafe { NonNull::new_unchecked(cpu.map(0, capacity)?) };
+        let mut cpu = OwnedBuffer::with_capacity(device, capacity)?;
+        let data_ptr = unsafe { NonNull::new_unchecked(map(&mut cpu,0, capacity)?) };
         Ok(Self { cpu, data_ptr })
     }
     pub fn as_slice_mut(&mut self) -> &mut [V] {

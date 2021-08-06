@@ -1,6 +1,5 @@
 use crate::render::stage_buffer::StageBuffer;
 use crate::particle::Particle;
-use crate::render::buffer::{Cpu, Gpu, Storage};
 use crate::render::command_pool::{CommandPool, CommandBuffer};
 use crate::render::shader_module::{ShaderModule, Fragment, Vertex};
 use ash::vk::ShaderStageFlags;
@@ -13,6 +12,7 @@ use crate::render::single_render_pass::SingleRenderPass;
 use crate::render::swap_chain::SwapchainImageIdx;
 use crate::render::submitter::Submitter;
 use crate::player::Player;
+use crate::render::buffer_type::{Cpu, Storage};
 
 pub struct ParticleResources {
     particles: Submitter<StageBuffer<Particle, Cpu, Storage>>,

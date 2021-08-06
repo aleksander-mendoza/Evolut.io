@@ -41,4 +41,10 @@ Constraint collision_constraint(uint particle1, uint particle2){
     return c;
 }
 
+struct DispatchIndirectCommand{
+    uint    x;
+    uint    y;
+    uint    z;
+};
+
 #endif // DATA_COMP

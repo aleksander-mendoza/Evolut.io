@@ -8,7 +8,7 @@ use crate::render::pipeline::{Pipeline, PushConstant, BufferBinding};
 use crate::render::semaphore::Semaphore;
 use ash::prelude::VkResult;
 use crate::render::fence::Fence;
-use crate::render::buffer::{Buffer, Type, Gpu, Cpu, GpuIndirect, CpuWriteable, GpuWriteable, DeviceLocal};
+use crate::render::owned_buffer::{OwnedBuffer};
 use crate::render::data::{VertexSource, VertexAttrib};
 use crate::render::descriptor_pool::DescriptorSet;
 use crate::render::texture::{Dim, Texture};
@@ -18,6 +18,8 @@ use std::rc::Rc;
 use crate::render::util::any_as_u8_slice;
 use crate::render::stage_buffer::StageBuffer;
 use crate::render::compute::{ComputePipelineBuilder, ComputePipeline};
+use crate::render::buffer_type::{GpuWriteable, CpuWriteable, GpuIndirect, BufferType, AsStorage};
+use crate::render::buffer::{Buffer, make_buffer_barrier};
 
 pub struct CommandBuffer {
     raw: vk::CommandBuffer,
@@ -40,7 +42,7 @@ impl CommandBuffer {
 
     }
 
-    pub fn copy<V:Copy, T1: Type, T2: Type>(&mut self, src: &Buffer<V, T1>, dst: &Buffer<V, T2>) -> &mut Self {
+    pub fn copy<V:Copy, T1: BufferType, T2: BufferType>(&mut self, src: &OwnedBuffer<V, T1>, dst: &OwnedBuffer<V, T2>) -> &mut Self {
         assert_eq!(src.capacity(), dst.capacity());
         unsafe {
             self.device.inner().cmd_copy_buffer(
@@ -57,7 +59,7 @@ impl CommandBuffer {
         self
     }
 
-    pub fn copy_to_image<V:Copy, T: Type, D: Dim>(&mut self, src: &Buffer<V, T>, dst: &Texture<D, Color>, img_layout: vk::ImageLayout) -> &mut Self {
+    pub fn copy_to_image<V:Copy, T: BufferType, D: Dim>(&mut self, src: &OwnedBuffer<V, T>, dst: &Texture<D, Color>, img_layout: vk::ImageLayout) -> &mut Self {
         // assert_eq!(src.capacity(),dst.capacity());
         unsafe {
             self.device.inner().cmd_copy_buffer_to_image(
@@ -82,7 +84,7 @@ impl CommandBuffer {
         }
         self
     }
-    pub fn buffer_barrier<V:Copy,T:Type>(&mut self, buffer:&Buffer<V,T>, src_access_mask: vk::AccessFlags, dst_access_mask: vk::AccessFlags,source_stage: vk::PipelineStageFlags, destination_stage: vk::PipelineStageFlags) -> &mut Self{
+    pub fn buffer_barrier<V:Copy,T:AsStorage>(&mut self, buffer:&OwnedBuffer<V,T>, src_access_mask: vk::AccessFlags, dst_access_mask: vk::AccessFlags, source_stage: vk::PipelineStageFlags, destination_stage: vk::PipelineStageFlags) -> &mut Self{
         unsafe {
             self.device.inner().cmd_pipeline_barrier(
                 self.raw,
@@ -90,7 +92,7 @@ impl CommandBuffer {
                 destination_stage,
                 vk::DependencyFlags::empty(),
                 &[],
-                &[buffer.make_buffer_barrier(src_access_mask, dst_access_mask)],
+                &[make_buffer_barrier(buffer,src_access_mask, dst_access_mask)],
                 &[],
             )
         }
@@ -198,7 +200,7 @@ impl CommandBuffer {
     //         .end()
     // }
     //
-    // pub fn single_pass_vertex_input<V: VertexSource, T: Type>(&mut self,
+    // pub fn single_pass_vertex_input<V: VertexSource, T: BufferType>(&mut self,
     //                                                           usage: vk::CommandBufferUsageFlags,
     //                                                           render_pass: &RenderPass,
     //                                                           framebuffer: &Framebuffer,
@@ -215,7 +217,7 @@ impl CommandBuffer {
     //         .end()
     // }
     //
-    // pub fn single_pass_vertex_input_uniform<V: VertexSource, T: Type>(&mut self,
+    // pub fn single_pass_vertex_input_uniform<V: VertexSource, T: BufferType>(&mut self,
     //                                                                   usage: vk::CommandBufferUsageFlags,
     //                                                                   render_pass: &RenderPass,
     //                                                                   framebuffer: &Framebuffer,
@@ -301,7 +303,7 @@ impl CommandBuffer {
         }
         self
     }
-    pub fn dispatch_indirect(&mut self,indirect_buffer:&Buffer<vk::DispatchIndirectCommand,GpuIndirect>, offset:usize) -> &mut Self {
+    pub fn dispatch_indirect(&mut self, indirect_buffer:&OwnedBuffer<vk::DispatchIndirectCommand,GpuIndirect>, offset:usize) -> &mut Self {
         unsafe {
             self.device.inner().cmd_dispatch_indirect(
                 self.raw, indirect_buffer.raw(), (std::mem::size_of::<vk::DispatchIndirectCommand>()*offset) as u64
@@ -309,7 +311,7 @@ impl CommandBuffer {
         }
         self
     }
-    pub fn fill<T:Type>(&mut self, buffer:&Buffer<u32,T>, value:u32) -> &mut Self {
+    pub fn fill<T:BufferType>(&mut self, buffer:&OwnedBuffer<u32,T>, value:u32) -> &mut Self {
         unsafe {
             self.device.inner().cmd_fill_buffer(
                 self.raw, buffer.raw(),0,(std::mem::size_of::<u32>()*buffer.len()) as u64,value
@@ -317,7 +319,7 @@ impl CommandBuffer {
         }
         self
     }
-    pub fn fill_zeros<V:Copy, T:Type>(&mut self, buffer:&Buffer<V,T>) -> &mut Self {
+    pub fn fill_zeros<V:Copy, T:BufferType>(&mut self, buffer:&OwnedBuffer<V,T>) -> &mut Self {
         unsafe {
             self.device.inner().cmd_fill_buffer(
                 self.raw, buffer.raw(),0,(std::mem::size_of::<V>()*buffer.len()) as u64,0
@@ -338,7 +340,7 @@ impl CommandBuffer {
         }
         self
     }
-    pub fn vertex_input<V: VertexSource, T: Type>(&mut self, binding:BufferBinding<V>,buffer: &Buffer<V, T>) -> &mut Self{
+    pub fn vertex_input<V: VertexSource, T: BufferType>(&mut self, binding:BufferBinding<V>, buffer: &OwnedBuffer<V, T>) -> &mut Self{
         unsafe {
             self.device.inner().cmd_bind_vertex_buffers(
                 self.raw,
@@ -374,7 +376,7 @@ impl CommandBuffer {
         }
         self
     }
-    pub fn draw_indirect(&mut self, buffer: &Buffer<vk::DrawIndirectCommand, GpuIndirect>)->&mut Self {
+    pub fn draw_indirect(&mut self, buffer: &OwnedBuffer<vk::DrawIndirectCommand, GpuIndirect>) ->&mut Self {
         unsafe {
             self.device.inner().cmd_draw_indirect(
                 self.raw,

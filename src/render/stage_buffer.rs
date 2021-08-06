@@ -1,15 +1,16 @@
 use ash::vk;
 use crate::render::submitter::Submitter;
-use crate::render::buffer::{GpuWriteable, CpuWriteable, Cpu, GpuIndirect, Buffer, Gpu};
+use crate::render::owned_buffer::{OwnedBuffer};
 use std::ops::{Index, IndexMut};
 use crate::render::device::Device;
 use crate::render::command_pool::CommandPool;
 use crate::render::data::VertexSource;
 use crate::render::vector::Vector;
 use std::collections::btree_map::IterMut;
+use crate::render::buffer_type::{GpuWriteable, CpuWriteable, GpuIndirect, Cpu, Gpu};
 
 pub struct StageBuffer<V: Copy, C: CpuWriteable, G: GpuWriteable> {
-    gpu: Buffer<V, G>,
+    gpu: OwnedBuffer<V, G>,
     cpu: Vector<V, C>,
     has_unflushed_changes:bool
 }
@@ -24,7 +25,7 @@ impl<V: Copy, C: CpuWriteable, G: GpuWriteable> StageBuffer<V, C, G> {
     pub fn device(&self) -> &Device {
         self.cpu.device()
     }
-    pub fn cpu(&self) -> &Buffer<V, C> {
+    pub fn cpu(&self) -> &OwnedBuffer<V, C> {
         self.cpu.buffer()
     }
     /**Returns true if the backing buffer need to be reallocated. In such cases the GPU memory becomes invalidated, and you need to re-record all command buffers that make use of it.
@@ -86,20 +87,20 @@ impl<V: Copy, C: CpuWriteable, G: GpuWriteable> StageBuffer<V, C, G> {
     /**The GPU memory becomes invalidated and needs to be flushed again manually. You also need to re-record all command buffers that make use of it.*/
     pub fn reallocate(&mut self, new_capacity: usize) -> Result<(), vk::Result> {
         self.cpu.reallocate(new_capacity)?;
-        self.gpu = Buffer::with_capacity(self.device(), new_capacity)?;
+        self.gpu = OwnedBuffer::with_capacity(self.device(), new_capacity)?;
         self.has_unflushed_changes = true;
         Ok(())
     }
-    pub fn gpu(&self) -> &Buffer<V, G> {
+    pub fn gpu(&self) -> &OwnedBuffer<V, G> {
         &self.gpu
     }
-    pub fn take_gpu(self) -> Buffer<V, G> {
+    pub fn take_gpu(self) -> OwnedBuffer<V, G> {
         let Self{gpu, ..} = self;
         gpu
     }
     pub fn with_capacity(device: &Device, capacity: usize) -> Result<Self, vk::Result> {
         let cpu = Vector::with_capacity(device, capacity)?;
-        let gpu = Buffer::with_capacity(device, capacity)?;
+        let gpu = OwnedBuffer::with_capacity(device, capacity)?;
         Ok(Self { cpu, gpu, has_unflushed_changes: false })
     }
     pub fn new(cmd: &CommandPool, data: &[V]) -> Result<Submitter<Self>, vk::Result> {

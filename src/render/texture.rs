@@ -1,5 +1,5 @@
 use image::{ColorType, GenericImageView, EncodableLayout};
-use crate::render::buffer::{Buffer, Cpu};
+use crate::render::owned_buffer::{OwnedBuffer};
 use crate::render::device::Device;
 use ash::vk;
 use std::marker::PhantomData;
@@ -12,6 +12,7 @@ use crate::render::imageview::{ImageView, Aspect, Color, Depth};
 use crate::render::fence::Fence;
 use crate::render::swap_chain::SwapChain;
 use crate::render::submitter::Submitter;
+use crate::render::buffer_type::Cpu;
 
 pub trait Dim {
     const DIM: vk::ImageType;
@@ -155,7 +156,7 @@ impl TextureView<Dim2D,Depth> {
 
 pub struct StageTexture<D: Dim> {
     texture: TextureView<D, Color>,
-    staging_buffer: Buffer<u8, Cpu>,
+    staging_buffer: OwnedBuffer<u8, Cpu>,
 }
 
 impl<D: Dim> StageTexture<D> {
@@ -168,7 +169,7 @@ impl<D: Dim> StageTexture<D> {
     pub fn take(self) -> TextureView<D, Color> {
         self.texture
     }
-    pub fn staging_buffer(&self) -> &Buffer<u8, Cpu> {
+    pub fn staging_buffer(&self) -> &OwnedBuffer<u8, Cpu> {
         &self.staging_buffer
     }
 }
@@ -189,7 +190,7 @@ impl StageTexture<Dim2D> {
         //     x => panic!("Invalid color scheme {:?} for image {:?}", x, file)
         // };
         let data = img.as_bytes();
-        let staging_buffer = Buffer::<u8, Cpu>::new(cmd.device(), data)?;
+        let staging_buffer = OwnedBuffer::<u8, Cpu>::new(cmd.device(), data)?;
         let texture = TextureView::new(cmd.device(), format, Dim2D::new(img.width(), img.height()))?;
         let mut slf = Submitter::new(Self { staging_buffer, texture },cmd)?;
         let (cmd,tex) = slf.inner_val();

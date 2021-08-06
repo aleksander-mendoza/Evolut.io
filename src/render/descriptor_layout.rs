@@ -1,7 +1,7 @@
 use ash::vk;
 use crate::render::device::Device;
 use ash::version::DeviceV1_0;
-use crate::render::buffer::{Uniform, Buffer};
+use crate::render::owned_buffer::{OwnedBuffer};
 use std::rc::Rc;
 use crate::render::data::VertexSource;
 use crate::render::descriptor_binding::DescriptorBinding;

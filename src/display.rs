@@ -13,7 +13,7 @@ use crate::render::vulkan_context::VulkanContext;
 use failure::Error;
 use ash::vk;
 use crate::render::data::{VertexClr, VertexClrTex, VertexSource};
-use crate::render::buffer::{Buffer};
+use crate::render::owned_buffer::{OwnedBuffer};
 use crate::render::fence::Fence;
 use crate::render::descriptor_pool::{DescriptorPool, DescriptorSet};
 use crate::render::descriptor_layout::DescriptorLayout;

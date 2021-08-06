@@ -1,5 +1,5 @@
 use crate::render::descriptors::{Descriptors, DescriptorsBuilder};
-use crate::render::buffer::{Buffer, Gpu, Storage, AsStorage, Uniform};
+use crate::render::owned_buffer::{OwnedBuffer};
 use ash::vk;
 use std::marker::PhantomData;
 use crate::render::device::Device;
@@ -11,6 +11,8 @@ use failure::err_msg;
 use ash::version::DeviceV1_0;
 use ash::vk::{Pipeline, PipelineLayout};
 use crate::render::descriptor_pool::{DescriptorPool, DescriptorSet};
+use crate::render::buffer_type::{AsStorage, Uniform};
+use crate::render::buffer::{descriptor_info, Buffer};
 
 pub struct ComputePipelineBuilder {
     bindings: Vec<vk::DescriptorSetLayoutBinding>,
@@ -37,7 +39,7 @@ impl ComputePipelineBuilder {
         self.shader.insert((CString::new(name).expect("Compute shader's function name contains null character"), shader));
         self
     }
-    pub fn storage_buffer<T: Copy>(&mut self, buffer: &Buffer<T, impl AsStorage>) -> StorageBufferBinding<T> {
+    pub fn storage_buffer<T: Copy>(&mut self, buffer: &OwnedBuffer<T, impl AsStorage>) -> StorageBufferBinding<T> {
         let new_index = self.bindings.len() as u32;
         self.bindings.push(vk::DescriptorSetLayoutBinding {
             binding: new_index,
@@ -46,11 +48,11 @@ impl ComputePipelineBuilder {
             stage_flags: vk::ShaderStageFlags::COMPUTE,
             p_immutable_samplers: std::ptr::null(),
         });
-        self.descriptors.push(buffer.descriptor_info());
+        self.descriptors.push(descriptor_info(buffer));
         StorageBufferBinding(new_index, PhantomData)
     }
 
-    pub fn uniform_buffer<T: Copy>(&mut self, buffer: &Buffer<T, Uniform>) -> UniformBufferBinding<T> {
+    pub fn uniform_buffer<T: Copy>(&mut self, buffer: &OwnedBuffer<T, Uniform>) -> UniformBufferBinding<T> {
         let new_index = self.bindings.len() as u32;
         self.bindings.push(vk::DescriptorSetLayoutBinding {
             binding: new_index,
@@ -59,7 +61,7 @@ impl ComputePipelineBuilder {
             stage_flags: vk::ShaderStageFlags::COMPUTE,
             p_immutable_samplers: std::ptr::null(),
         });
-        self.descriptors.push(buffer.descriptor_info());
+        self.descriptors.push(descriptor_info(buffer));
         UniformBufferBinding(new_index, PhantomData)
     }
 

@@ -1,7 +1,7 @@
 use crate::render::descriptor_pool::{DescriptorPool, DescriptorSet};
 use crate::render::descriptor_layout::DescriptorLayout;
 use crate::render::sampler::Sampler;
-use crate::render::buffer::{Buffer, Uniform};
+use crate::render::owned_buffer::{OwnedBuffer};
 use crate::render::imageview::{ImageView, Color};
 use ash::vk::{DescriptorBufferInfo, DescriptorSetLayoutBinding, DescriptorImageInfo};
 use crate::render::descriptor_binding::DescriptorBinding;
@@ -11,6 +11,8 @@ use crate::render::frames_in_flight::FramesInFlight;
 use crate::render::host_buffer::HostBuffer;
 use ash::vk;
 use std::marker::PhantomData;
+use crate::render::buffer_type::Uniform;
+use crate::render::buffer::descriptor_info;
 
 
 enum DescriptorUniform {
@@ -88,7 +90,7 @@ impl DescriptorsBuilderLocked {
                             descriptor_set.update_sampler_raw(binding as u32, sampler_info);
                         }
                         &DescriptorUniform::Buffer(type_size, elem_count) => {
-                            descriptor_set.update_uniform_buffer_raw(binding as u32, &uniform_buffers[binding].buffer_per_frame[frame].buffer().descriptor_info());
+                            descriptor_set.update_uniform_buffer_raw(binding as u32, &descriptor_info(uniform_buffers[binding].buffer_per_frame[frame].buffer()));
                         }
                     }
                 }

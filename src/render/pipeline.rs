@@ -9,8 +9,9 @@ use std::rc::Rc;
 use ash::vk::PipelineLayout;
 use crate::render::data::{VertexSource, VertexAttrib};
 use crate::render::descriptor_layout::DescriptorLayout;
-use crate::render::buffer::{Buffer, Type};
+use crate::render::owned_buffer::{OwnedBuffer};
 use std::marker::PhantomData;
+use crate::render::buffer_type::BufferType;
 
 
 pub struct Pipeline {
@@ -200,13 +201,13 @@ impl PipelineBuilder {
     pub fn instance_input<V:VertexSource>(&mut self, binding:u32)->BufferBinding<V>{
         self.input_buffer(binding,vk::VertexInputRate::INSTANCE)
     }
-    pub fn vertex_input_from<V:VertexSource>(&mut self, binding:u32, _buffer:&Buffer<V,impl Type>)->BufferBinding<V>{
+    pub fn vertex_input_from<V:VertexSource>(&mut self, binding:u32, _buffer:&OwnedBuffer<V,impl BufferType>) ->BufferBinding<V>{
         self.input_buffer_from(binding,_buffer,vk::VertexInputRate::VERTEX)
     }
-    pub fn instance_input_from<V:VertexSource>(&mut self, binding:u32, _buffer:&Buffer<V,impl Type>)->BufferBinding<V>{
+    pub fn instance_input_from<V:VertexSource>(&mut self, binding:u32, _buffer:&OwnedBuffer<V,impl BufferType>) ->BufferBinding<V>{
         self.input_buffer_from(binding,_buffer,vk::VertexInputRate::INSTANCE)
     }
-    pub fn input_buffer_from<V:VertexSource>(&mut self, binding:u32, _buffer:&Buffer<V,impl Type>, input_rate:vk::VertexInputRate)->BufferBinding<V>{
+    pub fn input_buffer_from<V:VertexSource>(&mut self, binding:u32, _buffer:&OwnedBuffer<V,impl BufferType>, input_rate:vk::VertexInputRate) ->BufferBinding<V>{
         self.input_buffer(binding, input_rate)
     }
     pub fn input_buffer<V:VertexSource>(&mut self, binding:u32, input_rate:vk::VertexInputRate)->BufferBinding<V>{

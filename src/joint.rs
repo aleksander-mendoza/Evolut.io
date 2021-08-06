@@ -1,7 +1,6 @@
 
 use crate::render::stage_buffer::StageBuffer;
 use crate::particle::Particle;
-use crate::render::buffer::{Cpu, Gpu};
 use crate::render::command_pool::{CommandPool, CommandBuffer};
 use crate::render::shader_module::ShaderModule;
 use ash::vk::ShaderStageFlags;

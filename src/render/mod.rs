@@ -15,7 +15,7 @@ pub mod fence;
 pub mod frames_in_flight;
 pub mod vulkan_context;
 pub mod data;
-pub mod buffer;
+pub mod owned_buffer;
 pub mod submitter;
 pub mod descriptor_pool;
 pub mod descriptor_layout;
@@ -31,4 +31,7 @@ pub mod stage_buffer;
 pub mod host_buffer;
 pub mod compute;
 pub mod uniform_types;
+pub mod buffer_type;
+pub mod subbuffer;
+pub mod buffer;
 

@@ -1,5 +1,5 @@
 use ash::vk;
-use crate::render::buffer::{Buffer, Uniform};
+use crate::render::owned_buffer::{OwnedBuffer};
 use crate::render::data::VertexSource;
 use ash::vk::DescriptorSetLayoutBinding;
 use crate::render::sampler::Sampler;

@@ -3,7 +3,7 @@ use crate::blocks::block::Block;
 use crate::blocks::face_orientation::FaceOrientation;
 use crate::blocks::world_size::{WorldSize};
 use crate::render::device::Device;
-use crate::render::buffer::{Buffer};
+use crate::render::owned_buffer::{OwnedBuffer};
 use ash::vk;
 use crate::render::command_pool::CommandBuffer;
 use failure::err_msg;

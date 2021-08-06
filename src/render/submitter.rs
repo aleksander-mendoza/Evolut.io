@@ -5,7 +5,8 @@ use std::ops::{Deref, DerefMut};
 use ash::prelude::VkResult;
 use crate::render::device::Device;
 use ash::version::DeviceV1_0;
-use crate::render::buffer::{Buffer, Type};
+use crate::render::owned_buffer::{OwnedBuffer};
+use crate::render::buffer_type::BufferType;
 
 pub struct SubmitterCmd{
     pool: CommandPool,
@@ -109,14 +110,14 @@ impl <T> Submitter<T>{
     }
 }
 
-impl <T:Type> Submitter<Buffer<u32,T>>{
+impl <T:BufferType> Submitter<OwnedBuffer<u32,T>>{
     pub fn fill_submit(&mut self, val:u32) -> VkResult<()> {
         let (inner,buff) = self.inner_val();
         inner.cmd().begin(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)?.fill(buff,val).end()?;
         inner.submit()
     }
 }
-impl <V:Copy,T:Type> Submitter<Buffer<V,T>>{
+impl <V:Copy,T:BufferType> Submitter<OwnedBuffer<V,T>>{
     pub fn fill_zeros_submit(&mut self) -> VkResult<()> {
         let (inner,val) = self.inner_val();
         inner.cmd().begin(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)?.fill_zeros(val).end()?;

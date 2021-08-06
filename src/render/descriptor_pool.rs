@@ -3,13 +3,15 @@ use crate::render::swap_chain::SwapChain;
 use crate::render::device::Device;
 use ash::version::DeviceV1_0;
 use crate::render::descriptor_layout::DescriptorLayout;
-use crate::render::buffer::{Buffer, Uniform, Gpu, Storage};
+use crate::render::owned_buffer::{OwnedBuffer};
 use crate::render::data::VertexSource;
 use crate::render::sampler::Sampler;
 use crate::render::imageview::{ImageView, Color};
 use ash::vk::{DescriptorImageInfo, DescriptorBufferInfo};
 use crate::render::host_buffer::HostBuffer;
 use crate::render::compute::ComputePipeline;
+use crate::render::buffer_type::{Uniform, Storage};
+use crate::render::buffer::descriptor_info;
 
 pub struct DescriptorPool{
     raw:vk::DescriptorPool,
@@ -70,13 +72,13 @@ impl DescriptorSet{
         self.raw
     }
     pub  fn update_uniform_buffer<T:Copy>(&self,binding:u32,buffer:&HostBuffer<T,Uniform>){
-        unsafe { self.update_uniform_buffer_raw(binding,&buffer.buffer().descriptor_info()) }
+        unsafe { self.update_uniform_buffer_raw(binding,&descriptor_info(buffer.buffer())) }
     }
     pub unsafe fn update_uniform_buffer_raw(&self,binding:u32,descriptor_info:&DescriptorBufferInfo){
         unsafe { self.update_buffer_raw(binding,descriptor_info, vk::DescriptorType::UNIFORM_BUFFER) }
     }
-    pub fn update_storage_buffer<T:Copy>(&self,binding:u32,buffer:&Buffer<T,Storage>) {
-        unsafe { self.update_storage_buffer_raw(binding,&buffer.descriptor_info()) }
+    pub fn update_storage_buffer<T:Copy>(&self,binding:u32,buffer:&OwnedBuffer<T,Storage>) {
+        unsafe { self.update_storage_buffer_raw(binding,&descriptor_info(buffer)) }
     }
     pub unsafe fn update_storage_buffer_raw(&self,binding:u32,descriptor_info:&DescriptorBufferInfo) {
         unsafe { self.update_buffer_raw(binding,descriptor_info, vk::DescriptorType::STORAGE_BUFFER) }

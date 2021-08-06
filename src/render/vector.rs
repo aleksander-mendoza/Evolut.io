@@ -1,9 +1,10 @@
-use crate::render::buffer::{Buffer, CpuWriteable};
+use crate::render::owned_buffer::{OwnedBuffer};
 use std::ptr::NonNull;
 use crate::render::device::Device;
 use ash::vk;
 use std::ops::{Deref, DerefMut};
 use crate::render::host_buffer::HostBuffer;
+use crate::render::buffer_type::CpuWriteable;
 
 
 pub struct Vector<V: Copy, C: CpuWriteable> {
@@ -12,7 +13,7 @@ pub struct Vector<V: Copy, C: CpuWriteable> {
 }
 impl<V: Copy, C: CpuWriteable> Vector<V, C> {
 
-    pub fn buffer(&self) -> &Buffer<V, C> {
+    pub fn buffer(&self) -> &OwnedBuffer<V, C> {
         &self.cpu.buffer()
     }
     pub fn capacity(&self) -> usize {
