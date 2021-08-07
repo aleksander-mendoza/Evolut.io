@@ -7,11 +7,16 @@ use std::collections::Bound;
 use std::ops::RangeBounds;
 use crate::render::buffer::Buffer;
 use ash::vk::DeviceMemory;
-#[derive(Clone)]
+
 pub struct SubBuffer<V: Copy, T: BufferType>{
     buff:Rc<OwnedBuffer<V, T>>,
     offset:vk::DeviceSize,
     size:vk::DeviceSize
+}
+impl <V: Copy, T: BufferType> Clone for SubBuffer<V,T>{
+    fn clone(&self) -> Self {
+        Self{buff:self.buff.clone(), offset:self.offset, size:self.size}
+    }
 }
 
 impl <V: Copy, T: BufferType> SubBuffer<V,T>{

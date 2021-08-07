@@ -14,6 +14,7 @@ use crate::render::swap_chain::SwapchainImageIdx;
 use crate::particles::ParticleResources;
 use crate::block_world::BlockWorldResources;
 use crate::player::Player;
+use crate::foundations::{Foundations, FoundationInitializer};
 
 pub struct JointResources<A:Resources,B:Resources> {
     a: A,
@@ -42,14 +43,14 @@ impl <A:Resources,B:Resources> JointResources<A,B> {
 impl <A:Resources,B:Resources> Resources for JointResources<A,B> {
     type Render = Joint<A::Render,B::Render>;
 
-    fn create_descriptors(&self, descriptors: &mut DescriptorsBuilder) -> Result<(), Error> {
-        self.a.create_descriptors(descriptors)?;
-        self.b.create_descriptors(descriptors)
+    fn create_descriptors(&self, descriptors: &mut DescriptorsBuilder, foundations:&FoundationInitializer) -> Result<(), Error> {
+        self.a.create_descriptors(descriptors,foundations)?;
+        self.b.create_descriptors(descriptors,foundations)
     }
 
-    fn make_renderable(self, cmd_pool: &CommandPool, render_pass: &SingleRenderPass, descriptors: &DescriptorsBuilderLocked) -> Result<Self::Render, Error> {
+    fn make_renderable(self, cmd_pool: &CommandPool, render_pass: &SingleRenderPass, descriptors: &DescriptorsBuilderLocked, foundations:&Foundations) -> Result<Self::Render, Error> {
         let Self{a,b} = self;
-        Ok(Joint{ a:a.make_renderable(cmd_pool,render_pass,descriptors)?, b:b.make_renderable(cmd_pool,render_pass,descriptors)? })
+        Ok(Joint{ a:a.make_renderable(cmd_pool,render_pass,descriptors,foundations)?, b:b.make_renderable(cmd_pool,render_pass,descriptors,foundations)? })
     }
 }
 
@@ -77,13 +78,13 @@ impl <A:Renderable,B:Renderable> Joint<A,B>{
 impl <A:Renderable,B:Renderable> Renderable for Joint<A,B> {
 
 
-    fn record_cmd_buffer(&self, cmd: &mut CommandBuffer, image_idx: SwapchainImageIdx, descriptors:&Descriptors, render_pass: &SingleRenderPass) -> Result<(), Error> {
-        self.a.record_cmd_buffer(cmd,image_idx,descriptors,render_pass)?;
-        self.b.record_cmd_buffer(cmd,image_idx,descriptors,render_pass)
+    fn record_cmd_buffer(&self, cmd: &mut CommandBuffer, image_idx: SwapchainImageIdx, descriptors:&Descriptors, render_pass: &SingleRenderPass, foundations:&Foundations) -> Result<(), Error> {
+        self.a.record_cmd_buffer(cmd,image_idx,descriptors,render_pass, foundations)?;
+        self.b.record_cmd_buffer(cmd,image_idx,descriptors,render_pass, foundations)
     }
-    fn record_compute_cmd_buffer(&self, cmd: &mut CommandBuffer) -> Result<(), Error> {
-        self.a.record_compute_cmd_buffer(cmd)?;
-        self.b.record_compute_cmd_buffer(cmd)
+    fn record_compute_cmd_buffer(&self, cmd: &mut CommandBuffer, foundations:&Foundations) -> Result<(), Error> {
+        self.a.record_compute_cmd_buffer(cmd,foundations)?;
+        self.b.record_compute_cmd_buffer(cmd,foundations)
     }
     fn update_uniforms(&mut self, image_idx: SwapchainImageIdx, player:&Player) {
         self.a.update_uniforms(image_idx, player);

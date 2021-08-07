@@ -11,15 +11,8 @@ layout (set = 0, binding = 0) uniform Throw{
     vec3 velocity;
 }throw;
 
-layout (set = 0, binding = 1) buffer ParticleConstants{
-    int predefined_constraints;
-    int collision_constraints;
-    // there are two types of particles:
-    int solid_particles; // solid particles - they can collide. They have mass, velocity and everything else that a particle should have.
-    int phantom_particles; // phantom particles - they do not collide with anything, but are merely used as extra anchors for constraints. They
-    // still have their own velocity and mass, so they can influence total mass of the body, its angular momentum etc.
-    int chunks_x;
-    int chunks_z;
+layout (std430, set = 0, binding = 1) buffer ParticleConstant{
+    ParticleConstants constants;
 };
 
 layout(std430, set = 0, binding = 2) buffer Particles{
@@ -42,13 +35,13 @@ void main()
 {
     uint gID = gl_GlobalInvocationID.x;
     if(gID==0){
-        collision_constraints = predefined_constraints; //First we reset the number of computed collision constraints
+        constants.collision_constraints = constants.predefined_constraints; //First we reset the number of computed collision constraints
         if(throw.velocity!=vec3(0,0,0)){
             particles[0].old_position = throw.position;
             particles[0].new_position = throw.position + throw.velocity;
         }
     }
-    if (gID < solid_particles){
+    if (gID < constants.solid_particles){
         const vec3 old_position = particles[gID].old_position;
         const vec3 current_position = particles[gID].new_position;
         vec3 velocity = current_position - old_position;
@@ -56,13 +49,13 @@ void main()
         //TODO: implement damping, drag, friction, gravity etc. The velocity variable might be useful here
         //The below code is a branchless test for bounding-box collision. It's equivalent to the code
         // if(candidate_position.x<0){candidate_position.x=-candidate_position.x;}
-        // if(candidate_position.x>16*chunks_x){candidate_position.x=16*chunks_x-(candidate_position.x-16*chunks_x);}
+        // if(candidate_position.x>16*constants.chunks_x){candidate_position.x=16*constants.chunks_x-(candidate_position.x-16*constants.chunks_x);}
         //and so on for each x,y,z coordinate.
         const vec3 new_position = candidate_position - 2*min(candidate_position, vec3(0, 0, 0)) + 2*min(vec3(16, 16, 16)-candidate_position, vec3(0, 0, 0));
         particles[gID].old_position = current_position;
         particles[gID].new_position = new_position;
-        for (int chunk_x=0;chunk_x<chunks_x;chunk_x++){
-            for (int chunk_z=0;chunk_z<chunks_z;chunk_z++){
+        for (int chunk_x=0;chunk_x<constants.chunks_x;chunk_x++){
+            for (int chunk_z=0;chunk_z<constants.chunks_z;chunk_z++){
                 if (int(new_position.x)/CHUNK_WIDTH==chunk_x && int(new_position.z)/CHUNK_DEPTH==chunk_z){
                     vec3 chunk_relative_pos = new_position;//- vec3(chunk_x*CHUNK_WIDTH,0,chunk_z*CHUNK_DEPTH);
                     const ivec3 cell_position = ivec3(chunk_relative_pos/(CELL_SIZE));
@@ -126,7 +119,7 @@ void main()
                                     const float distance_square = dot(distance_vector, distance_vector);
                                     if (0 < distance_square &&// we need to check this, because division by zero leads to algorithm instability
                                     distance_square<=(PARTICLE_COLLISION_DISTANCE_SQUARE)){
-                                        uint my_collision_constraint_index = atomicAdd(collision_constraints, 1);
+                                        uint my_collision_constraint_index = atomicAdd(constants.collision_constraints, 1);
                                         constraints[my_collision_constraint_index] = collision_constraint(gID, neighbour_particle_id);
                                     }
                                 }
@@ -140,16 +133,17 @@ void main()
         }
     }
     if(gID==0){
-        indirect[0].x = uint(ceil(float(collision_constraints)/32.));
+        indirect[0].x = uint(ceil(float(constants.collision_constraints)/32.));
     }
-    if (gID < phantom_particles){
-        const vec3 old_position = particles[solid_particles + gID].old_position;
-        const vec3 current_position = particles[solid_particles + gID].new_position;
+    if (gID < constants.phantom_particles){
+        const uint phantom_id = gID+constants.solid_particles;
+        const vec3 old_position = particles[phantom_id].old_position;
+        const vec3 current_position = particles[phantom_id].new_position;
         vec3 velocity = current_position - old_position;
         vec3 candidate_position = current_position + velocity;
         const vec3 new_position = candidate_position - 2*min(candidate_position, vec3(0, 0, 0)) + 2*min(vec3(16, 16, 16)-candidate_position, vec3(0, 0, 0));
-        particles[solid_particles + gID].old_position = current_position;
-        particles[solid_particles + gID].new_position = new_position;
+        particles[phantom_id].old_position = current_position;
+        particles[phantom_id].new_position = new_position;
     }
 }
 

@@ -23,10 +23,21 @@ struct Constraint{
 
 struct Bone{
     uvec4 particle_ids;
-    uint texture_variant;
-    uint part_variant;
-    uint dummy_field0;
-    uint dummy_field1;
+    vec3 center;
+    float color;
+};
+
+struct ParticleConstants{
+    int predefined_constraints;
+    int collision_constraints;
+    // there are two types of particles:
+    int solid_particles; // solid particles - they can collide. They have mass, velocity and everything else that a particle should have.
+    int phantom_particles; // phantom particles - they do not collide with anything, but are merely used as extra anchors for constraints. They
+    // still have their own velocity and mass, so they can influence total mass of the body, its angular momentum etc.
+    int chunks_x;
+    int chunks_z;
+    int bones;
+    int dummy;
 };
 
 int cell_position_to_idx(ivec3 cell_position){

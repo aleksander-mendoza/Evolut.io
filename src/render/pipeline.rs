@@ -146,6 +146,30 @@ impl PipelineBuilder {
         self.color_blend_attachment_states.push(blend_state);
         self
     }
+    pub fn color_blend_attachment_states_disabled(&mut self) -> &mut Self{
+        self.color_blend_attachment_states(vk::PipelineColorBlendAttachmentState {
+            blend_enable: vk::FALSE,
+            color_write_mask: vk::ColorComponentFlags::all(),
+            src_color_blend_factor: vk::BlendFactor::ONE,
+            dst_color_blend_factor: vk::BlendFactor::ZERO,
+            color_blend_op: vk::BlendOp::ADD,
+            src_alpha_blend_factor: vk::BlendFactor::ONE,
+            dst_alpha_blend_factor: vk::BlendFactor::ZERO,
+            alpha_blend_op: vk::BlendOp::ADD,
+        })
+    }
+    pub fn color_blend_attachment_states_default(&mut self) -> &mut Self{
+        self.color_blend_attachment_states(vk::PipelineColorBlendAttachmentState {
+            blend_enable: vk::TRUE,
+            color_write_mask: vk::ColorComponentFlags::all(),
+            src_color_blend_factor: vk::BlendFactor::SRC_ALPHA,
+            dst_color_blend_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
+            color_blend_op: vk::BlendOp::ADD,
+            src_alpha_blend_factor: vk::BlendFactor::ONE,
+            dst_alpha_blend_factor: vk::BlendFactor::ZERO,
+            alpha_blend_op: vk::BlendOp::ADD,
+        })
+    }
     pub fn reset_viewports(&mut self) -> &mut Self {
         self.viewport.clear();
         self

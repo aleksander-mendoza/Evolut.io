@@ -11,11 +11,8 @@ layout (set = 0, binding = 0) uniform Throw{
     vec3 velocity;
 }throw;
 
-layout (set = 0, binding = 1) buffer ParticleConstants{
-    int predefined_constraints;
-    int collision_constraints;
-    int chunks_x;
-    int chunks_z;
+layout (set = 0, binding = 1) buffer ParticleConstant{
+    ParticleConstants constants;
 };
 
 layout(std430, set = 0, binding = 2) buffer Particles{
@@ -33,7 +30,7 @@ layout(std430, set = 0, binding = 4) buffer Constraints{
 
 void main(){
     const uint gID = gl_GlobalInvocationID.x;
-    if(gID < collision_constraints){
+    if(gID < constants.collision_constraints){
         Constraint c = constraints[gID];
         const float min_dist = 0;
         const float max_dist = c.constant_param < 0 ? c.constant_param*c.constant_param : uintBitsToFloat(0x7F800000); // 0x7F800000 is infinity

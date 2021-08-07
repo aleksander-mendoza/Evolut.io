@@ -3,18 +3,23 @@ use crate::render::device::Device;
 use ash::version::DeviceV1_0;
 use crate::render::texture::Texture;
 use crate::render::imageview::{ImageView, Color};
+use std::rc::Rc;
 
-pub struct Sampler {
+struct SamplerInner {
     device: Device,
     raw:vk::Sampler
+}
+#[derive(Clone)]
+pub struct Sampler {
+    inner:Rc<SamplerInner>
 }
 
 impl Sampler {
     pub fn  device(&self) -> &Device{
-        &self.device
+        &self.inner.device
     }
     pub fn raw(&self)->vk::Sampler{
-        self.raw
+        self.inner.raw
     }
     pub fn new(device: &Device, filter:vk::Filter, normalize_coordinates:bool) -> Result<Self, ash::vk::Result> {
         let sampler_create_info = vk::SamplerCreateInfo::builder()
@@ -36,7 +41,7 @@ impl Sampler {
 
         unsafe {
             device.inner().create_sampler(&sampler_create_info, None)
-        }.map(|raw|Self{raw,device:device.clone()})
+        }.map(|raw|Self{inner:Rc::new(SamplerInner{raw,device:device.clone()})})
     }
 
     pub fn descriptor_info(&self, imageview:&ImageView<Color>) ->vk::DescriptorImageInfo{
@@ -48,7 +53,7 @@ impl Sampler {
     }
 }
 
-impl Drop for Sampler{
+impl Drop for SamplerInner{
     fn drop(&mut self) {
         unsafe { self.device.inner().destroy_sampler(self.raw, None) }
     }

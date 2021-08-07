@@ -47,6 +47,9 @@ mod player;
 mod bone;
 mod constraint;
 mod particle_constants;
+mod bones;
+mod physics;
+mod foundations;
 
 
 fn main() -> Result<(), failure::Error> {
@@ -73,6 +76,11 @@ fn run() -> Result<(),failure::Error>{
     let event_pump = sdl.event_pump().map_err(err_msg)?;
     let mut input = Input::new(event_pump);
     let mut fps_counter = FpsCounter::new(timer, 60);
+
+
+    std::thread::spawn(move ||{
+
+    });
 
     player.resize(&display);
     display.rerecord_all_cmd_buffers()?;

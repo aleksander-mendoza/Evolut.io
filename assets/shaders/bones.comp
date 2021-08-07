@@ -1,0 +1,26 @@
+#version 450
+#include "data.comp"
+
+layout (set = 0, binding = 1) buffer ParticleConstants{
+    ParticleConstants constants;
+};
+
+layout(std430, set = 0, binding = 2) buffer Particles{
+    Particle particles[]; // the particles at indices from 0 (inclusive) to solid_particles (exclusive) are solid. All the remaining particles are phantom.
+};
+
+layout(std430, set = 0, binding = 6) buffer Bones{
+    Bone bones[];
+};
+
+void main() {
+    uint gID = gl_GlobalInvocationID.x;
+    if(gID < constants.bones){
+        const uvec4 particle_ids = bones[gID].particle_ids;
+        const vec3 p1 = particles[particle_ids.x].position;
+        const vec3 p2 = particles[particle_ids.y].position;
+        const vec3 p3 = particles[particle_ids.z].position;
+        const vec3 p4 = particles[particle_ids.w].position;
+        bones[gID].center = (p1+p2+p3+p4)/4.;
+    }
+}

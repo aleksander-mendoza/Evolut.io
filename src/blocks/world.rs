@@ -17,8 +17,7 @@ pub struct World {
     faces: WorldFaces,
 }
 impl World {
-    pub fn new(width: usize, depth: usize, cmd_pool:&CommandPool) -> Result<Submitter<Self>, failure::Error> {
-        let size = WorldSize::new(width,depth);
+    pub fn new(size:WorldSize, cmd_pool:&CommandPool) -> Result<Submitter<Self>, failure::Error> {
         WorldFaces::new(size, cmd_pool.device()).map(|faces|Self{
             blocks: WorldBlocks::new(size),
             faces

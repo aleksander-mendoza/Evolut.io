@@ -18,10 +18,11 @@ use crate::render::imageview::Color;
 use crate::render::swap_chain::SwapchainImageIdx;
 use crate::display::{Renderable, Resources};
 use crate::player::Player;
+use crate::particles::ParticleResources;
+use crate::foundations::{FoundationInitializer, Foundations};
 
 pub struct BlockWorldResources {
     texture: Submitter<StageTexture<Dim2D>>,
-    sampler: Sampler,
     world: Submitter<World>,
     frag:ShaderModule<Fragment>,
     vert:ShaderModule<Vertex>,
@@ -30,12 +31,11 @@ impl BlockWorldResources{
     pub fn world(&self) -> &Submitter<World>{
         &self.world
     }
-    pub fn new(cmd_pool: &CommandPool) -> Result<Self, failure::Error> {
+    pub fn new(cmd_pool: &CommandPool, foundations:&FoundationInitializer) -> Result<Self, failure::Error> {
         let texture = StageTexture::new("assets/img/blocks.png".as_ref(), cmd_pool, true)?;
-        let sampler = Sampler::new(cmd_pool.device(), vk::Filter::NEAREST, true)?;
         let frag = ShaderModule::new(include_glsl!("assets/shaders/block.frag", kind: frag) as &[u32], cmd_pool.device())?;
         let vert = ShaderModule::new(include_glsl!("assets/shaders/block.vert") as &[u32], cmd_pool.device())?;
-        let mut world = World::new(2, 2, cmd_pool)?;
+        let mut world = World::new(foundations.world_size().clone(), cmd_pool)?;
         world.blocks_mut().no_update_fill_level(0, 1, BEDROCK);
         world.blocks_mut().no_update_fill_level(1, 1, DIRT);
         world.blocks_mut().no_update_fill_level(2, 1, GRASS);
@@ -45,7 +45,6 @@ impl BlockWorldResources{
         world.flush_all_chunks()?;
         Ok(Self {
             texture,
-            sampler,
             world,
             frag,
             vert,
@@ -54,13 +53,13 @@ impl BlockWorldResources{
 }
 impl Resources for BlockWorldResources{
     type Render = BlockWorld;
-    fn create_descriptors(&self,descriptors:&mut DescriptorsBuilder)->Result<(),failure::Error>{
-        descriptors.sampler(&self.sampler, self.texture.imageview());
+    fn create_descriptors(&self,descriptors:&mut DescriptorsBuilder, foundations:&FoundationInitializer)->Result<(),failure::Error>{
+        descriptors.sampler(foundations.sampler(), self.texture.imageview());
         Ok(())
     }
 
-    fn make_renderable(self, cmd_pool: &CommandPool, render_pass: &SingleRenderPass, descriptors:&DescriptorsBuilderLocked) -> Result<Self::Render, failure::Error>{
-        let Self{ texture, sampler, world, frag, vert } = self;
+    fn make_renderable(self, cmd_pool: &CommandPool, render_pass: &SingleRenderPass, descriptors:&DescriptorsBuilderLocked, foundations:&Foundations) -> Result<Self::Render, failure::Error>{
+        let Self{ texture, world, frag, vert } = self;
         let mut pipeline = PipelineBuilder::new();
         pipeline.descriptor_layout(descriptors.layout().clone())
             .fragment_shader("main", frag)
@@ -68,23 +67,13 @@ impl Resources for BlockWorldResources{
             .depth_test(true)
             .cull_face(vk::CullModeFlags::FRONT)
             .front_face_clockwise(true)
-            .color_blend_attachment_states(vk::PipelineColorBlendAttachmentState {
-                blend_enable: vk::TRUE,
-                color_write_mask: vk::ColorComponentFlags::all(),
-                src_color_blend_factor: vk::BlendFactor::SRC_ALPHA,
-                dst_color_blend_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
-                color_blend_op: vk::BlendOp::ADD,
-                src_alpha_blend_factor: vk::BlendFactor::ONE,
-                dst_alpha_blend_factor: vk::BlendFactor::ZERO,
-                alpha_blend_op: vk::BlendOp::ADD,
-            });
+            .color_blend_attachment_states_default();
         let instance_binding = pipeline.instance_input::<Face>(0);
         let chunk_position_binding = pipeline.push_constant::<glm::Vec3>();
         let texture = texture.take()?.take();
         let mut block_world_builder = BlockWorldBuilder {
             pipeline,
             texture,
-            sampler,
             world,
             instance_binding,
             chunk_position_binding,
@@ -98,7 +87,6 @@ impl Resources for BlockWorldResources{
 pub struct BlockWorldBuilder {
     pipeline: PipelineBuilder,
     texture: TextureView<Dim2D, Color>,
-    sampler: Sampler,
     world: Submitter<World>,
     instance_binding: BufferBinding<Face>,
     chunk_position_binding: PushConstant<glm::Vec3>,
@@ -139,7 +127,7 @@ impl BlockWorld {
 impl Renderable for BlockWorld {
 
 
-    fn record_cmd_buffer(&self, cmd: &mut CommandBuffer, image_idx: SwapchainImageIdx, descriptors:&Descriptors, render_pass: &SingleRenderPass) -> Result<(), Error> {
+    fn record_cmd_buffer(&self, cmd: &mut CommandBuffer, image_idx: SwapchainImageIdx, descriptors:&Descriptors, render_pass: &SingleRenderPass, foundations:&Foundations) -> Result<(), Error> {
         cmd
             .bind_pipeline(self.pipeline())
             .uniform(self.pipeline(), descriptors.descriptor_set(image_idx));
@@ -147,7 +135,7 @@ impl Renderable for BlockWorld {
         Ok(())
     }
 
-    fn record_compute_cmd_buffer(&self, cmd: &mut CommandBuffer) -> Result<(), Error> {
+    fn record_compute_cmd_buffer(&self, cmd: &mut CommandBuffer, foundations:&Foundations) -> Result<(), Error> {
         Ok(())
     }
 
