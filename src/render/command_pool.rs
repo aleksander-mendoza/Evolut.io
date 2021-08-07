@@ -436,6 +436,7 @@ impl Drop for CommandPoolInner {
 pub struct CommandPool {
     inner:Rc<CommandPoolInner>
 }
+// impl !Send for CommandPool{} //Command pool cannot be shared between threads!
 
 impl CommandPool {
     pub fn device(&self) -> &Device {

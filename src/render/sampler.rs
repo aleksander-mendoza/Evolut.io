@@ -4,6 +4,7 @@ use ash::version::DeviceV1_0;
 use crate::render::texture::Texture;
 use crate::render::imageview::{ImageView, Color};
 use std::rc::Rc;
+use std::sync::Arc;
 
 struct SamplerInner {
     device: Device,
@@ -11,7 +12,7 @@ struct SamplerInner {
 }
 #[derive(Clone)]
 pub struct Sampler {
-    inner:Rc<SamplerInner>
+    inner:Arc<SamplerInner>
 }
 
 impl Sampler {
@@ -41,7 +42,7 @@ impl Sampler {
 
         unsafe {
             device.inner().create_sampler(&sampler_create_info, None)
-        }.map(|raw|Self{inner:Rc::new(SamplerInner{raw,device:device.clone()})})
+        }.map(|raw|Self{inner:Arc::new(SamplerInner{raw,device:device.clone()})})
     }
 
     pub fn descriptor_info(&self, imageview:&ImageView<Color>) ->vk::DescriptorImageInfo{

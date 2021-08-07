@@ -1,28 +1,28 @@
 use crate::render::stage_buffer::{StageBuffer, StageSubBuffer, StageOwnedBuffer, IndirectDispatchSubBuffer};
-use crate::particle::Particle;
+use crate::pipelines::particle::Particle;
 use crate::render::command_pool::{CommandPool, CommandBuffer};
 use crate::render::shader_module::{ShaderModule, Fragment, Vertex};
 use ash::vk::ShaderStageFlags;
 use crate::render::pipeline::{PipelineBuilder, BufferBinding, Pipeline};
 use ash::vk;
-use crate::display::{Resources, Renderable};
+use crate::pipelines::renderable::{RenderResources, Renderable};
 use crate::render::descriptors::{DescriptorsBuilder, DescriptorsBuilderLocked, Descriptors};
 use failure::Error;
 use crate::render::single_render_pass::SingleRenderPass;
 use crate::render::swap_chain::SwapchainImageIdx;
 use crate::render::submitter::{Submitter, fill_submit};
-use crate::player::Player;
+use crate::pipelines::player::Player;
 use crate::render::buffer_type::{Cpu, Storage, GpuIndirect};
 use crate::render::owned_buffer::OwnedBuffer;
 use crate::blocks::world_size::CHUNK_VOLUME_IN_CELLS;
 use crate::render::subbuffer::SubBuffer;
-use crate::constraint::Constraint;
+use crate::pipelines::constraint::Constraint;
 use crate::render::buffer::Buffer;
-use crate::particle_constants::ParticleConstants;
+use crate::pipelines::particle_constants::ParticleConstants;
 use crate::blocks::WorldSize;
 use crate::render::sampler::Sampler;
-use crate::bone::Bone;
-use crate::foundations::{FoundationInitializer, Foundations};
+use crate::pipelines::bone::Bone;
+use crate::pipelines::foundations::{FoundationInitializer, Foundations};
 
 pub struct ParticleResources {
     frag: ShaderModule<Fragment>,
@@ -37,7 +37,7 @@ impl ParticleResources {
     }
 }
 
-impl Resources for ParticleResources {
+impl RenderResources for ParticleResources {
     type Render = Particles;
 
     fn create_descriptors(&self, descriptors: &mut DescriptorsBuilder, foundations:&FoundationInitializer) -> Result<(), Error> {

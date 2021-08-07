@@ -8,7 +8,7 @@ use crate::render::surface::Surface;
 use std::ffi::CStr;
 use std::rc::Rc;
 use ash::prelude::VkResult;
-
+use std::sync::Arc;
 
 
 const DEBUG_DEVICE_EXTENSIONS:[*const i8;3] = [
@@ -118,7 +118,7 @@ struct DeviceInner {
 
 #[derive(Clone)]
 pub struct Device {
-    inner: Rc<DeviceInner>,
+    inner: Arc<DeviceInner>,
 }
 
 impl Device {
@@ -160,7 +160,7 @@ impl Device {
 
         let queue = unsafe { device.get_device_queue(family_index, 0) };
 
-        Ok(Self { inner: Rc::new(DeviceInner { device, instance: instance.clone(), queue, family_index, physical_device }) })
+        Ok(Self { inner: Arc::new(DeviceInner { device, instance: instance.clone(), queue, family_index, physical_device }) })
     }
     pub fn family_index(&self) -> u32 {
         self.inner.family_index

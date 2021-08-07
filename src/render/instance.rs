@@ -10,6 +10,7 @@ use crate::render::device::{pick_physical_device, Device};
 use crate::render::surface::Surface;
 use crate::render::swap_chain::SwapChain;
 use std::rc::Rc;
+use std::sync::Arc;
 
 struct InstanceInner{
     raw: ash::Instance,
@@ -17,7 +18,7 @@ struct InstanceInner{
 }
 #[derive(Clone)]
 pub struct Instance {
-    inner:Rc<InstanceInner>
+    inner:Arc<InstanceInner>
 }
 
 
@@ -48,7 +49,7 @@ impl Instance {
         } else {
             None
         };
-        Ok(Self { inner:Rc::new(InstanceInner{raw: instance, debug: debug_utils })})
+        Ok(Self { inner:Arc::new(InstanceInner{raw: instance, debug: debug_utils })})
     }
 
     pub fn create_swapchain(&self, device: &Device, surface: &Surface) -> Result<SwapChain, failure::Error> {

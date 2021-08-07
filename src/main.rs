@@ -4,57 +4,55 @@ extern crate nalgebra_glm as glm;
 #[macro_use]
 extern crate memoffset;
 
-use crate::render::vulkan_context::VulkanContext;
-use crate::display::{Display};
 use std::ops::{Deref, DerefMut};
-use crate::input::Input;
-use crate::fps::FpsCounter;
-use failure::err_msg;
-use crate::blocks::{World, Block};
-use crate::blocks::block_properties::{BEDROCK, DIRT, GRASS, PLANK};
-use ash::vk;
-use crate::render::command_pool::CommandBuffer;
-use crate::render::framebuffer::Framebuffer;
-use crate::render::descriptor_pool::DescriptorSet;
-use crate::render::pipeline::Pipeline;
-use crate::render::swap_chain::SwapChain;
-use crate::render::render_pass::RenderPass;
-use crate::render::submitter::Submitter;
-use crate::mvp_uniforms::MvpUniforms;
-// use crate::triangles::Triangles;
-use crate::block_world::{BlockWorld, BlockWorldResources};
-use crate::render::shader_module::ShaderModule;
-use ash::vk::ShaderStageFlags;
-use crate::particles::ParticleResources;
-use crate::joint::{Joint, JointResources};
-use crate::render::compute::ComputePipelineBuilder;
-use crate::game::GameResources;
-use crate::player::Player;
 
-mod block_world;
-mod display;
+use ash::vk;
+use ash::vk::ShaderStageFlags;
+use failure::err_msg;
+
+// use crate::triangles::Triangles;
+use pipelines::block_world::{BlockWorld, BlockWorldResources};
+use pipelines::display::Display;
+use pipelines::game::GameResources;
+use pipelines::joint::{Joint, JointResources};
+use pipelines::mvp_uniforms::MvpUniforms;
+use pipelines::particles::ParticleResources;
+use pipelines::player::Player;
+
+use crate::blocks::{Block, World};
+use crate::blocks::block_properties::{BEDROCK, DIRT, GRASS, PLANK};
+use crate::fps::FpsCounter;
+use crate::input::Input;
+use crate::render::command_pool::{CommandBuffer, CommandPool};
+use crate::render::compute::ComputePipelineBuilder;
+use crate::render::descriptor_pool::DescriptorSet;
+use crate::render::framebuffer::Framebuffer;
+use crate::render::pipeline::Pipeline;
+use crate::render::render_pass::RenderPass;
+use crate::render::shader_module::ShaderModule;
+use crate::render::submitter::Submitter;
+use crate::render::swap_chain::SwapChain;
+use crate::render::vulkan_context::VulkanContext;
+use crate::pipelines::physics::{PhysicsResources, Physics};
+use crate::pipelines::player_event::PlayerEvent;
+use crate::pipelines::computable::Computable;
+use std::sync::mpsc::Receiver;
+use crate::render::fence::Fence;
+use crate::physics_timer::PhysicsTimer;
+use std::panic::catch_unwind;
+
 mod render;
 mod input;
 mod fps;
 mod blocks;
-mod mvp_uniforms;
-mod triangles;
-mod particle;
-mod particles;
-mod joint;
-mod game;
-mod player;
-mod bone;
-mod constraint;
-mod particle_constants;
-mod bones;
-mod physics;
-mod foundations;
+mod pipelines;
+mod physics_timer;
 
 
 fn main() -> Result<(), failure::Error> {
     run()
 }
+
 
 fn run() -> Result<(),failure::Error>{
     #[cfg(target_os = "macos")] {
@@ -72,15 +70,9 @@ fn run() -> Result<(),failure::Error>{
     let vulkan = VulkanContext::new(window)?;
     let mut player = Player::new();
     let mut display = Display::new(vulkan,&player, GameResources::new)?;
-
     let event_pump = sdl.event_pump().map_err(err_msg)?;
     let mut input = Input::new(event_pump);
     let mut fps_counter = FpsCounter::new(timer, 60);
-
-
-    std::thread::spawn(move ||{
-
-    });
 
     player.resize(&display);
     display.rerecord_all_cmd_buffers()?;
@@ -97,6 +89,7 @@ fn run() -> Result<(),failure::Error>{
                 .set_relative_mouse_mode(!sdl.mouse().relative_mouse_mode());
         }
         player.update(&mut display, &input, &fps_counter);
+        // player.send_events(sx);
         if display.render(false,&player)? {
             display.device().device_wait_idle()?;
             display.recreate()?;

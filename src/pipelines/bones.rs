@@ -1,22 +1,22 @@
-use crate::display::{Resources, Renderable};
+use crate::pipelines::renderable::{RenderResources, Renderable};
 use crate::render::descriptors::{DescriptorsBuilder, DescriptorsBuilderLocked, Descriptors};
 use crate::render::single_render_pass::SingleRenderPass;
 use failure::Error;
 use crate::render::command_pool::{CommandPool, CommandBuffer};
 use crate::render::shader_module::{ShaderModule, Fragment, Vertex};
-use crate::particles::ParticleResources;
+use crate::pipelines::particles::ParticleResources;
 use crate::render::submitter::Submitter;
 use crate::render::texture::{StageTexture, Dim2D, TextureView};
 use crate::render::sampler::Sampler;
 use ash::vk;
 use crate::render::pipeline::{PipelineBuilder, Pipeline, BufferBinding};
-use crate::bone::Bone;
+use crate::pipelines::bone::Bone;
 use crate::render::swap_chain::SwapchainImageIdx;
-use crate::player::Player;
+use crate::pipelines::player::Player;
 use crate::render::imageview::Color;
 use crate::render::buffer_type::Storage;
 use crate::render::subbuffer::SubBuffer;
-use crate::foundations::{Foundations, FoundationInitializer};
+use crate::pipelines::foundations::{Foundations, FoundationInitializer};
 
 pub struct BoneResources{
     texture: Submitter<StageTexture<Dim2D>>,
@@ -33,7 +33,7 @@ impl BoneResources{
     }
 }
 
-impl Resources for BoneResources {
+impl RenderResources for BoneResources {
     type Render = Bones;
 
     fn create_descriptors(&self, descriptors: &mut DescriptorsBuilder, foundations:&FoundationInitializer) -> Result<(), Error> {

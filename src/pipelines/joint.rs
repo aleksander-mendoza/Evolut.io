@@ -1,27 +1,27 @@
 
 use crate::render::stage_buffer::StageBuffer;
-use crate::particle::Particle;
+use crate::pipelines::particle::Particle;
 use crate::render::command_pool::{CommandPool, CommandBuffer};
 use crate::render::shader_module::ShaderModule;
 use ash::vk::ShaderStageFlags;
 use crate::render::pipeline::{PipelineBuilder, BufferBinding, Pipeline};
 use ash::vk;
-use crate::display::{Resources, Renderable};
+use crate::pipelines::renderable::{RenderResources, Renderable};
 use crate::render::descriptors::{DescriptorsBuilder, DescriptorsBuilderLocked, Descriptors};
 use failure::Error;
 use crate::render::single_render_pass::SingleRenderPass;
 use crate::render::swap_chain::SwapchainImageIdx;
-use crate::particles::ParticleResources;
-use crate::block_world::BlockWorldResources;
-use crate::player::Player;
-use crate::foundations::{Foundations, FoundationInitializer};
+use crate::pipelines::particles::ParticleResources;
+use crate::pipelines::block_world::BlockWorldResources;
+use crate::pipelines::player::Player;
+use crate::pipelines::foundations::{Foundations, FoundationInitializer};
 
-pub struct JointResources<A:Resources,B:Resources> {
+pub struct JointResources<A: RenderResources,B: RenderResources> {
     a: A,
     b: B
 }
 
-impl <A:Resources,B:Resources> JointResources<A,B>{
+impl <A: RenderResources,B: RenderResources> JointResources<A,B>{
     pub fn a(&self)->&A{
         &self.a
     }
@@ -35,12 +35,12 @@ impl <A:Resources,B:Resources> JointResources<A,B>{
         &mut self.b
     }
 }
-impl <A:Resources,B:Resources> JointResources<A,B> {
+impl <A: RenderResources,B: RenderResources> JointResources<A,B> {
     pub fn new(a: A, b: B) -> Self {
         Self { a, b }
     }
 }
-impl <A:Resources,B:Resources> Resources for JointResources<A,B> {
+impl <A: RenderResources,B: RenderResources> RenderResources for JointResources<A,B> {
     type Render = Joint<A::Render,B::Render>;
 
     fn create_descriptors(&self, descriptors: &mut DescriptorsBuilder, foundations:&FoundationInitializer) -> Result<(), Error> {

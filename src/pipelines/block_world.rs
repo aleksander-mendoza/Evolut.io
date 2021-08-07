@@ -13,13 +13,13 @@ use crate::render::sampler::Sampler;
 use crate::render::descriptor_layout::DescriptorLayout;
 use crate::render::device::Device;
 use crate::render::descriptors::{Descriptors, DescriptorsBuilder, DescriptorsBuilderLocked, UniformBufferBinding};
-use crate::mvp_uniforms::MvpUniforms;
+use crate::pipelines::mvp_uniforms::MvpUniforms;
 use crate::render::imageview::Color;
 use crate::render::swap_chain::SwapchainImageIdx;
-use crate::display::{Renderable, Resources};
-use crate::player::Player;
-use crate::particles::ParticleResources;
-use crate::foundations::{FoundationInitializer, Foundations};
+use crate::pipelines::player::Player;
+use crate::pipelines::particles::ParticleResources;
+use crate::pipelines::foundations::{FoundationInitializer, Foundations};
+use crate::pipelines::renderable::{RenderResources, Renderable};
 
 pub struct BlockWorldResources {
     texture: Submitter<StageTexture<Dim2D>>,
@@ -51,7 +51,7 @@ impl BlockWorldResources{
         })
     }
 }
-impl Resources for BlockWorldResources{
+impl RenderResources for BlockWorldResources{
     type Render = BlockWorld;
     fn create_descriptors(&self,descriptors:&mut DescriptorsBuilder, foundations:&FoundationInitializer)->Result<(),failure::Error>{
         descriptors.sampler(foundations.sampler(), self.texture.imageview());

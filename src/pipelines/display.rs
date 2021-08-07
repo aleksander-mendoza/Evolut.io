@@ -24,35 +24,26 @@ use crate::blocks::Face;
 use crate::render::single_render_pass::SingleRenderPass;
 use crate::render::descriptors::{Descriptors, DescriptorsBuilder, UniformBufferBinding, DescriptorsBuilderLocked};
 use std::marker::PhantomData;
-use crate::player::Player;
-use crate::mvp_uniforms::MvpUniforms;
-use crate::foundations::{FoundationInitializer, Foundations};
+use crate::pipelines::player::Player;
+use crate::pipelines::mvp_uniforms::MvpUniforms;
+use crate::pipelines::foundations::{FoundationInitializer, Foundations};
+use crate::pipelines::renderable::{RenderResources, Renderable};
+use crate::pipelines::computable::{ComputeResources, Computable};
+use std::sync::Arc;
 
-pub trait Resources:Sized{
-    type Render:Renderable;
-    fn create_descriptors(&self,descriptors:&mut DescriptorsBuilder, foundations:&FoundationInitializer)->Result<(),failure::Error>;
-    fn make_renderable(self, cmd_pool: &CommandPool, render_pass: &SingleRenderPass, descriptors:&DescriptorsBuilderLocked, foundations:&Foundations) -> Result<Self::Render, failure::Error>;
 
-}
-pub trait Renderable:Sized{
-    fn record_cmd_buffer(&self, cmd: &mut CommandBuffer, image_idx:SwapchainImageIdx,descriptors:&Descriptors, render_pass:&SingleRenderPass, foundations:&Foundations)->Result<(),Error>;
-    fn record_compute_cmd_buffer(&self, cmd: &mut CommandBuffer, foundations:&Foundations)->Result<(),Error>;
-    fn update_uniforms(&mut self, image_idx:SwapchainImageIdx, player:&Player);
-    fn recreate(&mut self, render_pass: &SingleRenderPass, ) -> Result<(), Error>;
-}
-
-pub struct Display<P:Resources>{
+pub struct Display<P: RenderResources>{
     command_buffers: Vec<CommandBuffer>,
     pipeline:P::Render,
     render_pass:SingleRenderPass,
     descriptors:Descriptors,
     descriptors_builder:DescriptorsBuilderLocked,
-    foundations: Foundations,
+    foundations: Arc<Foundations>,
     cmd_pool: CommandPool,
     uniforms_binding:UniformBufferBinding<MvpUniforms,1>,
     vulkan: VulkanContext,
 }
-impl <P:Resources> Display<P> {
+impl <P: RenderResources> Display<P> {
     const CLEAR_VALUES: [vk::ClearValue; 2] = [vk::ClearValue {
         color: vk::ClearColorValue {
             float32: [0.0, 0.0, 0.0, 1.0],
@@ -70,20 +61,21 @@ impl <P:Resources> Display<P> {
     pub fn pipeline_mut(&mut self) -> &mut P::Render{
         &mut self.pipeline
     }
-    pub fn new(vulkan: VulkanContext, player:&Player, f:impl FnOnce(&CommandPool, &FoundationInitializer)->Result<P,failure::Error>) -> Result<Self, failure::Error> {
+    pub fn new(vulkan: VulkanContext, player:&Player,
+               render:impl FnOnce(&CommandPool, &FoundationInitializer)->Result<P,failure::Error>) -> Result<Self, failure::Error> {
         let render_pass = vulkan.create_single_render_pass()?;
         let cmd_pool = CommandPool::new(vulkan.device(),true)?;
         let mut descriptors_builder = DescriptorsBuilder::new();
         let uniforms_binding = descriptors_builder.singleton_uniform_buffer(player.mvp_uniforms());
         let foundations = FoundationInitializer::new(&cmd_pool)?;
-        let resources = f(&cmd_pool,&foundations)?;
-        resources.create_descriptors(&mut descriptors_builder, &foundations)?;
+        let render_resources = render(&cmd_pool,&foundations)?;
+        render_resources.create_descriptors(&mut descriptors_builder, &foundations)?;
         let descriptors_builder = descriptors_builder.make_layout(cmd_pool.device())?;
-        let foundations = foundations.build()?;
-        let pipeline = resources.make_renderable(&cmd_pool,&render_pass,&descriptors_builder, &foundations)?;
+        let foundations = Arc::new(foundations.build()?);
+        let pipeline = render_resources.make_renderable(&cmd_pool, &render_pass,&descriptors_builder, &foundations)?;
         let descriptors = descriptors_builder.build(render_pass.swapchain())?;
         let command_buffers = cmd_pool.create_command_buffers(render_pass.framebuffers_len() as u32)?;
-        Ok(Self {
+        let display = Self {
             descriptors_builder,
             descriptors,
             command_buffers,
@@ -93,13 +85,17 @@ impl <P:Resources> Display<P> {
             cmd_pool,
             vulkan,
             uniforms_binding
-        })
+        };
+        Ok(display)
     }
     pub fn cmd_pool(&self) -> &CommandPool {
         &self.cmd_pool
     }
     pub fn device(&self) -> &Device {
         self.vulkan.device()
+    }
+    pub fn foundations(&self) -> Arc<Foundations> {
+        self.foundations.clone()
     }
     pub fn destroy(self) -> VulkanContext {
         let Self { vulkan, .. } = self;
@@ -156,9 +152,9 @@ impl <P:Resources> Display<P> {
         let render_finished = vulkan.frames_in_flight().current_rendering();
         fence.reset()?;
         let command_buffer = &mut command_buffers[image_idx.get_usize()];
-        if rerecord_cmd{
-            pipeline.record_cmd_buffer(command_buffer,image_idx,descriptors, render_pass, foundations)?
-        }
+        // if rerecord_cmd{
+        //     pipeline.record_cmd_buffer(command_buffer,image_idx,descriptors, render_pass, foundations)?
+        // }
         descriptors.uniform_as_slice_mut(image_idx, *uniforms_binding).copy_from_slice(std::slice::from_ref(player.mvp_uniforms()));
         pipeline.update_uniforms(image_idx, player);
 

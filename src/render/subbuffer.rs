@@ -7,9 +7,10 @@ use std::collections::Bound;
 use std::ops::RangeBounds;
 use crate::render::buffer::Buffer;
 use ash::vk::DeviceMemory;
+use std::sync::Arc;
 
 pub struct SubBuffer<V: Copy, T: BufferType>{
-    buff:Rc<OwnedBuffer<V, T>>,
+    buff:Arc<OwnedBuffer<V, T>>,
     offset:vk::DeviceSize,
     size:vk::DeviceSize
 }
@@ -52,7 +53,7 @@ impl <V: Copy, T: BufferType> SubBuffer<V,T>{
 impl <V: Copy, T: BufferType> From<OwnedBuffer<V,T>> for SubBuffer<V,T>{
     fn from(b: OwnedBuffer<V, T>) -> Self {
         let size = b.bytes();
-        Self{buff:Rc::new(b), offset: 0, size }
+        Self{buff:Arc::new(b), offset: 0, size }
     }
 }
 

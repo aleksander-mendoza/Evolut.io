@@ -1,9 +1,9 @@
 use crate::blocks::Block;
 use crate::input::Input;
 use crate::fps::FpsCounter;
-use crate::mvp_uniforms::MvpUniforms;
-use crate::display::Display;
-use crate::game::GameResources;
+use crate::pipelines::mvp_uniforms::MvpUniforms;
+use crate::pipelines::display::Display;
+use crate::pipelines::game::GameResources;
 
 pub struct Player {
     projection_matrix: glm::Mat4,
