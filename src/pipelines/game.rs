@@ -15,7 +15,7 @@ use crate::render::submitter::Submitter;
 use crate::pipelines::joint::{Joint, JointResources};
 use crate::pipelines::particles::{ParticleResources, Particles};
 use crate::pipelines::block_world::{BlockWorldResources, BlockWorld};
-use crate::render::compute::{ComputePipelineBuilder, ComputePipeline, StorageBufferBinding, UniformBufferBinding};
+use crate::render::compute::{ ComputePipeline, StorageBufferBinding, UniformBufferBinding};
 use crate::blocks::world_size::{CHUNK_WIDTH, CHUNK_HEIGHT, CHUNK_DEPTH, CHUNK_WIDTH_IN_CELLS, CHUNK_DEPTH_IN_CELLS, CHUNK_HEIGHT_IN_CELLS};
 use crate::render::vector::Vector;
 use crate::render::host_buffer::HostBuffer;

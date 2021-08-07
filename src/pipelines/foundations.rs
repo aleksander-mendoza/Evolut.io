@@ -129,20 +129,18 @@ impl FoundationInitializer {
         let mut collision_grid = Submitter::new(grid_buffer, cmd_pool)?;
         fill_submit(&mut collision_grid,u32::MAX)?;
 
-        let indirect = StageBuffer::new_indirect_dispatch_buffer(cmd_pool, &[
-            vk::DispatchIndirectCommand { // solve_constraints.comp
-                x: 0, // number of predefined_constraints + collision_constraints
+        fn dispatch_indirect(x:f32)->vk::DispatchIndirectCommand{
+            vk::DispatchIndirectCommand{
+                x: (x/32.).ceil() as u32,
                 y: 1,
-                z: 1,
-            }, vk::DispatchIndirectCommand { // collision_detection.comp
-                x: phantom_particles.max(solid_particles) as u32,
-                y: 1,
-                z: 1,
-            }, vk::DispatchIndirectCommand {
-                x: 0,
-                y: 1,
-                z: 1,
+                z: 1
             }
+        }
+
+        let indirect = StageBuffer::new_indirect_dispatch_buffer(cmd_pool, &[
+            dispatch_indirect(phantom_particles.max(solid_particles) as f32),// collision_detection.comp
+            dispatch_indirect(0.), // solve_constraints.comp
+            dispatch_indirect(bone_data.len() as f32) // bones.comp
         ])?;
 
         let bones = StageBuffer::wrap(cmd_pool, &bone_data, bones_buffer)?;

@@ -15,7 +15,7 @@ use crate::render::submitter::Submitter;
 use crate::pipelines::joint::{Joint, JointResources};
 use crate::pipelines::particles::{ParticleResources, Particles};
 use crate::pipelines::block_world::{BlockWorldResources, BlockWorld};
-use crate::render::compute::{ComputePipelineBuilder, ComputePipeline, StorageBufferBinding, UniformBufferBinding};
+use crate::render::compute::{ComputePipeline, StorageBufferBinding, UniformBufferBinding, ComputeDescriptorsBuilder};
 use crate::blocks::world_size::{CHUNK_WIDTH, CHUNK_HEIGHT, CHUNK_DEPTH, CHUNK_WIDTH_IN_CELLS, CHUNK_DEPTH_IN_CELLS, CHUNK_HEIGHT_IN_CELLS};
 use crate::render::vector::Vector;
 use crate::render::host_buffer::HostBuffer;
@@ -29,6 +29,7 @@ use crate::pipelines::computable::{ComputeResources, Computable};
 pub struct PhysicsResources {
     collision_detection: ShaderModule<Compute>,
     solve_constraints: ShaderModule<Compute>,
+    update_bones: ShaderModule<Compute>,
     particle_uniform: HostBuffer<ThrowUniform, Uniform>,
 }
 
@@ -45,11 +46,12 @@ impl PhysicsResources {
     pub fn new(cmd_pool: &CommandPool, foundations:&FoundationInitializer) -> Result<Self, failure::Error> {
         let collision_detection = ShaderModule::new(include_glsl!("assets/shaders/collision_detection.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let solve_constraints = ShaderModule::new(include_glsl!("assets/shaders/solve_constraints.comp", kind: comp) as &[u32], cmd_pool.device())?;
+        let update_bones = ShaderModule::new(include_glsl!("assets/shaders/bones.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let particle_uniform = HostBuffer::new(cmd_pool.device(), &[ThrowUniform {
             position: Vec3(glm::vec3(0., 0., 0.)),
             velocity: Vec3(glm::vec3(0., 0., 0.)),
         }])?;
-        Ok(Self { collision_detection, solve_constraints, particle_uniform })
+        Ok(Self { collision_detection, solve_constraints, particle_uniform, update_bones })
     }
 }
 impl ComputeResources for PhysicsResources{
@@ -60,21 +62,24 @@ impl ComputeResources for PhysicsResources{
             collision_detection,
             solve_constraints,
             particle_uniform,
+            update_bones
         } = self;
-        let mut compute_pipeline = ComputePipelineBuilder::new();
-        let uniform_binding = compute_pipeline.uniform_buffer(particle_uniform.buffer());
-        compute_pipeline.storage_buffer(foundations.constants());
-        compute_pipeline.storage_buffer(foundations.particles());
-        compute_pipeline.storage_buffer(foundations.collision_grid());
-        compute_pipeline.storage_buffer(foundations.constraints());
-        compute_pipeline.storage_buffer(foundations.indirect());
-        compute_pipeline.shader("main", collision_detection);
-        let collision_detection = compute_pipeline.build(cmd_pool.device())?;
-        compute_pipeline.shader("main", solve_constraints);
-        let solve_constraints = compute_pipeline.build(cmd_pool.device())?;
+        let mut descriptors = ComputeDescriptorsBuilder::new();
+        let uniform_binding = descriptors.uniform_buffer(particle_uniform.buffer());
+        descriptors.storage_buffer(foundations.constants());
+        descriptors.storage_buffer(foundations.particles());
+        descriptors.storage_buffer(foundations.collision_grid());
+        descriptors.storage_buffer(foundations.constraints());
+        descriptors.storage_buffer(foundations.indirect());
+        descriptors.storage_buffer(foundations.bones());
+        let descriptors = descriptors.build(cmd_pool.device())?;
+        let collision_detection = descriptors.build("main", collision_detection)?;
+        let solve_constraints = descriptors.build("main", solve_constraints)?;
+        let update_bones = descriptors.build("main", update_bones)?;
         Ok(Physics {
             collision_detection,
             solve_constraints,
+            update_bones,
             uniform_binding,
             particle_uniform,
         })
@@ -87,19 +92,27 @@ pub struct Physics {
     uniform_binding: UniformBufferBinding<ThrowUniform>,
     collision_detection: ComputePipeline,
     solve_constraints: ComputePipeline,
+    update_bones: ComputePipeline,
     particle_uniform: HostBuffer<ThrowUniform, Uniform>,
 }
 
 impl Computable for Physics {
     fn record_compute_cmd_buffer(&self, cmd: &mut CommandBuffer,foundations:&Foundations) -> Result<(), Error> {
         cmd.bind_compute_pipeline(&self.collision_detection)
-            .dispatch_1d(foundations.particles().bytes() as u32 / 32)
+            .bind_compute_descriptors(&self.collision_detection)
+            .dispatch_indirect(foundations.indirect(), 0)
             .buffer_barriers(vk::PipelineStageFlags::COMPUTE_SHADER, vk::PipelineStageFlags::COMPUTE_SHADER, &[
                 make_shader_buffer_barrier(foundations.particles()),
                 make_shader_buffer_barrier(foundations.constraints())
             ])
             .bind_compute_pipeline(&self.solve_constraints)
-            .dispatch_indirect(foundations.indirect(), 0);
+            .dispatch_indirect(foundations.indirect(), 1)
+            .buffer_barriers(vk::PipelineStageFlags::COMPUTE_SHADER, vk::PipelineStageFlags::COMPUTE_SHADER, &[
+                make_shader_buffer_barrier(foundations.particles()),
+            ])
+            .bind_compute_pipeline(&self.update_bones)
+            .dispatch_indirect(foundations.indirect(), 2)
+        ;
         Ok(())
     }
 

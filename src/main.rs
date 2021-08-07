@@ -24,7 +24,6 @@ use crate::blocks::block_properties::{BEDROCK, DIRT, GRASS, PLANK};
 use crate::fps::FpsCounter;
 use crate::input::Input;
 use crate::render::command_pool::{CommandBuffer, CommandPool};
-use crate::render::compute::ComputePipelineBuilder;
 use crate::render::descriptor_pool::DescriptorSet;
 use crate::render::framebuffer::Framebuffer;
 use crate::render::pipeline::Pipeline;

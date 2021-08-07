@@ -17,7 +17,7 @@ use crate::render::imageview::{Color, Aspect};
 use std::rc::Rc;
 use crate::render::util::any_as_u8_slice;
 use crate::render::stage_buffer::StageBuffer;
-use crate::render::compute::{ComputePipelineBuilder, ComputePipeline};
+use crate::render::compute::{ComputePipeline};
 use crate::render::buffer_type::{GpuWriteable, CpuWriteable, GpuIndirect, BufferType, AsStorage};
 use crate::render::buffer::{Buffer, make_buffer_barrier};
 
@@ -278,6 +278,11 @@ impl CommandBuffer {
                 vk::PipelineBindPoint::COMPUTE,
                 pipeline.raw(),
             );
+        }
+        self
+    }
+    pub fn bind_compute_descriptors(&mut self, pipeline: &ComputePipeline) -> &mut Self {
+        unsafe{
             self.device.inner().cmd_bind_descriptor_sets(
                 self.raw,
                 vk::PipelineBindPoint::COMPUTE,

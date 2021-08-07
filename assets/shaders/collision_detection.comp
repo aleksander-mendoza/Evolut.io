@@ -5,31 +5,7 @@
 
 layout (local_size_x = 32) in;
 
-
-layout (set = 0, binding = 0) uniform Throw{
-    vec3 position;
-    vec3 velocity;
-}throw;
-
-layout (std430, set = 0, binding = 1) buffer ParticleConstant{
-    ParticleConstants constants;
-};
-
-layout(std430, set = 0, binding = 2) buffer Particles{
-    Particle particles[]; // the particles at indices from 0 (inclusive) to solid_particles (exclusive) are solid. All the remaining particles are phantom.
-};
-
-layout(std430, set = 0, binding = 3) buffer CollisionGrid{
-    uint collision_grid[];
-};
-
-layout(std430, set = 0, binding = 4) buffer Constraints{
-    Constraint constraints[];
-};
-
-layout(std430, set = 0, binding = 5) buffer Indirect{
-    DispatchIndirectCommand[] indirect;
-};
+#include "physics_descriptors.comp"
 
 void main()
 {
@@ -133,7 +109,7 @@ void main()
         }
     }
     if(gID==0){
-        indirect[0].x = uint(ceil(float(constants.collision_constraints)/32.));
+        indirect[1].x = uint(ceil(float(constants.collision_constraints)/32.));
     }
     if (gID < constants.phantom_particles){
         const uint phantom_id = gID+constants.solid_particles;

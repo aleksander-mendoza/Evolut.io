@@ -1,0 +1,29 @@
+
+layout (set = 0, binding = 0) uniform Throw{
+    vec3 position;
+    vec3 velocity;
+}throw;
+
+layout (std430, set = 0, binding = 1) buffer ParticleConstant{
+    ParticleConstants constants;
+};
+
+layout(std430, set = 0, binding = 2) buffer Particles{
+    Particle particles[]; // the particles at indices from 0 (inclusive) to solid_particles (exclusive) are solid. All the remaining particles are phantom.
+};
+
+layout(std430, set = 0, binding = 3) buffer CollisionGrid{
+    uint collision_grid[];
+};
+
+layout(std430, set = 0, binding = 4) buffer Constraints{
+    Constraint constraints[];
+};
+
+layout(std430, set = 0, binding = 5) buffer Indirect{
+    DispatchIndirectCommand[] indirect;
+};
+
+layout(std430, set = 0, binding = 6) buffer Bones{
+    Bone bones[];
+};

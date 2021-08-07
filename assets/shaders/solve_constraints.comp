@@ -5,28 +5,7 @@
 
 layout (local_size_x = 32) in;
 
-
-layout (set = 0, binding = 0) uniform Throw{
-    vec3 position;
-    vec3 velocity;
-}throw;
-
-layout (set = 0, binding = 1) buffer ParticleConstant{
-    ParticleConstants constants;
-};
-
-layout(std430, set = 0, binding = 2) buffer Particles{
-    Particle particles[];
-};
-
-layout(std430, set = 0, binding = 3) buffer CollisionGrid{
-    uint collision_grid[];
-};
-
-layout(std430, set = 0, binding = 4) buffer Constraints{
-    Constraint constraints[];
-};
-
+#include "physics_descriptors.comp"
 
 void main(){
     const uint gID = gl_GlobalInvocationID.x;
