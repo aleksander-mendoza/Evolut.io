@@ -1,12 +1,12 @@
 use ash::version::{InstanceV1_0, DeviceV1_0, InstanceV1_1};
 use ash::vk;
 use failure::err_msg;
-use ash::vk::{QueueFamilyProperties, ExtensionProperties, PhysicalDeviceMemoryProperties, MemoryRequirements, ImageFormatProperties, PhysicalDeviceSubgroupPropertiesBuilder, PhysicalDeviceSubgroupProperties};
+use ash::vk::{QueueFamilyProperties, ExtensionProperties, PhysicalDeviceMemoryProperties, MemoryRequirements, PhysicalDeviceSubgroupProperties};
 use crate::render::instance::Instance;
 use crate::render::validation_layer::get_validation_layer_support;
 use crate::render::surface::Surface;
 use std::ffi::CStr;
-use std::rc::Rc;
+
 use ash::prelude::VkResult;
 use std::sync::Arc;
 
@@ -92,7 +92,7 @@ pub fn pick_physical_device(instance: &ash::Instance, surface: &Surface, debug:b
     physical_devices
         .iter()
         .map(|&dev| (dev, score_physical_device(instance, dev, surface, debug)))
-        .max_by_key(|(dev, score)| *score)
+        .max_by_key(|(_dev, score)| *score)
         .and_then(|(dev, score)| if score > 0 { Some(dev) } else { None })
         .ok_or_else(|| err_msg("No suitable devices are available. You need to have a GPU with compute shaders and graphics pipeline"))
 }

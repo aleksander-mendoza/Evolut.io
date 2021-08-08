@@ -76,10 +76,10 @@ impl RenderPassBuilder {
         self.subpasses.push((vk::PipelineBindPoint::GRAPHICS, inputs.into(), colors.into(), Some(depth)));
         self
     }
-    pub fn graphics_subpass(mut self, inputs: impl Into<Vec<vk::AttachmentReference>>, colors: impl Into<Vec<vk::AttachmentReference>>) -> Self {
+    pub fn graphics_subpass(self, inputs: impl Into<Vec<vk::AttachmentReference>>, colors: impl Into<Vec<vk::AttachmentReference>>) -> Self {
         self.subpass(vk::PipelineBindPoint::GRAPHICS, inputs, colors)
     }
-    pub fn compute_subpass(mut self, inputs: impl Into<Vec<vk::AttachmentReference>>, colors: impl Into<Vec<vk::AttachmentReference>>) -> Self {
+    pub fn compute_subpass(self, inputs: impl Into<Vec<vk::AttachmentReference>>, colors: impl Into<Vec<vk::AttachmentReference>>) -> Self {
         self.subpass(vk::PipelineBindPoint::COMPUTE, inputs, colors)
     }
     pub fn subpass(mut self, bind_point: vk::PipelineBindPoint, inputs: impl Into<Vec<vk::AttachmentReference>>, colors: impl Into<Vec<vk::AttachmentReference>>) -> Self {

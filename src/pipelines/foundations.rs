@@ -1,19 +1,19 @@
-use crate::render::stage_buffer::{StageBuffer, StageSubBuffer, StageOwnedBuffer, IndirectDispatchSubBuffer};
+use crate::render::stage_buffer::{StageBuffer, StageSubBuffer, IndirectDispatchSubBuffer, IndirectSubBuffer};
 use crate::pipelines::particle::Particle;
-use crate::render::command_pool::{CommandPool, CommandBuffer};
-use crate::render::shader_module::{ShaderModule, Fragment, Vertex};
-use ash::vk::ShaderStageFlags;
-use crate::render::pipeline::{PipelineBuilder, BufferBinding, Pipeline};
+use crate::render::command_pool::{CommandPool};
+
+
+
 use ash::vk;
-use crate::pipelines::renderable::{RenderResources, Renderable};
-use crate::render::descriptors::{DescriptorsBuilder, DescriptorsBuilderLocked, Descriptors};
+
+
 use failure::Error;
-use crate::render::single_render_pass::SingleRenderPass;
-use crate::render::swap_chain::SwapchainImageIdx;
+
+
 use crate::render::submitter::{Submitter, fill_submit};
-use crate::pipelines::player::Player;
+
 use crate::render::buffer_type::{Cpu, Storage, GpuIndirect};
-use crate::render::owned_buffer::OwnedBuffer;
+
 use crate::blocks::world_size::CHUNK_VOLUME_IN_CELLS;
 use crate::render::subbuffer::SubBuffer;
 use crate::pipelines::constraint::Constraint;
@@ -23,18 +23,55 @@ use crate::blocks::WorldSize;
 use crate::render::sampler::Sampler;
 use crate::pipelines::bone::Bone;
 
+pub struct Indirect{
+    collision_detection:SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
+    solve_constraints:SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
+    update_bones:SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
+    draw_bones:SubBuffer<vk::DrawIndirectCommand, GpuIndirect>,
+}
+impl Indirect{
+    fn new(indirect_dispatch:&Submitter<IndirectDispatchSubBuffer>, indirect_draw:&Submitter<IndirectSubBuffer>)->Self{
+        let collision_detection = indirect_dispatch.gpu().element(0);
+        let solve_constraints = indirect_dispatch.gpu().element(1);
+        let update_bones = indirect_dispatch.gpu().element(2);
+        let draw_bones = indirect_draw.gpu().element(0);
+        Self{
+            collision_detection,
+            solve_constraints,
+            update_bones,
+            draw_bones
+        }
+    }
+    pub fn draw_bones(&self)->&SubBuffer<vk::DrawIndirectCommand, GpuIndirect>{
+        &self.draw_bones
+    }
+    pub fn collision_detection(&self)->&SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>{
+        &self.collision_detection
+    }
+    pub fn solve_constraints(&self)->&SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>{
+        &self.solve_constraints
+    }
+    pub fn update_bones(&self)->&SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>{
+        &self.update_bones
+    }
+}
 pub struct FoundationInitializer {
     particles: Submitter<StageSubBuffer<Particle, Cpu, Storage>>,
     collision_grid: Submitter<SubBuffer<u32, Storage>>,
     constraints: Submitter<StageSubBuffer<Constraint, Cpu, Storage>>,
     bones: Submitter<StageSubBuffer<Bone, Cpu, Storage>>,
     particle_constants: Submitter<StageSubBuffer<ParticleConstants, Cpu, Storage>>,
-    indirect: Submitter<IndirectDispatchSubBuffer>,
+    indirect_dispatch: Submitter<IndirectDispatchSubBuffer>,
+    indirect_draw: Submitter<IndirectSubBuffer>,
+    indirect:Indirect,
     sampler: Sampler,
     world_size:WorldSize,
 }
 
 impl FoundationInitializer {
+    pub fn indirect(&self) -> &Indirect {
+        &self.indirect
+    }
     pub fn particles(&self) -> &StageSubBuffer<Particle, Cpu, Storage> {
         &self.particles
     }
@@ -84,7 +121,7 @@ impl FoundationInitializer {
         ];
 
         let bone_data = vec![
-            Bone::new(glm::vec4(1,2,3,4))
+            Bone::new([1,2,3,4], 3)
         ];
 
         let constants = ParticleConstants {
@@ -120,7 +157,7 @@ impl FoundationInitializer {
         let bones_buffer = super_buffer.sub(offset..offset + bones_in_bytes).reinterpret_into::<Bone>();
         let offset = offset+bones_in_bytes;
         let constants_buffer = super_buffer.sub(offset..offset + constants_in_bytes).reinterpret_into::<ParticleConstants>();
-        let offset = offset+constants_in_bytes;
+        let _offset = offset+constants_in_bytes;
 
         let particle_constants = StageBuffer::wrap(cmd_pool, &[constants], constants_buffer)?;
 
@@ -129,6 +166,12 @@ impl FoundationInitializer {
         let mut collision_grid = Submitter::new(grid_buffer, cmd_pool)?;
         fill_submit(&mut collision_grid,u32::MAX)?;
 
+        let bones = StageBuffer::wrap(cmd_pool, &bone_data, bones_buffer)?;
+
+        let constraints = StageBuffer::wrap(cmd_pool, &predefined_constraints, constraint_buffer)?;
+
+        let sampler = Sampler::new(cmd_pool.device(), vk::Filter::NEAREST, true)?;
+
         fn dispatch_indirect(x:f32)->vk::DispatchIndirectCommand{
             vk::DispatchIndirectCommand{
                 x: (x/32.).ceil() as u32,
@@ -136,23 +179,45 @@ impl FoundationInitializer {
                 z: 1
             }
         }
-
-        let indirect = StageBuffer::new_indirect_dispatch_buffer(cmd_pool, &[
+        fn draw_indirect(vertex_count:u32, instance_count:u32)->vk::DrawIndirectCommand{
+            vk::DrawIndirectCommand{
+                vertex_count,
+                instance_count,
+                first_vertex: 0,
+                first_instance: 0
+            }
+        }
+        let indirect_dispatch_data = vec![
             dispatch_indirect(phantom_particles.max(solid_particles) as f32),// collision_detection.comp
             dispatch_indirect(0.), // solve_constraints.comp
             dispatch_indirect(bone_data.len() as f32) // bones.comp
-        ])?;
+        ];
+        let indirect_draw_data = vec![
+            draw_indirect(36, bone_data.len() as u32),// bones.vert
+        ];
+        let indirect_dispatch_in_bytes = std::mem::size_of_val(indirect_dispatch_data.as_slice()) as u64;
+        let indirect_draw_in_bytes = std::mem::size_of_val(indirect_draw_data.as_slice()) as u64;
+        let super_indirect_buffer: SubBuffer<u8, GpuIndirect> = SubBuffer::with_capacity(cmd_pool.device(),
+                                                                                     indirect_dispatch_in_bytes +
+                                                                                         indirect_draw_in_bytes)?;
+        let offset = 0;
+        let indirect_dispatch_buffer = super_indirect_buffer.sub(offset..offset+indirect_dispatch_in_bytes).reinterpret_into::<vk::DispatchIndirectCommand>();
+        let offset = offset+indirect_dispatch_in_bytes;
+        let indirect_draw_buffer = super_indirect_buffer.sub(offset..offset + indirect_draw_in_bytes).reinterpret_into::<vk::DrawIndirectCommand>();
+        let offset = offset+indirect_draw_in_bytes;
 
-        let bones = StageBuffer::wrap(cmd_pool, &bone_data, bones_buffer)?;
+        let indirect_dispatch = StageBuffer::wrap(cmd_pool, &indirect_dispatch_data, indirect_dispatch_buffer)?;
+        let indirect_draw = StageBuffer::wrap(cmd_pool, &indirect_draw_data, indirect_draw_buffer)?;
 
-        let constraints = StageBuffer::wrap(cmd_pool, &predefined_constraints, constraint_buffer)?;
+        let indirect = Indirect::new(&indirect_dispatch, &indirect_draw);
 
-        let sampler = Sampler::new(cmd_pool.device(), vk::Filter::NEAREST, true)?;
-
-        Ok(Self { world_size, sampler, particles, constraints, collision_grid, particle_constants, indirect, bones })
+        Ok(Self { world_size, sampler, particles, constraints, collision_grid, particle_constants,
+            indirect_dispatch, indirect_draw, indirect, bones })
     }
     pub fn build(self) -> Result<Foundations, Error> {
         let Self {
+            indirect_dispatch,
+            indirect_draw,
             world_size,
             bones,
             particles,
@@ -167,8 +232,11 @@ impl FoundationInitializer {
         let constraints = constraints.take()?.take_gpu();
         let bones = bones.take()?.take_gpu();
         let particle_constants = particle_constants.take()?.take_gpu();
-        let indirect = indirect.take()?.take_gpu();
+        let indirect_dispatch = indirect_dispatch.take()?.take_gpu();
+        let indirect_draw = indirect_draw.take()?.take_gpu();
         Ok(Foundations {
+            indirect_draw,
+            indirect_dispatch,
             world_size,
             bones,
             collision_grid,
@@ -188,11 +256,16 @@ pub struct Foundations {
     bones: SubBuffer<Bone, Storage>,
     particle_constants: SubBuffer<ParticleConstants, Storage>,
     collision_grid: SubBuffer<u32, Storage>,
-    indirect:  SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
+    indirect_dispatch:  SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
+    indirect_draw:  SubBuffer<vk::DrawIndirectCommand, GpuIndirect>,
+    indirect:Indirect,
     sampler: Sampler,
 }
 
 impl Foundations {
+    pub fn indirect(&self) -> &Indirect {
+        &self.indirect
+    }
     pub fn particles(&self) -> &SubBuffer<Particle, Storage> {
         &self.particles
     }
@@ -202,8 +275,11 @@ impl Foundations {
     pub fn constants(&self) -> &SubBuffer<ParticleConstants, Storage> {
         &self.particle_constants
     }
-    pub fn indirect(&self) -> &SubBuffer<vk::DispatchIndirectCommand, GpuIndirect> {
-        &self.indirect
+    pub fn indirect_dispatch(&self) -> &SubBuffer<vk::DispatchIndirectCommand, GpuIndirect> {
+        &self.indirect_dispatch
+    }
+    pub fn indirect_draw(&self) -> &SubBuffer<vk::DrawIndirectCommand, GpuIndirect> {
+        &self.indirect_draw
     }
     pub fn constraints(&self) -> &SubBuffer<Constraint, Storage> {
         &self.constraints

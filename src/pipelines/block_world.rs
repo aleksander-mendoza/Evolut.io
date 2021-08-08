@@ -2,22 +2,22 @@ use crate::blocks::{World, Face};
 use crate::blocks::block_properties::{BEDROCK, DIRT, GRASS, PLANK, GLASS};
 use ash::vk;
 use crate::render::shader_module::{ShaderModule, Fragment, Vertex};
-use ash::vk::{ShaderStageFlags, PFN_vkCmdResetQueryPool};
+
 use crate::render::pipeline::{PipelineBuilder, BufferBinding, PushConstant, Pipeline};
 use crate::render::single_render_pass::SingleRenderPass;
 use crate::render::submitter::Submitter;
 use crate::render::command_pool::{CommandPool, CommandBuffer};
 use failure::Error;
 use crate::render::texture::{StageTexture, TextureView, Dim2D};
-use crate::render::sampler::Sampler;
-use crate::render::descriptor_layout::DescriptorLayout;
-use crate::render::device::Device;
-use crate::render::descriptors::{Descriptors, DescriptorsBuilder, DescriptorsBuilderLocked, UniformBufferBinding};
-use crate::pipelines::mvp_uniforms::MvpUniforms;
+
+
+
+use crate::render::descriptors::{Descriptors, DescriptorsBuilder, DescriptorsBuilderLocked};
+
 use crate::render::imageview::Color;
 use crate::render::swap_chain::SwapchainImageIdx;
 use crate::pipelines::player::Player;
-use crate::pipelines::particles::ParticleResources;
+
 use crate::pipelines::foundations::{FoundationInitializer, Foundations};
 use crate::pipelines::renderable::{RenderResources, Renderable};
 
@@ -58,7 +58,7 @@ impl RenderResources for BlockWorldResources{
         Ok(())
     }
 
-    fn make_renderable(self, cmd_pool: &CommandPool, render_pass: &SingleRenderPass, descriptors:&DescriptorsBuilderLocked, foundations:&Foundations) -> Result<Self::Render, failure::Error>{
+    fn make_renderable(self, _cmd_pool: &CommandPool, render_pass: &SingleRenderPass, descriptors:&DescriptorsBuilderLocked, _foundations:&Foundations) -> Result<Self::Render, failure::Error>{
         let Self{ texture, world, frag, vert } = self;
         let mut pipeline = PipelineBuilder::new();
         pipeline.descriptor_layout(descriptors.layout().clone())
@@ -127,7 +127,7 @@ impl BlockWorld {
 impl Renderable for BlockWorld {
 
 
-    fn record_cmd_buffer(&self, cmd: &mut CommandBuffer, image_idx: SwapchainImageIdx, descriptors:&Descriptors, render_pass: &SingleRenderPass, foundations:&Foundations) -> Result<(), Error> {
+    fn record_cmd_buffer(&self, cmd: &mut CommandBuffer, image_idx: SwapchainImageIdx, descriptors:&Descriptors, _render_pass: &SingleRenderPass, _foundations:&Foundations) -> Result<(), Error> {
         cmd
             .bind_pipeline(self.pipeline())
             .uniform(self.pipeline(), descriptors.descriptor_set(image_idx));
@@ -135,11 +135,11 @@ impl Renderable for BlockWorld {
         Ok(())
     }
 
-    fn record_compute_cmd_buffer(&self, cmd: &mut CommandBuffer, foundations:&Foundations) -> Result<(), Error> {
+    fn record_compute_cmd_buffer(&self, _cmd: &mut CommandBuffer, _foundations:&Foundations) -> Result<(), Error> {
         Ok(())
     }
 
-    fn update_uniforms(&mut self, image_idx: SwapchainImageIdx, player:&Player) {
+    fn update_uniforms(&mut self, _image_idx: SwapchainImageIdx, _player:&Player) {
     }
     fn recreate(&mut self, render_pass: &SingleRenderPass) -> Result<(), Error> {
         self.block_world_compiled = self.block_world_builder.create_pipeline(render_pass)?;

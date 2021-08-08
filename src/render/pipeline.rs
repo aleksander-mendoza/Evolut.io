@@ -2,14 +2,14 @@ use crate::render::shader_module::{ShaderModule, AnyShaderModule, Fragment, Vert
 use ash::vk;
 use crate::render::device::Device;
 use ash::version::DeviceV1_0;
-use std::ffi::{CStr, CString};
+use std::ffi::{CString};
 use failure::err_msg;
-use crate::render::render_pass::{RenderPassBuilder, RenderPass};
-use std::rc::Rc;
+use crate::render::render_pass::{RenderPass};
+
 use ash::vk::PipelineLayout;
 use crate::render::data::{VertexSource, VertexAttrib};
 use crate::render::descriptor_layout::DescriptorLayout;
-use crate::render::owned_buffer::{OwnedBuffer};
+
 use std::marker::PhantomData;
 use crate::render::buffer_type::BufferType;
 use crate::render::buffer::Buffer;

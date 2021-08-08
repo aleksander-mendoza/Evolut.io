@@ -1,11 +1,9 @@
 use ash::vk;
 use crate::render::device::Device;
 use ash::version::DeviceV1_0;
-use crate::render::owned_buffer::{OwnedBuffer};
+
 use std::rc::Rc;
-use crate::render::data::VertexSource;
-use crate::render::descriptor_binding::DescriptorBinding;
-use std::ops::Deref;
+
 use crate::render::sampler::Sampler;
 use ash::vk::DescriptorPoolSize;
 use crate::render::swap_chain::SwapChain;
@@ -48,12 +46,7 @@ impl DescriptorLayout{
     pub fn raw(&self)->vk::DescriptorSetLayout{
         self.inner.raw
     }
-    pub fn new_uniform<T:Copy,const size:usize>(device:&Device, buffer:&[T;size]) -> Result<DescriptorLayout, ash::vk::Result> {
-        DescriptorLayout::new(device,&[buffer.create_binding(0)])
-    }
-    pub fn new_sampler_uniform<T:Copy,const size:usize>(sampler:&Sampler, buffer:&[T;size]) -> Result<DescriptorLayout, ash::vk::Result> {
-        DescriptorLayout::new(sampler.device(),&[sampler.create_binding(0),buffer.create_binding(1)])
-    }
+
     pub fn new(device: &Device, layouts:&[vk::DescriptorSetLayoutBinding]) -> Result<Self, ash::vk::Result> {
         let max_binding = layouts.iter().map(|l|l.binding).max().expect("No descriptor set layout bindings provided!") as usize;
         let mut bindings_to_layout = vec![None;max_binding+1];

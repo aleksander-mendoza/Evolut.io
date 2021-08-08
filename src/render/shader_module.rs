@@ -2,8 +2,8 @@ use ash::vk;
 use crate::render::device::Device;
 use ash::version::DeviceV1_0;
 use ash::prelude::VkResult;
-use std::ffi::{CStr, CString};
-use std::rc::Rc;
+use std::ffi::{CStr};
+
 use ash::vk::ShaderStageFlags;
 use std::marker::PhantomData;
 use std::sync::Arc;

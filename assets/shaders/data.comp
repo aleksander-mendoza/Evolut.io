@@ -22,9 +22,11 @@ struct Constraint{
 };
 
 struct Bone{
-    uvec4 particle_ids;
+    uint[4] particle_ids;
     vec3 center;
-    float color;
+    uint texture_variant;
+    vec3 normal;
+    uint part_variant;
 };
 
 struct ParticleConstants{

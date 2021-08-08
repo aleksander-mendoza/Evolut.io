@@ -1,18 +1,18 @@
 
-use crate::render::stage_buffer::StageBuffer;
-use crate::pipelines::particle::Particle;
+
+
 use crate::render::command_pool::{CommandPool, CommandBuffer};
-use crate::render::shader_module::ShaderModule;
-use ash::vk::ShaderStageFlags;
-use crate::render::pipeline::{PipelineBuilder, BufferBinding, Pipeline};
-use ash::vk;
+
+
+
+
 use crate::pipelines::renderable::{RenderResources, Renderable};
 use crate::render::descriptors::{DescriptorsBuilder, DescriptorsBuilderLocked, Descriptors};
 use failure::Error;
 use crate::render::single_render_pass::SingleRenderPass;
 use crate::render::swap_chain::SwapchainImageIdx;
-use crate::pipelines::particles::ParticleResources;
-use crate::pipelines::block_world::BlockWorldResources;
+
+
 use crate::pipelines::player::Player;
 use crate::pipelines::foundations::{Foundations, FoundationInitializer};
 

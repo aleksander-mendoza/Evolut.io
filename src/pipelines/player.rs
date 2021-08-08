@@ -63,7 +63,7 @@ impl Player {
 
         let movement_vector = input.get_direction_unit_vector() * self.movement_speed * fps_counter.delta_f32();
         let inverse_rotation = glm::quat_inverse(&self.rotation);
-        let mut movement_vector = glm::quat_rotate_vec3(&inverse_rotation, &movement_vector);
+        let movement_vector = glm::quat_rotate_vec3(&inverse_rotation, &movement_vector);
         // display.pipeline().a().world().blocks().zero_out_velocity_vector_on_hitbox_collision(&mut movement_vector, &(location-glm::vec3(0.4f32,1.5,0.4)),&(location+glm::vec3(0.4f32,0.3,0.4)));
         self.location += movement_vector;
         self.ray_trace_vector = glm::quat_rotate_vec(&inverse_rotation, &glm::vec4(0f32, 0., -self.player_reach, 0.));

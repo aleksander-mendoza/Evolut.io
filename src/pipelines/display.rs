@@ -1,34 +1,34 @@
-use crate::render::instance::Instance;
-use crate::render::device::{pick_physical_device, Device};
-use crate::render::pipeline::{PipelineBuilder, Pipeline};
-use crate::render::render_pass::{RenderPassBuilder, RenderPass};
-use crate::render::shader_module::ShaderModule;
-use ash::vk::{ShaderStageFlags, PhysicalDevice, ClearValue, VertexInputAttributeDescription};
+
+use crate::render::device::{Device};
+
+
+
+
 use crate::render::command_pool::{CommandPool, CommandBuffer};
-use crate::render::imageview::{ImageView, Color, Depth};
-use crate::render::frames_in_flight::FramesInFlight;
-use crate::render::surface::Surface;
+
+
+
 use crate::render::swap_chain::{SwapChain, SwapchainImageIdx};
 use crate::render::vulkan_context::VulkanContext;
 use failure::Error;
 use ash::vk;
-use crate::render::data::{VertexClr, VertexClrTex, VertexSource};
-use crate::render::owned_buffer::{OwnedBuffer};
-use crate::render::fence::Fence;
-use crate::render::descriptor_pool::{DescriptorPool, DescriptorSet};
-use crate::render::descriptor_layout::DescriptorLayout;
-use crate::render::texture::{StageTexture, Dim2D, TextureView};
-use crate::render::sampler::Sampler;
-use crate::render::framebuffer::Framebuffer;
-use crate::blocks::Face;
+
+
+
+
+
+
+
+
+
 use crate::render::single_render_pass::SingleRenderPass;
 use crate::render::descriptors::{Descriptors, DescriptorsBuilder, UniformBufferBinding, DescriptorsBuilderLocked};
-use std::marker::PhantomData;
+
 use crate::pipelines::player::Player;
 use crate::pipelines::mvp_uniforms::MvpUniforms;
 use crate::pipelines::foundations::{FoundationInitializer, Foundations};
 use crate::pipelines::renderable::{RenderResources, Renderable};
-use crate::pipelines::computable::{ComputeResources, Computable};
+use crate::pipelines::computable::{Computable};
 use std::sync::Arc;
 
 
@@ -143,8 +143,8 @@ impl <P: RenderResources> Display<P> {
         Ok(())
     }
 
-    pub fn render(&mut self, rerecord_cmd:bool, player:&Player) -> Result<bool, failure::Error> {
-        let Self{ command_buffers, pipeline, render_pass,foundations, vulkan,descriptors, uniforms_binding, .. } = self;
+    pub fn render(&mut self, _rerecord_cmd:bool, player:&Player) -> Result<bool, failure::Error> {
+        let Self{ command_buffers, pipeline, render_pass,foundations: _, vulkan,descriptors, uniforms_binding, .. } = self;
         let fence = vulkan.frames_in_flight().current_fence();
         fence.wait(None)?;
         let image_available = vulkan.frames_in_flight().current_image_semaphore();

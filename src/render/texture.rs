@@ -1,15 +1,15 @@
-use image::{ColorType, GenericImageView, EncodableLayout};
+use image::{GenericImageView, EncodableLayout};
 use crate::render::owned_buffer::{OwnedBuffer};
 use crate::render::device::Device;
 use ash::vk;
 use std::marker::PhantomData;
-use ash::vk::{Extent3D, DeviceMemory, Image, DeviceSize, Extent2D};
-use ash::version::{DeviceV1_0, InstanceV1_0};
+use ash::vk::{Extent3D, DeviceMemory, Image, Extent2D};
+use ash::version::{DeviceV1_0};
 use failure::err_msg;
 use std::path::Path;
-use crate::render::command_pool::{CommandPool, CommandBuffer};
+use crate::render::command_pool::{CommandPool};
 use crate::render::imageview::{ImageView, Aspect, Color, Depth};
-use crate::render::fence::Fence;
+
 use crate::render::swap_chain::SwapChain;
 use crate::render::submitter::Submitter;
 use crate::render::buffer_type::Cpu;

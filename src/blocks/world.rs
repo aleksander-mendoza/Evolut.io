@@ -1,13 +1,13 @@
 use crate::blocks::world_blocks::WorldBlocks;
-use crate::blocks::chunk_faces::{ChunkFaces};
+
 use crate::blocks::world_size::{WorldSize, CHUNK_WIDTH, CHUNK_DEPTH, CHUNK_HEIGHT};
 use crate::blocks::block::Block;
 use crate::blocks::raycast::ray_cast;
 use crate::blocks::world_faces::WorldFaces;
-use crate::render::device::Device;
+
 use crate::render::command_pool::{CommandBuffer, CommandPool};
 use crate::render::submitter::Submitter;
-use ash::prelude::VkResult;
+
 use crate::render::pipeline::{PushConstant, Pipeline, BufferBinding};
 use crate::blocks::Face;
 use failure::err_msg;
@@ -168,7 +168,7 @@ impl World {
     }
 
     pub fn ray_cast_remove_block(&mut self, start: &[f32], distance_and_direction: &[f32]) {
-        ray_cast(start, distance_and_direction, |block_x, block_y, block_z, adjacent_x, adjacent_y, adjacent_z| {
+        ray_cast(start, distance_and_direction, |block_x, block_y, block_z, _adjacent_x, _adjacent_y, _adjacent_z| {
             if self.size().is_point_in_bounds(block_x, block_y, block_z) &&
                 self.update_remove_block(block_x as usize, block_y as usize, block_z as usize) {
                 Some(())

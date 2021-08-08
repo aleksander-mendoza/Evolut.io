@@ -1,8 +1,8 @@
-use crate::render::stage_buffer::{StageBuffer, StageSubBuffer, StageOwnedBuffer, IndirectDispatchSubBuffer};
+
 use crate::pipelines::particle::Particle;
 use crate::render::command_pool::{CommandPool, CommandBuffer};
 use crate::render::shader_module::{ShaderModule, Fragment, Vertex};
-use ash::vk::ShaderStageFlags;
+
 use crate::render::pipeline::{PipelineBuilder, BufferBinding, Pipeline};
 use ash::vk;
 use crate::pipelines::renderable::{RenderResources, Renderable};
@@ -10,18 +10,18 @@ use crate::render::descriptors::{DescriptorsBuilder, DescriptorsBuilderLocked, D
 use failure::Error;
 use crate::render::single_render_pass::SingleRenderPass;
 use crate::render::swap_chain::SwapchainImageIdx;
-use crate::render::submitter::{Submitter, fill_submit};
+
 use crate::pipelines::player::Player;
-use crate::render::buffer_type::{Cpu, Storage, GpuIndirect};
-use crate::render::owned_buffer::OwnedBuffer;
-use crate::blocks::world_size::CHUNK_VOLUME_IN_CELLS;
-use crate::render::subbuffer::SubBuffer;
-use crate::pipelines::constraint::Constraint;
+
+
+
+
+
 use crate::render::buffer::Buffer;
-use crate::pipelines::particle_constants::ParticleConstants;
-use crate::blocks::WorldSize;
-use crate::render::sampler::Sampler;
-use crate::pipelines::bone::Bone;
+
+
+
+
 use crate::pipelines::foundations::{FoundationInitializer, Foundations};
 
 pub struct ParticleResources {
@@ -30,7 +30,7 @@ pub struct ParticleResources {
 }
 
 impl ParticleResources {
-    pub fn new(cmd_pool: &CommandPool, foundations:&FoundationInitializer) -> Result<Self, failure::Error> {
+    pub fn new(cmd_pool: &CommandPool, _foundations:&FoundationInitializer) -> Result<Self, failure::Error> {
         let frag = ShaderModule::new(include_glsl!("assets/shaders/particles.frag", kind: frag) as &[u32], cmd_pool.device())?;
         let vert = ShaderModule::new(include_glsl!("assets/shaders/particles.vert") as &[u32], cmd_pool.device())?;
         Ok(Self { vert, frag })
@@ -40,11 +40,11 @@ impl ParticleResources {
 impl RenderResources for ParticleResources {
     type Render = Particles;
 
-    fn create_descriptors(&self, descriptors: &mut DescriptorsBuilder, foundations:&FoundationInitializer) -> Result<(), Error> {
+    fn create_descriptors(&self, _descriptors: &mut DescriptorsBuilder, _foundations:&FoundationInitializer) -> Result<(), Error> {
         Ok(())
     }
 
-    fn make_renderable(self, cmd_pool: &CommandPool, render_pass: &SingleRenderPass, descriptors: &DescriptorsBuilderLocked, foundations:&Foundations) -> Result<Self::Render, Error> {
+    fn make_renderable(self, _cmd_pool: &CommandPool, render_pass: &SingleRenderPass, descriptors: &DescriptorsBuilderLocked, foundations:&Foundations) -> Result<Self::Render, Error> {
         let Self {frag, vert} = self;
         let mut pipeline = PipelineBuilder::new();
         pipeline.descriptor_layout(descriptors.layout().clone())
@@ -92,18 +92,18 @@ impl Particles {
 }
 
 impl Renderable for Particles {
-    fn record_cmd_buffer(&self, cmd: &mut CommandBuffer, image_idx: SwapchainImageIdx, descriptors: &Descriptors, render_pass: &SingleRenderPass, foundations:&Foundations) -> Result<(), Error> {
+    fn record_cmd_buffer(&self, cmd: &mut CommandBuffer, image_idx: SwapchainImageIdx, descriptors: &Descriptors, _render_pass: &SingleRenderPass, foundations:&Foundations) -> Result<(), Error> {
         cmd.bind_pipeline(self.pipeline())
             .uniform(self.pipeline(), descriptors.descriptor_set(image_idx))
             .vertex_input(self.particle_builder.particle_binding, foundations.particles())
-            .draw(foundations.particles().bytes() as u32, 1, 0, 0);
+            .draw(foundations.particles().len() as u32, 1, 0, 0);
         Ok(())
     }
-    fn record_compute_cmd_buffer(&self, cmd: &mut CommandBuffer, foundations:&Foundations) -> Result<(), Error> {
+    fn record_compute_cmd_buffer(&self, _cmd: &mut CommandBuffer, _foundations:&Foundations) -> Result<(), Error> {
         Ok(())
     }
 
-    fn update_uniforms(&mut self, image_idx: SwapchainImageIdx, player: &Player) {}
+    fn update_uniforms(&mut self, _image_idx: SwapchainImageIdx, _player: &Player) {}
     fn recreate(&mut self, render_pass: &SingleRenderPass) -> Result<(), Error> {
         self.particle_compiled = self.particle_builder.create_pipeline(render_pass)?;
         Ok(())

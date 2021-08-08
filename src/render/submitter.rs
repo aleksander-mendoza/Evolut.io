@@ -5,7 +5,7 @@ use std::ops::{Deref, DerefMut};
 use ash::prelude::VkResult;
 use crate::render::device::Device;
 use ash::version::DeviceV1_0;
-use crate::render::owned_buffer::{OwnedBuffer};
+
 use crate::render::buffer_type::BufferType;
 use crate::render::buffer::Buffer;
 
@@ -83,7 +83,7 @@ impl<T> Submitter<T> {
     }
     pub fn take(self) -> VkResult<T> {
         self.inner().wait(None)?;
-        let Self { inner, val } = self;
+        let Self { inner: _, val } = self;
         Ok(val)
     }
     pub fn inner_val(&mut self) -> (&mut SubmitterCmd, &mut T) {

@@ -1,15 +1,15 @@
-use std::ffi::CString;
+
 use ash::version::{EntryV1_0, InstanceV1_0};
 use crate::render::constants::APP_INFO;
 use crate::render::platforms::{required_extension_names};
-use ash::{InstanceError, vk};
+use ash::{vk};
 use crate::render::validation_layer::{populate_debug_messenger_create_info, get_validation_layer_support};
-use failure::{err_msg, Error};
+
 use ash::vk::DebugUtilsMessengerCreateInfoEXT;
 use crate::render::device::{pick_physical_device, Device};
 use crate::render::surface::Surface;
 use crate::render::swap_chain::SwapChain;
-use std::rc::Rc;
+
 use std::sync::Arc;
 
 struct InstanceInner{
@@ -24,7 +24,7 @@ pub struct Instance {
 
 impl Instance {
     pub fn new(entry: &ash::Entry, debug: bool) -> Result<Self, failure::Error> {
-        let mut extension_names = required_extension_names(debug);
+        let extension_names = required_extension_names(debug);
         let mut extension_features_vec = vec![];
         if debug{
             // extension_features_vec.push(vk::ValidationFeatureEnableEXT::BEST_PRACTICES);

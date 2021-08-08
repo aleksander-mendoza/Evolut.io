@@ -4,7 +4,7 @@ use crate::render::device::Device;
 use ash::version::DeviceV1_0;
 use crate::render::descriptor_layout::DescriptorLayout;
 use crate::render::owned_buffer::{OwnedBuffer};
-use crate::render::data::VertexSource;
+
 use crate::render::sampler::Sampler;
 use crate::render::imageview::{ImageView, Color};
 use ash::vk::{DescriptorImageInfo, DescriptorBufferInfo};

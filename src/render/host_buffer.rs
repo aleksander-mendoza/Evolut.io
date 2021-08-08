@@ -4,7 +4,7 @@ use crate::render::device::Device;
 use ash::vk;
 use std::ops::{Deref, DerefMut};
 use crate::render::buffer_type::CpuWriteable;
-use crate::render::buffer::{Buffer, map, map_whole};
+use crate::render::buffer::{Buffer, map_whole};
 
 pub struct HostBuffer<V: Copy, C: CpuWriteable> {
     cpu: OwnedBuffer<V, C>,

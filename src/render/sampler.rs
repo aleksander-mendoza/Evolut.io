@@ -1,9 +1,9 @@
 use ash::vk;
 use crate::render::device::Device;
 use ash::version::DeviceV1_0;
-use crate::render::texture::Texture;
+
 use crate::render::imageview::{ImageView, Color};
-use std::rc::Rc;
+
 use std::sync::Arc;
 
 struct SamplerInner {

@@ -12,7 +12,7 @@ pub trait Buffer<V: Copy, T: BufferType>:Sized {
     }
     fn bytes(&self) -> vk::DeviceSize;
     fn element_offset(&self, idx:u64) -> vk::DeviceSize {
-        assert!(idx<self.len());
+        assert!(idx<self.len(),"idx={}, len={}, offset={}",idx,self.len(),self.offset());
         self.offset()+self.element_size() as u64 * idx
     }
     fn raw_mem(&self) -> vk::DeviceMemory;

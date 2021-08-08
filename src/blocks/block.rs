@@ -1,5 +1,5 @@
 use std::fmt::{Display, Formatter};
-use crate::blocks::block_properties::{BLOCKS, STONE};
+use crate::blocks::block_properties::{BLOCKS};
 use crate::blocks::face_orientation::FaceOrientation;
 use crate::render::data::{VertexSource, VertexAttrib};
 use ash::vk::VertexInputAttributeDescription;

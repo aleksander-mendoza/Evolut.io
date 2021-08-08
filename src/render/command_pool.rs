@@ -1,7 +1,7 @@
 use ash::vk;
 use crate::render::device::Device;
 use ash::version::DeviceV1_0;
-use std::marker::PhantomData;
+
 use crate::render::render_pass::RenderPass;
 use ash::vk::{ClearValue, CommandPoolResetFlags};
 use crate::render::pipeline::{Pipeline, PushConstant, BufferBinding};
@@ -351,7 +351,7 @@ impl CommandBuffer {
                 self.raw,
                 binding.binding(),
                 &[buffer.raw()],
-                &[0],
+                &[buffer.offset()],
             )
         }
         self
@@ -381,13 +381,13 @@ impl CommandBuffer {
         }
         self
     }
-    pub fn draw_indirect(&mut self, buffer: &OwnedBuffer<vk::DrawIndirectCommand, GpuIndirect>) ->&mut Self {
+    pub fn draw_indirect(&mut self, buffer: &impl Buffer<vk::DrawIndirectCommand, GpuIndirect>) ->&mut Self {
         unsafe {
             self.device.inner().cmd_draw_indirect(
                 self.raw,
                 buffer.raw(),
                 buffer.offset(),
-                buffer.bytes() as u32,
+                buffer.len() as u32,
                 std::mem::size_of::<vk::DrawIndirectCommand>() as u32,
             )
         }

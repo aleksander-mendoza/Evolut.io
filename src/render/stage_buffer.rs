@@ -4,16 +4,16 @@ use crate::render::owned_buffer::{OwnedBuffer};
 use std::ops::{Index, IndexMut};
 use crate::render::device::Device;
 use crate::render::command_pool::CommandPool;
-use crate::render::data::VertexSource;
+
 use crate::render::vector::Vector;
-use std::collections::btree_map::IterMut;
+
 use crate::render::buffer_type::{GpuWriteable, CpuWriteable, GpuIndirect, Cpu, Gpu};
 use crate::render::buffer::Buffer;
 use crate::render::subbuffer::SubBuffer;
 use std::marker::PhantomData;
 
-pub type StageOwnedBuffer<V: Copy, C: CpuWriteable, G: GpuWriteable> = StageBuffer<V,C,G,OwnedBuffer<V,G>>;
-pub type StageSubBuffer<V: Copy, C: CpuWriteable, G: GpuWriteable> = StageBuffer<V,C,G,SubBuffer<V,G>>;
+pub type StageOwnedBuffer<V, C, G> = StageBuffer<V,C,G,OwnedBuffer<V,G>>;
+pub type StageSubBuffer<V, C, G> = StageBuffer<V,C,G,SubBuffer<V,G>>;
 pub struct StageBuffer<V: Copy, C: CpuWriteable, G: GpuWriteable, B:Buffer<V, G>> {
     gpu: B,
     cpu: Vector<V, C>,
@@ -99,7 +99,7 @@ impl<V: Copy, C: CpuWriteable, G: GpuWriteable, B:Buffer<V, G>> StageBuffer<V, C
 }
 impl<V: Copy, C: CpuWriteable, G: GpuWriteable> StageBuffer<V, C, G, SubBuffer<V,G>> {
     pub fn wrap(cmd: &CommandPool, data: &[V], gpu:SubBuffer<V,G>)->Result<Submitter<Self>, vk::Result>{
-        assert!((data.len()*std::mem::size_of::<V>()) as u64 <= gpu.bytes() );
+        assert!((data.len()*std::mem::size_of::<V>()) as u64 <= gpu.bytes(), "len={}, size_of={}, bytes={}", data.len(), std::mem::size_of::<V>(), gpu.bytes() );
         let cpu = Vector::with_capacity(cmd.device(), data.len() as u64)?;
         let mut slf = Submitter::new(Self{cpu,gpu,has_unflushed_changes:false, _g:PhantomData},cmd)?;
         unsafe { slf.set_len(data.len() as u64) }
@@ -167,9 +167,9 @@ impl<V: Copy, C: CpuWriteable, G: GpuWriteable,B:Buffer<V, G>> IndexMut<usize> f
         &mut self.cpu[index]
     }
 }
-pub type VertexBuffer<V: VertexSource,B:Buffer<V, Gpu>> = StageBuffer<V, Cpu, Gpu,B>;
-pub type VertexOwnedBuffer<V: VertexSource> = VertexBuffer<V,OwnedBuffer<V,Gpu>>;
-pub type VertexSubBuffer<V: VertexSource> = VertexBuffer<V,SubBuffer<V,Gpu>>;
+pub type VertexBuffer<V,B> = StageBuffer<V, Cpu, Gpu,B>;
+pub type VertexOwnedBuffer<V> = VertexBuffer<V,OwnedBuffer<V,Gpu>>;
+pub type VertexSubBuffer<V> = VertexBuffer<V,SubBuffer<V,Gpu>>;
 
 impl<V: Copy,B:Buffer<V, Gpu>> VertexBuffer<V,B> {
     pub fn new_vertex_buffer(cmd: &CommandPool, data: &[V]) -> Result<Submitter<Self>, vk::Result> {
@@ -177,7 +177,7 @@ impl<V: Copy,B:Buffer<V, Gpu>> VertexBuffer<V,B> {
     }
 }
 
-pub type IndirectBuffer<B:Buffer<Cpu, GpuIndirect>> = StageBuffer<vk::DrawIndirectCommand, Cpu, GpuIndirect,B>;
+pub type IndirectBuffer<B> = StageBuffer<vk::DrawIndirectCommand, Cpu, GpuIndirect,B>;
 pub type IndirectOwnedBuffer = IndirectBuffer<OwnedBuffer<vk::DrawIndirectCommand, GpuIndirect>>;
 pub type IndirectSubBuffer = IndirectBuffer<SubBuffer<vk::DrawIndirectCommand, GpuIndirect>>;
 impl <B:Buffer<vk::DrawIndirectCommand, GpuIndirect>> IndirectBuffer<B> {
@@ -187,7 +187,7 @@ impl <B:Buffer<vk::DrawIndirectCommand, GpuIndirect>> IndirectBuffer<B> {
 }
 
 
-pub type IndirectDispatchBuffer<B:Buffer<Cpu, GpuIndirect>> = StageBuffer<vk::DispatchIndirectCommand, Cpu, GpuIndirect, B>;
+pub type IndirectDispatchBuffer<B> = StageBuffer<vk::DispatchIndirectCommand, Cpu, GpuIndirect, B>;
 pub type IndirectDispatchOwnedBuffer = IndirectDispatchBuffer<OwnedBuffer<vk::DispatchIndirectCommand, GpuIndirect>>;
 pub type IndirectDispatchSubBuffer = IndirectDispatchBuffer<SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>>;
 impl <B:Buffer<vk::DispatchIndirectCommand, GpuIndirect>> IndirectDispatchBuffer<B> {

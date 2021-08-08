@@ -5,17 +5,21 @@ use ash::vk;
 #[repr(C, packed)]
 #[derive(Copy,Clone,Debug)]
 pub struct Bone{
-    particle_ids:glm::UVec4,
+    particle_ids:[u32;4],
     center:glm::Vec3,
-    color:f32,
+    texture_variant:u32,
+    normal:glm::Vec3,
+    part_variant:u32,
 }
 
 impl Bone{
-    pub fn new(particle_ids:glm::UVec4) -> Self{
+    pub fn new(particle_ids:[u32;4], part_variant:u32) -> Self{
         Self{
             particle_ids,
-            center:glm::vec3(0.,0.,0.),
-            color:rand::random()
+            center: glm::vec3(0.,0.,0.),
+            texture_variant: 0,
+            normal: glm::vec3(0.,0.,0.),
+            part_variant
         }
     }
 }
@@ -26,21 +30,51 @@ impl VertexSource for Bone{
             vk::VertexInputAttributeDescription {
                 binding,
                 location: 0,
-                format:  glm::UVec4::FORMAT,
-                offset: offset_of!(Self, particle_ids) as u32,
+                format:  u32::FORMAT,
+                offset: (offset_of!(Self, particle_ids) + std::mem::size_of::<u32>()*0) as u32,
             },
             vk::VertexInputAttributeDescription {
                 binding,
                 location: 1,
                 format:  u32::FORMAT,
-                offset: offset_of!(Self, center) as u32,
+                offset: (offset_of!(Self, particle_ids) + std::mem::size_of::<u32>()*1) as u32,
             },
             vk::VertexInputAttributeDescription {
                 binding,
                 location: 2,
                 format:  u32::FORMAT,
-                offset: offset_of!(Self, color) as u32,
-            }
+                offset: (offset_of!(Self, particle_ids) + std::mem::size_of::<u32>()*2) as u32,
+            },
+            vk::VertexInputAttributeDescription {
+                binding,
+                location: 3,
+                format:  u32::FORMAT,
+                offset: (offset_of!(Self, particle_ids) + std::mem::size_of::<u32>()*3) as u32,
+            },
+            vk::VertexInputAttributeDescription {
+                binding,
+                location: 4,
+                format:  glm::Vec3::FORMAT,
+                offset: offset_of!(Self, center) as u32,
+            },
+            vk::VertexInputAttributeDescription {
+                binding,
+                location: 5,
+                format:  u32::FORMAT,
+                offset: offset_of!(Self, texture_variant) as u32,
+            },
+            vk::VertexInputAttributeDescription {
+                binding,
+                location: 6,
+                format:  glm::Vec3::FORMAT,
+                offset: offset_of!(Self, normal) as u32,
+            },
+            vk::VertexInputAttributeDescription {
+                binding,
+                location: 7,
+                format:  u32::FORMAT,
+                offset: offset_of!(Self, part_variant) as u32,
+            },
         ]
     }
 }

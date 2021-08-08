@@ -1,5 +1,5 @@
-use crate::render::buffer_type::{BufferType, AsDescriptor};
-use std::rc::Rc;
+use crate::render::buffer_type::{BufferType};
+
 use crate::render::owned_buffer::OwnedBuffer;
 use crate::render::device::Device;
 use ash::vk;
@@ -30,6 +30,10 @@ impl <V: Copy, T: BufferType> SubBuffer<V,T>{
     }
     pub fn parent(&self) -> &OwnedBuffer<V, T> {
         &self.buff
+    }
+    pub fn element(&self, idx:vk::DeviceSize) -> Self{
+        let s = self.element_size() as u64;
+        self.sub(idx*s..(idx+1)*s)
     }
     pub fn sub(&self, range:impl RangeBounds<vk::DeviceSize>) -> Self{
         let from = match range.start_bound(){

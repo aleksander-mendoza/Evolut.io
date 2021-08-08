@@ -1,14 +1,14 @@
 use ash::vk;
 use crate::render::surface::Surface;
 use crate::render::device::Device;
-use ash::version::DeviceV1_0;
+
 use crate::render::imageview::{ImageView, Color};
 use ash::prelude::VkResult;
 use crate::render::semaphore::Semaphore;
 use crate::render::fence::Fence;
 use crate::render::instance::Instance;
-use crate::render::render_pass::RenderPass;
-use crate::render::framebuffer::Framebuffer;
+
+
 use std::rc::Rc;
 
 struct SwapChainInner{

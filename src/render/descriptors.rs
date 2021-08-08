@@ -1,23 +1,23 @@
 use crate::render::descriptor_pool::{DescriptorPool, DescriptorSet};
 use crate::render::descriptor_layout::DescriptorLayout;
 use crate::render::sampler::Sampler;
-use crate::render::owned_buffer::{OwnedBuffer};
+
 use crate::render::imageview::{ImageView, Color};
-use ash::vk::{DescriptorBufferInfo, DescriptorSetLayoutBinding, DescriptorImageInfo};
-use crate::render::descriptor_binding::DescriptorBinding;
+use ash::vk::{DescriptorSetLayoutBinding, DescriptorImageInfo};
 use crate::render::device::Device;
 use crate::render::swap_chain::{SwapChain, SwapchainImageIdx};
-use crate::render::frames_in_flight::FramesInFlight;
+
 use crate::render::host_buffer::HostBuffer;
 use ash::vk;
 use std::marker::PhantomData;
-use crate::render::buffer_type::Uniform;
-use crate::render::buffer::descriptor_info;
+use crate::render::buffer_type::{Uniform, Storage, AsStorage, AsDescriptor};
+use crate::render::buffer::{descriptor_info, Buffer};
 
 
 enum DescriptorUniform {
     Sampler(DescriptorImageInfo),
     Buffer(/*size in bytes*/usize),
+    Storage(vk::DescriptorBufferInfo),
 }
 
 pub struct DescriptorsBuilder {
@@ -39,6 +39,21 @@ impl <T, const size: usize> UniformBufferBinding<T,size>{
     }
 }
 
+
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub struct StorageBufferBinding<V, T>{
+    binding:usize,
+    _p:PhantomData<(V,T)>
+}
+impl <V, T> StorageBufferBinding<V, T>{
+    fn new(binding:usize)->Self{
+        Self{
+            binding,
+            _p:PhantomData
+        }
+    }
+}
+
 impl DescriptorsBuilder {
     pub fn new() -> Self {
         Self {
@@ -48,7 +63,13 @@ impl DescriptorsBuilder {
     }
 
     pub fn sampler(&mut self, sampler: &Sampler, image_view: &ImageView<Color>) {
-        self.bindings.push(sampler.create_binding(self.descriptors.len() as u32));
+        self.bindings.push( vk::DescriptorSetLayoutBinding {
+            binding: self.descriptors.len() as u32,
+            descriptor_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+            descriptor_count: 1,
+            stage_flags: vk::ShaderStageFlags::FRAGMENT,
+            p_immutable_samplers: std::ptr::null(),
+        });
         self.descriptors.push(DescriptorUniform::Sampler(sampler.descriptor_info(image_view)));
     }
 
@@ -58,9 +79,28 @@ impl DescriptorsBuilder {
     }
     pub fn array_uniform_buffer<T: Copy, const size: usize>(&mut self, buffer: &[T; size]) -> UniformBufferBinding<T, size> {
         let new_idx = self.descriptors.len();
-        self.bindings.push(buffer.create_binding(new_idx as u32));
+        self.bindings.push(vk::DescriptorSetLayoutBinding {
+            binding: new_idx as u32,
+            descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
+            descriptor_count: size as u32,
+            stage_flags: vk::ShaderStageFlags::VERTEX,
+            p_immutable_samplers: std::ptr::null(),
+        });
         self.descriptors.push(DescriptorUniform::Buffer(std::mem::size_of::<[T; size]>()));
         UniformBufferBinding::new(new_idx)
+    }
+
+    pub fn storage_buffer<V: Copy, T:AsStorage + AsDescriptor>(&mut self, buffer: &impl Buffer<V, T>) -> StorageBufferBinding<V, T> {
+        let new_idx = self.descriptors.len();
+        self.bindings.push(vk::DescriptorSetLayoutBinding {
+            binding: new_idx as u32,
+            descriptor_type: vk::DescriptorType::STORAGE_BUFFER,
+            descriptor_count: 1,
+            stage_flags: vk::ShaderStageFlags::VERTEX,
+            p_immutable_samplers: std::ptr::null(),
+        });
+        self.descriptors.push(DescriptorUniform::Storage(descriptor_info(buffer)));
+        StorageBufferBinding::new(new_idx)
     }
 
     pub fn make_layout(self, device: &Device) -> Result<DescriptorsBuilderLocked, vk::Result> {
@@ -89,8 +129,11 @@ impl DescriptorsBuilderLocked {
                         DescriptorUniform::Sampler(sampler_info) => {
                             descriptor_set.update_sampler_raw(binding as u32, sampler_info);
                         }
-                        &DescriptorUniform::Buffer(size) => {
+                        &DescriptorUniform::Buffer(_size) => {
                             descriptor_set.update_uniform_buffer_raw(binding as u32, &descriptor_info(uniform_buffers[binding].buffer_per_frame[frame].buffer()));
+                        }
+                        DescriptorUniform::Storage(info) => {
+                            descriptor_set.update_storage_buffer_raw(binding as u32, info);
                         }
                     }
                 }
@@ -117,6 +160,9 @@ impl UniformBuffers {
             &DescriptorUniform::Buffer(size) => {
                 Self::buffer(swapchain, size as u64)
             }
+            DescriptorUniform::Storage(_) => {
+                Self::storage()
+            }
         }
     }
     fn sampler() -> Self {
@@ -126,6 +172,9 @@ impl UniformBuffers {
         let buffers: Result<Vec<HostBuffer<u8, Uniform>>, vk::Result> = (0..swapchain.len()).into_iter()
             .map(|_| HostBuffer::with_capacity(swapchain.device(), size)).collect();
         Ok(Self { buffer_per_frame: buffers? })
+    }
+    fn storage() -> Result<Self,vk::Result> {
+        Ok(Self { buffer_per_frame: Vec::new() })
     }
 }
 

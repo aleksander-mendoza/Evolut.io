@@ -2,7 +2,7 @@ use crate::render::semaphore::Semaphore;
 use crate::render::fence::Fence;
 use crate::render::device::Device;
 use ash::vk;
-use crate::render::swap_chain::SwapChain;
+
 
 pub struct FramesInFlight{
     image_available_semaphores:Vec<Semaphore>,

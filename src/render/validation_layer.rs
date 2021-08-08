@@ -1,13 +1,13 @@
 use ash::version::EntryV1_0;
 use ash::vk;
 
-use std::ffi::{CStr, CString};
+use std::ffi::{CStr};
 use std::os::raw::c_void;
-use std::ptr;
+
 use failure::err_msg;
-use ash::vk::{InstanceCreateInfoBuilder, DebugUtilsMessengerCreateInfoEXT, DebugUtilsMessengerCreateInfoEXTBuilder, LayerProperties};
-use std::ops::{Deref, DerefMut};
-use ash::extensions::ext::DebugUtils;
+use ash::vk::{LayerProperties};
+
+
 
 pub fn layer_name(layer: &LayerProperties) -> &CStr {
     unsafe {

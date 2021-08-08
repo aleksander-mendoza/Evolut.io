@@ -1,23 +1,23 @@
-use crate::render::stage_buffer::{StageBuffer, IndirectDispatchBuffer, IndirectDispatchOwnedBuffer, StageOwnedBuffer};
-use crate::pipelines::particle::Particle;
-use crate::render::owned_buffer::{OwnedBuffer};
+
+
+
 use crate::render::command_pool::{CommandPool, CommandBuffer};
-use crate::render::shader_module::{ShaderModule, Fragment, Vertex, Compute};
-use ash::vk::ShaderStageFlags;
-use crate::render::pipeline::{PipelineBuilder, BufferBinding, Pipeline};
+use crate::render::shader_module::{ShaderModule, Compute};
+
+
 use ash::vk;
-use crate::pipelines::renderable::{RenderResources, Renderable};
-use crate::render::descriptors::{DescriptorsBuilder, DescriptorsBuilderLocked, Descriptors};
+
+
 use failure::Error;
-use crate::render::single_render_pass::SingleRenderPass;
-use crate::render::swap_chain::SwapchainImageIdx;
-use crate::render::submitter::Submitter;
-use crate::pipelines::joint::{Joint, JointResources};
-use crate::pipelines::particles::{ParticleResources, Particles};
-use crate::pipelines::block_world::{BlockWorldResources, BlockWorld};
-use crate::render::compute::{ComputePipeline, StorageBufferBinding, UniformBufferBinding, ComputeDescriptorsBuilder};
-use crate::blocks::world_size::{CHUNK_WIDTH, CHUNK_HEIGHT, CHUNK_DEPTH, CHUNK_WIDTH_IN_CELLS, CHUNK_DEPTH_IN_CELLS, CHUNK_HEIGHT_IN_CELLS};
-use crate::render::vector::Vector;
+
+
+
+
+
+
+use crate::render::compute::{ComputePipeline, UniformBufferBinding, ComputeDescriptorsBuilder};
+
+
 use crate::render::host_buffer::HostBuffer;
 use crate::pipelines::player::Player;
 use crate::render::uniform_types::Vec3;
@@ -43,7 +43,7 @@ pub struct ThrowUniform {
 }
 
 impl PhysicsResources {
-    pub fn new(cmd_pool: &CommandPool, foundations:&FoundationInitializer) -> Result<Self, failure::Error> {
+    pub fn new(cmd_pool: &CommandPool, _foundations:&FoundationInitializer) -> Result<Self, failure::Error> {
         let collision_detection = ShaderModule::new(include_glsl!("assets/shaders/collision_detection.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let solve_constraints = ShaderModule::new(include_glsl!("assets/shaders/solve_constraints.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let update_bones = ShaderModule::new(include_glsl!("assets/shaders/bones.comp", kind: comp) as &[u32], cmd_pool.device())?;
@@ -70,7 +70,7 @@ impl ComputeResources for PhysicsResources{
         descriptors.storage_buffer(foundations.particles());
         descriptors.storage_buffer(foundations.collision_grid());
         descriptors.storage_buffer(foundations.constraints());
-        descriptors.storage_buffer(foundations.indirect());
+        descriptors.storage_buffer(foundations.indirect_dispatch());
         descriptors.storage_buffer(foundations.bones());
         let descriptors = descriptors.build(cmd_pool.device())?;
         let collision_detection = descriptors.build("main", collision_detection)?;
@@ -100,18 +100,18 @@ impl Computable for Physics {
     fn record_compute_cmd_buffer(&self, cmd: &mut CommandBuffer,foundations:&Foundations) -> Result<(), Error> {
         cmd.bind_compute_pipeline(&self.collision_detection)
             .bind_compute_descriptors(&self.collision_detection)
-            .dispatch_indirect(foundations.indirect(), 0)
+            .dispatch_indirect(foundations.indirect().collision_detection(), 0)
             .buffer_barriers(vk::PipelineStageFlags::COMPUTE_SHADER, vk::PipelineStageFlags::COMPUTE_SHADER, &[
                 make_shader_buffer_barrier(foundations.particles()),
                 make_shader_buffer_barrier(foundations.constraints())
             ])
             .bind_compute_pipeline(&self.solve_constraints)
-            .dispatch_indirect(foundations.indirect(), 1)
+            .dispatch_indirect(foundations.indirect().solve_constraints(), 0)
             .buffer_barriers(vk::PipelineStageFlags::COMPUTE_SHADER, vk::PipelineStageFlags::COMPUTE_SHADER, &[
                 make_shader_buffer_barrier(foundations.particles()),
             ])
             .bind_compute_pipeline(&self.update_bones)
-            .dispatch_indirect(foundations.indirect(), 2)
+            .dispatch_indirect(foundations.indirect().update_bones(), 0)
         ;
         Ok(())
     }

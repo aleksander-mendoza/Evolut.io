@@ -1,11 +1,10 @@
 #version 450
-layout(binding = 0) uniform sampler2D texSampler;
+layout(binding = 3) uniform sampler2D mobsSampler;
 
 layout(location = 0) out vec4 outColor;
-layout(location = 0) in vec3 fragColor;
-layout(location = 1) in vec2 fragTex;
+layout(location = 0) in vec2 fragTex;
 
 
 void main() {
-    outColor = texture(texSampler, fragTex);
+    outColor = texture(mobsSampler, fragTex);
 }

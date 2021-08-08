@@ -4,7 +4,7 @@ use crate::render::render_pass::RenderPass;
 use ash::version::DeviceV1_0;
 use crate::render::swap_chain::SwapChain;
 use crate::render::imageview::{ImageView, Depth, Color};
-use crate::render::texture::Dim2D;
+
 use failure::err_msg;
 
 pub struct Framebuffer {

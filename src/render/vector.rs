@@ -1,5 +1,5 @@
 use crate::render::owned_buffer::{OwnedBuffer};
-use std::ptr::NonNull;
+
 use crate::render::device::Device;
 use ash::vk;
 use std::ops::{Deref, DerefMut};
@@ -26,7 +26,7 @@ impl<V: Copy, C: CpuWriteable> Vector<V, C> {
         self.cpu.device()
     }
     pub fn with_capacity(device: &Device, max_elements: vk::DeviceSize) -> Result<Self, vk::Result> {
-        let mut cpu = HostBuffer::with_capacity(device, max_elements)?;
+        let cpu = HostBuffer::with_capacity(device, max_elements)?;
         Ok(Self { cpu, len: 0 })
     }
     pub unsafe fn set_len(&mut self, len: vk::DeviceSize) {

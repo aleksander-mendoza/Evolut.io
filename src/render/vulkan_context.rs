@@ -25,7 +25,7 @@ impl VulkanContext {
         let surface = instance.create_surface(&entry, window)?;
         let physical_device = instance.pick_physical_device(&surface)?;
         let device = instance.create_device(&entry, physical_device)?;
-        let mut frames_in_flight = FramesInFlight::new(&device, 2)?;
+        let frames_in_flight = FramesInFlight::new(&device, 2)?;
         Ok(Self {
             entry,
             instance,
