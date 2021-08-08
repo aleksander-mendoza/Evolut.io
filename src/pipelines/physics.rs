@@ -72,6 +72,7 @@ impl ComputeResources for PhysicsResources{
         descriptors.storage_buffer(foundations.constraints());
         descriptors.storage_buffer(foundations.indirect_dispatch());
         descriptors.storage_buffer(foundations.bones());
+        descriptors.storage_buffer(foundations.world_buffer());
         let descriptors = descriptors.build(cmd_pool.device())?;
         let collision_detection = descriptors.build("main", collision_detection)?;
         let solve_constraints = descriptors.build("main", solve_constraints)?;

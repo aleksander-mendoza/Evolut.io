@@ -18,7 +18,7 @@ use crate::render::subbuffer::SubBuffer;
 use crate::pipelines::constraint::Constraint;
 use crate::render::buffer::Buffer;
 use crate::pipelines::particle_constants::ParticleConstants;
-use crate::blocks::WorldSize;
+use crate::blocks::{WorldSize, Block};
 use crate::render::sampler::Sampler;
 use crate::pipelines::bone::Bone;
 
@@ -58,6 +58,7 @@ impl Indirect {
 
 pub struct FoundationInitializer {
     particles: Submitter<StageSubBuffer<Particle, Cpu, Storage>>,
+    world_buffer:SubBuffer<Block, Storage>,
     collision_grid: Submitter<SubBuffer<u32, Storage>>,
     constraints: Submitter<StageSubBuffer<Constraint, Cpu, Storage>>,
     bones: Submitter<StageSubBuffer<Bone, Cpu, Storage>>,
@@ -90,6 +91,9 @@ impl FoundationInitializer {
     }
     pub fn world_size(&self) -> &WorldSize {
         &self.world_size
+    }
+    pub fn world_buffer(&self) -> &SubBuffer<Block, Storage> {
+        &self.world_buffer
     }
 
     pub fn new(cmd_pool: &CommandPool) -> Result<Self, failure::Error> {
@@ -208,6 +212,7 @@ impl FoundationInitializer {
 
         let particles_in_bytes = std::mem::size_of::<Particle>() as u64 * particles;
         let grid_in_bytes = std::mem::size_of::<u32>() as u64 * grid_size;
+        let world_in_bytes = (std::mem::size_of::<Block>()*world_size.world_volume()) as u64;
         let constraints_in_bytes = std::mem::size_of::<Constraint>() as u64 * max_constraints;
         let bones_in_bytes = std::mem::size_of::<Bone>() as u64 * bones;
         let constants_in_bytes = std::mem::size_of_val(&constants) as u64;
@@ -215,6 +220,7 @@ impl FoundationInitializer {
         let super_buffer: SubBuffer<u8, Storage> = SubBuffer::with_capacity(cmd_pool.device(),
                                                                             particles_in_bytes +
                                                                                 grid_in_bytes +
+                                                                                world_in_bytes +
                                                                                 constraints_in_bytes +
                                                                                 bones_in_bytes +
                                                                                 constants_in_bytes)?;
@@ -223,6 +229,8 @@ impl FoundationInitializer {
         let offset = offset + particles_in_bytes;
         let grid_buffer = super_buffer.sub(offset..offset + grid_in_bytes).reinterpret_into::<u32>();
         let offset = offset + grid_in_bytes;
+        let world_buffer = super_buffer.sub(offset..offset + world_in_bytes).reinterpret_into::<Block>();
+        let offset = offset + world_in_bytes;
         let constraint_buffer = super_buffer.sub(offset..offset + constraints_in_bytes).reinterpret_into::<Constraint>();
         let offset = offset + constraints_in_bytes;
         let bones_buffer = super_buffer.sub(offset..offset + bones_in_bytes).reinterpret_into::<Bone>();
@@ -283,6 +291,7 @@ impl FoundationInitializer {
         let indirect = Indirect::new(&indirect_dispatch, &indirect_draw);
 
         Ok(Self {
+            world_buffer,
             world_size,
             sampler,
             particles,
@@ -300,6 +309,7 @@ impl FoundationInitializer {
             indirect_dispatch,
             indirect_draw,
             world_size,
+            world_buffer,
             bones,
             particles,
             collision_grid,
@@ -316,6 +326,7 @@ impl FoundationInitializer {
         let indirect_dispatch = indirect_dispatch.take()?.take_gpu();
         let indirect_draw = indirect_draw.take()?.take_gpu();
         Ok(Foundations {
+            world_buffer,
             indirect_draw,
             indirect_dispatch,
             world_size,
@@ -332,6 +343,7 @@ impl FoundationInitializer {
 
 pub struct Foundations {
     world_size: WorldSize,
+    world_buffer: SubBuffer<Block, Storage>,
     particles: SubBuffer<Particle, Storage>,
     constraints: SubBuffer<Constraint, Storage>,
     bones: SubBuffer<Bone, Storage>,
@@ -352,6 +364,9 @@ impl Foundations {
     }
     pub fn bones(&self) -> &SubBuffer<Bone, Storage> {
         &self.bones
+    }
+    pub fn world_buffer(&self) -> &SubBuffer<Block, Storage> {
+        &self.world_buffer
     }
     pub fn constants(&self) -> &SubBuffer<ParticleConstants, Storage> {
         &self.particle_constants

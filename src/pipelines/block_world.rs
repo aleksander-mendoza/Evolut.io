@@ -1,4 +1,4 @@
-use crate::blocks::{World, Face};
+use crate::blocks::{World, Face, Block};
 use crate::blocks::block_properties::{BEDROCK, DIRT, GRASS, PLANK, GLASS};
 use ash::vk;
 use crate::render::shader_module::{ShaderModule, Fragment, Vertex};
@@ -20,8 +20,11 @@ use crate::pipelines::player::Player;
 
 use crate::pipelines::foundations::{FoundationInitializer, Foundations};
 use crate::pipelines::renderable::{RenderResources, Renderable};
+use crate::render::stage_buffer::{StageBuffer, StageSubBuffer};
+use crate::render::buffer_type::{Storage, Cpu};
 
 pub struct BlockWorldResources {
+    world_gpu_copy: Submitter<StageSubBuffer<Block,Cpu,Storage>>,
     texture: Submitter<StageTexture<Dim2D>>,
     world: Submitter<World>,
     frag:ShaderModule<Fragment>,
@@ -43,7 +46,10 @@ impl BlockWorldResources{
         world.blocks_mut().no_update_outline(5, 2, 5, 5, 5, 5, PLANK);
         world.compute_faces();
         world.flush_all_chunks()?;
+        let world_gpu_copy = StageBuffer::wrap(cmd_pool,  world.blocks().as_slice(), foundations.world_buffer().clone())?;
+
         Ok(Self {
+            world_gpu_copy,
             texture,
             world,
             frag,
@@ -59,7 +65,8 @@ impl RenderResources for BlockWorldResources{
     }
 
     fn make_renderable(self, _cmd_pool: &CommandPool, render_pass: &SingleRenderPass, descriptors:&DescriptorsBuilderLocked, _foundations:&Foundations) -> Result<Self::Render, failure::Error>{
-        let Self{ texture, world, frag, vert } = self;
+        let Self{ texture,world_gpu_copy,
+            world, frag, vert } = self;
         let mut pipeline = PipelineBuilder::new();
         pipeline.descriptor_layout(descriptors.layout().clone())
             .fragment_shader("main", frag)
@@ -71,6 +78,7 @@ impl RenderResources for BlockWorldResources{
         let instance_binding = pipeline.instance_input::<Face>(0);
         let chunk_position_binding = pipeline.push_constant::<glm::Vec3>();
         let texture = texture.take()?.take();
+        let _ = world_gpu_copy.take()?; //wait for completion and then dispose of the staging buffer
         let mut block_world_builder = BlockWorldBuilder {
             pipeline,
             texture,

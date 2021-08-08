@@ -53,9 +53,9 @@ impl WorldSize {
         assert!(y < self.height());
         z * self.world_width() + x + y * self.world_area()
     }
-    pub fn world_idx_into_block_pos(&self, idx: usize) -> (usize, usize, usize) {
-        ((idx % self.world_area()) / self.world_width(), idx % self.world_width(), idx / self.world_area())
-    }
+    // pub fn world_idx_into_block_pos(&self, idx: usize) -> (usize, usize, usize) {
+    //     ((idx % self.world_area()) / self.world_width(), idx % self.world_width(), idx / self.world_area())
+    // }
     pub fn world_area(&self) -> usize {
         self.world_width() * self.world_depth()
     }

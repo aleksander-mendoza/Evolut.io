@@ -2,10 +2,41 @@
 
 #include "constants.comp"
 #include "data.comp"
+#include "world.comp"
 
 layout (local_size_x = 32) in;
 
 #include "physics_descriptors.comp"
+
+uint max_vec3_component(vec3 v){
+    return v.x > v.y ? (v.x > v.z ? 0 : 2) : (v.y > v.z ? 1 : 2);
+}
+
+vec3 compute_new_position(uint id){
+    const uint world_width = constants.chunks_x*CHUNK_WIDTH;
+    const uint world_area = world_width*constants.chunks_z*CHUNK_DEPTH;
+    const vec3 old_position = particles[id].old_position;
+    const vec3 current_position = particles[id].new_position;
+    vec3 velocity = current_position - old_position;
+    velocity.y -= GRAVITY;
+    vec3 new_position = current_position + velocity;
+    //TODO: implement damping, drag, friction, gravity etc. The velocity variable might be useful here
+    //The below code is a branchless test for bounding-box collision. It's equivalent to the code
+    // if(candidate_position.x<0){candidate_position.x=-candidate_position.x;}
+    // if(candidate_position.x>16*constants.chunks_x){candidate_position.x=16*constants.chunks_x-(candidate_position.x-16*constants.chunks_x);}
+    //and so on for each x,y,z coordinate.
+    new_position = new_position - 2*min(new_position, vec3(0, 0, 0)) + 2*min(vec3(16, 16, 16)-new_position, vec3(0, 0, 0));
+    uvec3 block_position = uvec3(new_position);
+    const uint block = world[block_pos_into_world_idx(world_width, world_area, block_position)];
+    if (block > 0){
+        vec3 pos_relative_to_block = new_position - block_position;
+        uint max_comp = max_vec3_component(abs(pos_relative_to_block-vec3(0.5,0.5,0.5)));
+        new_position[max_comp] += 2.*(block_position[max_comp] + round(pos_relative_to_block[max_comp]) - new_position[max_comp]);
+    }
+    particles[id].old_position = current_position;
+    particles[id].new_position = new_position;
+    return new_position;
+}
 
 void main()
 {
@@ -17,19 +48,9 @@ void main()
             particles[0].new_position = throw.position + throw.velocity;
         }
     }
+
     if (gID < constants.solid_particles){
-        const vec3 old_position = particles[gID].old_position;
-        const vec3 current_position = particles[gID].new_position;
-        vec3 velocity = current_position - old_position;
-        vec3 candidate_position = current_position + velocity;
-        //TODO: implement damping, drag, friction, gravity etc. The velocity variable might be useful here
-        //The below code is a branchless test for bounding-box collision. It's equivalent to the code
-        // if(candidate_position.x<0){candidate_position.x=-candidate_position.x;}
-        // if(candidate_position.x>16*constants.chunks_x){candidate_position.x=16*constants.chunks_x-(candidate_position.x-16*constants.chunks_x);}
-        //and so on for each x,y,z coordinate.
-        const vec3 new_position = candidate_position - 2*min(candidate_position, vec3(0, 0, 0)) + 2*min(vec3(16, 16, 16)-candidate_position, vec3(0, 0, 0));
-        particles[gID].old_position = current_position;
-        particles[gID].new_position = new_position;
+        vec3 new_position = compute_new_position(gID);
         for (int chunk_x=0;chunk_x<constants.chunks_x;chunk_x++){
             for (int chunk_z=0;chunk_z<constants.chunks_z;chunk_z++){
                 if (int(new_position.x)/CHUNK_WIDTH==chunk_x && int(new_position.z)/CHUNK_DEPTH==chunk_z){
@@ -112,14 +133,7 @@ void main()
         indirect[1].x = uint(ceil(float(constants.collision_constraints)/32.));
     }
     if (gID < constants.phantom_particles){
-        const uint phantom_id = gID+constants.solid_particles;
-        const vec3 old_position = particles[phantom_id].old_position;
-        const vec3 current_position = particles[phantom_id].new_position;
-        vec3 velocity = current_position - old_position;
-        vec3 candidate_position = current_position + velocity;
-        const vec3 new_position = candidate_position - 2*min(candidate_position, vec3(0, 0, 0)) + 2*min(vec3(16, 16, 16)-candidate_position, vec3(0, 0, 0));
-        particles[phantom_id].old_position = current_position;
-        particles[phantom_id].new_position = new_position;
+        compute_new_position(gID+constants.solid_particles);
     }
 }
 
