@@ -7,19 +7,21 @@ use ash::vk;
 pub struct Bone{
     particle_ids:[u32;4],
     center:glm::Vec3,
-    texture_variant:u32,
+    texture_variant:u16,
+    part_variant:u16,
     normal:glm::Vec3,
-    part_variant:u32,
+    thickness:f32,
 }
 
 impl Bone{
-    pub fn new(particle_ids:[u32;4], part_variant:u32) -> Self{
+    pub fn new(particle_ids:[u32;4], part_variant:u16, thickness:f32) -> Self{
         Self{
             particle_ids,
             center: glm::vec3(0.,0.,0.),
             texture_variant: 0,
-            normal: glm::vec3(0.,0.,0.),
-            part_variant
+            part_variant,
+            normal: glm::vec3(0., 0., 0.),
+            thickness
         }
     }
 }
@@ -60,20 +62,26 @@ impl VertexSource for Bone{
             vk::VertexInputAttributeDescription {
                 binding,
                 location: 5,
-                format:  u32::FORMAT,
+                format:  u16::FORMAT,
                 offset: offset_of!(Self, texture_variant) as u32,
             },
             vk::VertexInputAttributeDescription {
                 binding,
                 location: 6,
+                format:  u16::FORMAT,
+                offset: offset_of!(Self, part_variant) as u32,
+            },
+            vk::VertexInputAttributeDescription {
+                binding,
+                location: 7,
                 format:  glm::Vec3::FORMAT,
                 offset: offset_of!(Self, normal) as u32,
             },
             vk::VertexInputAttributeDescription {
                 binding,
-                location: 7,
-                format:  u32::FORMAT,
-                offset: offset_of!(Self, part_variant) as u32,
+                location: 8,
+                format:  f32::FORMAT,
+                offset: offset_of!(Self, thickness) as u32,
             },
         ]
     }

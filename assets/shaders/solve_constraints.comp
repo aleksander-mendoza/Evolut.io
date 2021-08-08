@@ -8,6 +8,7 @@ layout (local_size_x = 32) in;
 #include "physics_descriptors.comp"
 
 void main(){
+    const float stiffness = 0.2;
     const uint gID = gl_GlobalInvocationID.x;
     if(gID < constants.collision_constraints){
         Constraint c = constraints[gID];
@@ -21,7 +22,7 @@ void main(){
             const float distance_square = dot(distance_vector, distance_vector);
             if (min_dist < distance_square && distance_square <= max_dist ) {
                 const float distance = sqrt(distance_square);//TODO: maybe I should approximate sqrt with less expensive function?
-                const vec3 collision_projection_delta =  0.5 * (distance - c.constant_param)*distance_vector/distance;
+                const vec3 collision_projection_delta =  stiffness * 0.5 * (distance - c.constant_param)*distance_vector/distance;
                 atomicAdd(particles[c.particle1].new_position.x, -collision_projection_delta.x);
                 atomicAdd(particles[c.particle1].new_position.y, -collision_projection_delta.y);
                 atomicAdd(particles[c.particle1].new_position.z, -collision_projection_delta.z);

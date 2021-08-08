@@ -35,6 +35,9 @@ impl VertexAttrib for glm::UVec4{
 impl VertexAttrib for u8{
     const FORMAT: Format = vk::Format::R8_UINT;
 }
+impl VertexAttrib for u16 {
+    const FORMAT: Format = vk::Format::R16_UINT;
+}
 impl VertexAttrib for u32 {
     const FORMAT: Format = vk::Format::R32_UINT;
 }

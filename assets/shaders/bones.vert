@@ -6,8 +6,10 @@
 layout(location = 0) in uint[4] particle_ids;
 layout(location = 4) in vec3 center;
 layout(location = 5) in uint texture_variant;
-layout(location = 6) in vec3 normal;
-layout(location = 7) in uint part_variant;
+layout(location = 6) in uint part_variant;
+layout(location = 7) in vec3 normal;
+layout(location = 8) in float thickness;
+
 
 //layout(location = 0) out vec3 fragColor;
 layout(location = 0) out vec2 fragTex;
@@ -26,7 +28,7 @@ layout(std430, binding = 2) buffer Particles{
 //};
 
 void main() {
-    const float width = 0.2;
+    const float width = 1;
     const vec2 A = vec2(0,width);// left bottom front
     const vec2 B = vec2(1,width);// right bottom front
     const vec2 C = vec2(1,-width);// right bottom back
@@ -145,7 +147,7 @@ void main() {
     const uint num_faces = uint(6);
     const vec2 particle_id_and_normal_direction = particle_id_per_vertex[gl_VertexIndex];
     const vec3 relative = particles[particle_ids[uint(particle_id_and_normal_direction.x)]].new_position - center;
-    gl_Position = MVP * vec4(center + relative*1.2 + particle_id_and_normal_direction.y*normal, 1.0);
+    gl_Position = MVP * vec4(center + relative*1.2 + particle_id_and_normal_direction.y*thickness*normal, 1.0);
     gl_Position.y = -gl_Position.y;
     uint bone_idx = body_part_to_bone_idx[part_variant];
     float bone_stride = tex_stride[bone_idx];
