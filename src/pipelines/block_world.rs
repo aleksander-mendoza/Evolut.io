@@ -1,4 +1,4 @@
-use crate::blocks::{World, Face, Block};
+use crate::blocks::{World, Face, Block, WorldBlocks};
 use crate::blocks::block_properties::{BEDROCK, DIRT, GRASS, PLANK, GLASS};
 use ash::vk;
 use crate::render::shader_module::{ShaderModule, Fragment, Vertex};
@@ -24,9 +24,8 @@ use crate::render::stage_buffer::{StageBuffer, StageSubBuffer};
 use crate::render::buffer_type::{Storage, Cpu};
 
 pub struct BlockWorldResources {
-    world_gpu_copy: Submitter<StageSubBuffer<Block,Cpu,Storage>>,
+    world: Submitter<StageSubBuffer<Block,Cpu,Storage>>,
     texture: Submitter<StageTexture<Dim2D>>,
-    world: Submitter<World>,
     frag:ShaderModule<Fragment>,
     vert:ShaderModule<Vertex>,
 }
@@ -38,20 +37,17 @@ impl BlockWorldResources{
         let texture = StageTexture::new("assets/img/blocks.png".as_ref(), cmd_pool, true)?;
         let frag = ShaderModule::new(include_glsl!("assets/shaders/block.frag", kind: frag) as &[u32], cmd_pool.device())?;
         let vert = ShaderModule::new(include_glsl!("assets/shaders/block.vert") as &[u32], cmd_pool.device())?;
-        let mut world = World::new(foundations.world_size().clone(), cmd_pool)?;
-        world.blocks_mut().no_update_fill_level(0, 1, BEDROCK);
-        world.blocks_mut().no_update_fill_level(1, 1, DIRT);
-        world.blocks_mut().no_update_fill_level(2, 1, GRASS);
-        world.blocks_mut().no_update_fill_level(10, 1, GLASS);
-        world.blocks_mut().no_update_outline(5, 2, 5, 5, 5, 5, PLANK);
-        world.compute_faces();
-        world.flush_all_chunks()?;
-        let world_gpu_copy = StageBuffer::wrap(cmd_pool,  world.blocks().as_slice(), foundations.world_buffer().clone())?;
+        let mut world = WorldBlocks::new(foundations.world_size().clone());
+        world.no_update_fill_level(0, 1, BEDROCK);
+        world.no_update_fill_level(1, 1, DIRT);
+        world.no_update_fill_level(2, 1, GRASS);
+        world.no_update_fill_level(10, 1, GLASS);
+        world.no_update_outline(5, 2, 5, 5, 5, 5, PLANK);
+        let world = StageBuffer::wrap(cmd_pool,  world.as_slice(), foundations.world_buffer().clone())?;
 
         Ok(Self {
-            world_gpu_copy,
-            texture,
             world,
+            texture,
             frag,
             vert,
         })
@@ -65,8 +61,8 @@ impl RenderResources for BlockWorldResources{
     }
 
     fn make_renderable(self, _cmd_pool: &CommandPool, render_pass: &SingleRenderPass, descriptors:&DescriptorsBuilderLocked, _foundations:&Foundations) -> Result<Self::Render, failure::Error>{
-        let Self{ texture,world_gpu_copy,
-            world, frag, vert } = self;
+        let Self{ texture,world,
+             frag, vert } = self;
         let mut pipeline = PipelineBuilder::new();
         pipeline.descriptor_layout(descriptors.layout().clone())
             .fragment_shader("main", frag)
@@ -78,11 +74,10 @@ impl RenderResources for BlockWorldResources{
         let instance_binding = pipeline.instance_input::<Face>(0);
         let chunk_position_binding = pipeline.push_constant::<glm::Vec3>();
         let texture = texture.take()?.take();
-        let _ = world_gpu_copy.take()?; //wait for completion and then dispose of the staging buffer
+        let _ = world.take()?; //wait for completion and then dispose of the staging buffer
         let mut block_world_builder = BlockWorldBuilder {
             pipeline,
             texture,
-            world,
             instance_binding,
             chunk_position_binding,
         };
@@ -95,7 +90,6 @@ impl RenderResources for BlockWorldResources{
 pub struct BlockWorldBuilder {
     pipeline: PipelineBuilder,
     texture: TextureView<Dim2D, Color>,
-    world: Submitter<World>,
     instance_binding: BufferBinding<Face>,
     chunk_position_binding: PushConstant<glm::Vec3>,
 }

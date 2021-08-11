@@ -1,0 +1,13 @@
+#ifndef FACE_COMP
+#define FACE_COMP
+
+#define Face uint
+
+#define YPlus 0
+#define YMinus 1
+#define XPlus 2
+#define XMinus 3
+#define ZPlus 4
+#define ZMinus 5
+
+#endif // FACE_COMP

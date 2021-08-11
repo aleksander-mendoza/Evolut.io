@@ -1,71 +1,18 @@
 #ifndef DATA_COMP
 #define DATA_COMP
 #include "constants.comp"
-
-struct Particle{
-    vec3 old_position;
-    float size;
-    vec3 new_position;
-    float color;
-};
-
-struct Constraint{
-    int particle1; // if negative, then the actual particle ID is obtained by negating this value. Moreover,
-        // negative numbers are used to specify that the constraint is an inequality:
-        // dist(particles[-particle1].position, particles[particle2].position) <= constant_param
-        // If the value is positive, then the constraint is an equality
-        // dist(particles[particle1].position, particles[particle2].position) == constant_param
-    int particle2;
-    float constant_param; // If this value is negative, then the constraint is an inequality
-        // that keeps the particles away from one another
-        // dist(particles[particle1].position, particles[particle2].position) >= -constant_param
-};
-
-struct Bone{
-    uint[4] particle_ids;
-    vec3 center;
-    uint texture_variant_and_part;
-    vec3 normal;
-    float thickness;
-};
-
-uint get_body_part(uint texture_variant_and_part){
-    return texture_variant_and_part & 0x00FFu;
-}
-
-uint get_texture_variant(uint texture_variant_and_part){
-    return texture_variant_and_part >> 16;
-}
-
-struct ParticleConstants{
-    int predefined_constraints;
-    int collision_constraints;
-    // there are two types of particles:
-    int solid_particles; // solid particles - they can collide. They have mass, velocity and everything else that a particle should have.
-    int phantom_particles; // phantom particles - they do not collide with anything, but are merely used as extra anchors for constraints. They
-    // still have their own velocity and mass, so they can influence total mass of the body, its angular momentum etc.
-    int chunks_x;
-    int chunks_z;
-    int bones;
-    int dummy;
-};
-
-int cell_position_to_idx(ivec3 cell_position){
-    return cell_position.x+(cell_position.y+cell_position.z*CHUNK_HEIGHT_IN_CELLS)*CHUNK_WIDTH_IN_CELLS;
-}
-
-Constraint collision_constraint(uint particle1, uint particle2){
-    Constraint c;
-    c.particle1 = int(particle1);
-    c.particle2 = int(particle2);
-    c.constant_param = -PARTICLE_DIAMETER;
-    return c;
-}
+#include "particle.comp"
+#include "constraint.comp"
+#include "bone.comp"
+#include "particle_constants.comp"
+#include "grid.comp"
+#include "face.comp"
 
 struct DispatchIndirectCommand{
     uint    x;
     uint    y;
     uint    z;
 };
+
 
 #endif // DATA_COMP

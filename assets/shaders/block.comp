@@ -1,0 +1,29 @@
+#ifndef FACE_COMP
+#define FACE_COMP
+
+#define Block uint
+#define BLOCK_ID_AIR 0
+#define BLOCK_ID_GLASS 1
+#define BLOCK_ID_ICE 2
+#define BLOCK_ID_SPAWNER 3
+#define BLOCK_ID_WATER 4
+#define BLOCK_ID_LEAVES 5
+#define BLOCK_ID_STONE 6
+#define BLOCK_ID_DIRT 7
+#define BLOCK_ID_GRASS 8
+#define BLOCK_ID_PLANK 9
+#define BLOCK_ID_CRAFTING 10
+#define BLOCK_ID_SLAB 11
+#define BLOCK_ID_BRICK 12
+#define BLOCK_ID_TNT 13
+#define BLOCK_ID_COBBLESTONE 14
+#define BLOCK_ID_BEDROCK 15
+#define BLOCK_ID_GRAVEL 14
+
+struct BlockProp{
+    uint[6] texture_ids;
+    float opacity; // the higher, the more opaque
+    float mass;
+};
+
+#endif // FACE_COMP

@@ -1,0 +1,20 @@
+#ifndef PARTICLE_CONSTANTS_COMP
+#define PARTICLE_CONSTANTS_COMP
+#include "constants.comp"
+
+
+struct ParticleConstants{
+    int predefined_constraints;
+    int collision_constraints;
+    // there are two types of particles:
+    int solid_particles; // solid particles - they can collide. They have mass, velocity and everything else that a particle should have.
+    int phantom_particles; // phantom particles - they do not collide with anything, but are merely used as extra anchors for constraints. They
+    // still have their own velocity and mass, so they can influence total mass of the body, its angular momentum etc.
+    int chunks_x;
+    int chunks_z;
+    int bones;
+    int dummy;
+};
+
+
+#endif // PARTICLE_CONSTANTS_COMP

@@ -1,0 +1,11 @@
+#ifndef PARTICLE_COMP
+#define PARTICLE_COMP
+
+struct Particle{
+    vec3 old_position;
+    float size;
+    vec3 new_position;
+    float color;
+};
+
+#endif // PARTICLE_COMP

@@ -31,3 +31,11 @@ layout(std430, set = 0, binding = 6) buffer Bones{
 layout(std430, set = 0, binding = 7) buffer World{
     uint world[];
 };
+
+layout(std430, set = 0, binding = 8) buffer Faces{
+    Face faces[];
+};
+
+layout(std430, set = 0, binding = 9) buffer BlockProps{
+    BlockProp block_props[];
+};

@@ -8,8 +8,7 @@ use ash::vk;
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 #[repr(C, packed)]
 pub struct Face {
-    coords: u8_u8_u8_u8,
-    tex_id: u32,
+    coords: u8_u8_u8_u8
 }
 
 
@@ -22,22 +21,12 @@ impl VertexSource for Face {
                 format:  u8_u8_u8_u8::FORMAT,
                 offset: offset_of!(Self, coords) as u32,
             },
-            vk::VertexInputAttributeDescription {
-                binding,
-                location: 1,
-                format: u32::FORMAT,
-                offset: offset_of!(Self, tex_id) as u32,
-            },
         ]
     }
 }
 
 
 impl Face {
-    pub fn update_texture(&mut self, new_block: Block) {
-        let ort = self.block_orientation();
-        self.tex_id = new_block.texture_id(ort);
-    }
     pub fn coords_and_ort(&self) -> u32 {
         self.coords.as_u32().clone()
     }
@@ -58,9 +47,6 @@ impl Face {
     }
     pub fn orientation(&self) -> u8 {
         self.coords.d3
-    }
-    pub fn texture_id(&self) -> u32 {
-        self.tex_id
     }
     pub fn block_x(&self) -> usize {
         self.coords.d0 as usize

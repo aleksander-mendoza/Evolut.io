@@ -1,0 +1,20 @@
+#ifndef BONE_COMP
+#define BONE_COMP
+
+struct Bone{
+    uint[4] particle_ids;
+    vec3 center;
+    uint texture_variant_and_part;
+    vec3 normal;
+    float thickness;
+};
+
+uint get_body_part(uint texture_variant_and_part){
+    return texture_variant_and_part & 0x00FFu;
+}
+
+uint get_texture_variant(uint texture_variant_and_part){
+    return texture_variant_and_part >> 16;
+}
+
+#endif // BONE_COMP

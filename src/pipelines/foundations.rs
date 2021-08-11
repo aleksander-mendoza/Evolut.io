@@ -18,9 +18,10 @@ use crate::render::subbuffer::SubBuffer;
 use crate::pipelines::constraint::Constraint;
 use crate::render::buffer::Buffer;
 use crate::pipelines::particle_constants::ParticleConstants;
-use crate::blocks::{WorldSize, Block};
+use crate::blocks::{WorldSize, Block, Face};
 use crate::render::sampler::Sampler;
 use crate::pipelines::bone::Bone;
+use crate::blocks::block_properties::{BLOCKS, BlockProp};
 
 pub struct Indirect {
     collision_detection: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
@@ -59,8 +60,10 @@ impl Indirect {
 pub struct FoundationInitializer {
     particles: Submitter<StageSubBuffer<Particle, Cpu, Storage>>,
     world_buffer:SubBuffer<Block, Storage>,
+    face_buffer:SubBuffer<Face, Storage>,
     collision_grid: Submitter<SubBuffer<u32, Storage>>,
     constraints: Submitter<StageSubBuffer<Constraint, Cpu, Storage>>,
+    block_properties: Submitter<StageSubBuffer<BlockProp, Cpu, Storage>>,
     bones: Submitter<StageSubBuffer<Bone, Cpu, Storage>>,
     particle_constants: Submitter<StageSubBuffer<ParticleConstants, Cpu, Storage>>,
     indirect_dispatch: Submitter<IndirectDispatchSubBuffer>,
@@ -95,11 +98,17 @@ impl FoundationInitializer {
     pub fn world_buffer(&self) -> &SubBuffer<Block, Storage> {
         &self.world_buffer
     }
-
+    pub fn face_buffer(&self) -> &SubBuffer<Face, Storage> {
+        &self.face_buffer
+    }
+    pub fn block_properties(&self) -> &StageSubBuffer<BlockProp, Cpu, Storage> {
+        &self.block_properties
+    }
     pub fn new(cmd_pool: &CommandPool) -> Result<Self, failure::Error> {
         let world_size = WorldSize::new(2, 2);
         let particles = 512u64;
         let bones = 128u64;
+        let faces = 512u64;
         let max_constraints = 128u64;
         let grid_size = CHUNK_VOLUME_IN_CELLS as u64;
         let solid_particles = 256;
@@ -190,6 +199,8 @@ impl FoundationInitializer {
             Constraint::distance(12, 13,diag_wl),
         ];
 
+        let block_properties_data:Vec<BlockProp> = BLOCKS.iter().map(|p|p.prop).collect();
+
         let bone_data = vec![
             Bone::new([1, 2, 3, 4], 2, 0.1),
             Bone::new([4, 3, 5, 6], 3, 0.2),
@@ -211,7 +222,9 @@ impl FoundationInitializer {
         };
 
         let particles_in_bytes = std::mem::size_of::<Particle>() as u64 * particles;
+        let faces_in_bytes = std::mem::size_of::<Face>() as u64 * faces;
         let grid_in_bytes = std::mem::size_of::<u32>() as u64 * grid_size;
+        let block_properties_in_bytes = std::mem::size_of_val(block_properties_data.as_slice()) as u64;
         let world_in_bytes = (std::mem::size_of::<Block>()*world_size.world_volume()) as u64;
         let constraints_in_bytes = std::mem::size_of::<Constraint>() as u64 * max_constraints;
         let bones_in_bytes = std::mem::size_of::<Bone>() as u64 * bones;
@@ -219,7 +232,9 @@ impl FoundationInitializer {
 
         let super_buffer: SubBuffer<u8, Storage> = SubBuffer::with_capacity(cmd_pool.device(),
                                                                             particles_in_bytes +
+                                                                                faces_in_bytes +
                                                                                 grid_in_bytes +
+                                                                                block_properties_in_bytes +
                                                                                 world_in_bytes +
                                                                                 constraints_in_bytes +
                                                                                 bones_in_bytes +
@@ -227,16 +242,28 @@ impl FoundationInitializer {
         let offset = 0;
         let particle_buffer = super_buffer.sub(offset..offset + particles_in_bytes).reinterpret_into::<Particle>();
         let offset = offset + particles_in_bytes;
+        assert_eq!(offset%16,0); // check correct GLSL alignment
+        let face_buffer = super_buffer.sub(offset..offset + faces_in_bytes).reinterpret_into::<Face>();
+        let offset = offset + faces_in_bytes;
+        assert_eq!(offset%16,0);
         let grid_buffer = super_buffer.sub(offset..offset + grid_in_bytes).reinterpret_into::<u32>();
         let offset = offset + grid_in_bytes;
+        assert_eq!(offset%16,0);
+        let block_properties_buffer = super_buffer.sub(offset..offset + block_properties_in_bytes).reinterpret_into::<BlockProp>();
+        let offset = offset + block_properties_in_bytes;
+        assert_eq!(offset%16,0);
         let world_buffer = super_buffer.sub(offset..offset + world_in_bytes).reinterpret_into::<Block>();
         let offset = offset + world_in_bytes;
+        assert_eq!(offset%16,0);
         let constraint_buffer = super_buffer.sub(offset..offset + constraints_in_bytes).reinterpret_into::<Constraint>();
         let offset = offset + constraints_in_bytes;
+        assert_eq!(offset%16,0);
         let bones_buffer = super_buffer.sub(offset..offset + bones_in_bytes).reinterpret_into::<Bone>();
         let offset = offset + bones_in_bytes;
+        assert_eq!(offset%16,0);
         let constants_buffer = super_buffer.sub(offset..offset + constants_in_bytes).reinterpret_into::<ParticleConstants>();
-        let _offset = offset + constants_in_bytes;
+        let offset = offset + constants_in_bytes;
+        assert_eq!(offset%16,0);
 
         let particle_constants = StageBuffer::wrap(cmd_pool, &[constants], constants_buffer)?;
 
@@ -244,6 +271,8 @@ impl FoundationInitializer {
 
         let mut collision_grid = Submitter::new(grid_buffer, cmd_pool)?;
         fill_submit(&mut collision_grid, u32::MAX)?;
+
+        let block_properties = StageBuffer::wrap(cmd_pool, &block_properties_data, block_properties_buffer)?;
 
         let bones = StageBuffer::wrap(cmd_pool, &bone_data, bones_buffer)?;
 
@@ -291,7 +320,9 @@ impl FoundationInitializer {
         let indirect = Indirect::new(&indirect_dispatch, &indirect_draw);
 
         Ok(Self {
+            block_properties,
             world_buffer,
+            face_buffer,
             world_size,
             sampler,
             particles,
@@ -306,9 +337,11 @@ impl FoundationInitializer {
     }
     pub fn build(self) -> Result<Foundations, Error> {
         let Self {
+            block_properties,
             indirect_dispatch,
             indirect_draw,
             world_size,
+            face_buffer,
             world_buffer,
             bones,
             particles,
@@ -320,12 +353,15 @@ impl FoundationInitializer {
         } = self;
         let particles = particles.take()?.take_gpu();
         let collision_grid = collision_grid.take()?;
+        let block_properties = block_properties.take()?.take_gpu();
         let constraints = constraints.take()?.take_gpu();
         let bones = bones.take()?.take_gpu();
         let particle_constants = particle_constants.take()?.take_gpu();
         let indirect_dispatch = indirect_dispatch.take()?.take_gpu();
         let indirect_draw = indirect_draw.take()?.take_gpu();
         Ok(Foundations {
+            block_properties,
+            face_buffer,
             world_buffer,
             indirect_draw,
             indirect_dispatch,
@@ -343,6 +379,8 @@ impl FoundationInitializer {
 
 pub struct Foundations {
     world_size: WorldSize,
+    block_properties: SubBuffer<BlockProp, Storage>,
+    face_buffer: SubBuffer<Face, Storage>,
     world_buffer: SubBuffer<Block, Storage>,
     particles: SubBuffer<Particle, Storage>,
     constraints: SubBuffer<Constraint, Storage>,
@@ -367,6 +405,12 @@ impl Foundations {
     }
     pub fn world_buffer(&self) -> &SubBuffer<Block, Storage> {
         &self.world_buffer
+    }
+    pub fn block_properties(&self) -> &SubBuffer<BlockProp, Storage> {
+        &self.block_properties
+    }
+    pub fn face_buffer(&self) -> &SubBuffer<Face, Storage> {
+        &self.face_buffer
     }
     pub fn constants(&self) -> &SubBuffer<ParticleConstants, Storage> {
         &self.particle_constants

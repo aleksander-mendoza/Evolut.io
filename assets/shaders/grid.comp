@@ -1,0 +1,8 @@
+#ifndef GRID_COMP
+#define GRID_COMP
+
+int cell_position_to_idx(ivec3 cell_position){
+    return cell_position.x+(cell_position.y+cell_position.z*CHUNK_HEIGHT_IN_CELLS)*CHUNK_WIDTH_IN_CELLS;
+}
+
+#endif // GRID_COMP

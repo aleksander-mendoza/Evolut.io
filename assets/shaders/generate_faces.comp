@@ -1,0 +1,102 @@
+#version 450
+
+#include "constants.comp"
+#include "data.comp"
+
+layout (local_size_x = 32) in;
+
+#include "physics_descriptors.comp"
+
+void main() {
+    uint gID = gl_GlobalInvocationID.x;
+    const uint total_chunks = constants.chunks_x*constants.chunks_z;
+    if(gID==0){
+        for(int i=0;i<2*total_chunks;i++){
+            faces[i] = 0;
+        }
+    }
+    uint block_x = (gID / 255) % 16;
+    uint block_y = gID % 255;
+    uint block_z = gID / (255*16);
+    const uint world_width = constants.chunks_x*CHUNK_WIDTH;
+    const uint world_area = total_chunks*CHUNK_DEPTH*CHUNK_WIDTH;
+
+    ///////////
+    // First we count the number of faces in every chunk
+    ///////////
+    if(gID < CHUNK_WIDTH*CHUNK_HEIGHT*CHUNK_DEPTH){
+        for (int chunk_x=0;chunk_x<constants.chunks_x;chunk_x++){
+            for (int chunk_z=0;chunk_z<constants.chunks_z;chunk_z++){
+                uvec3 block_pos = uvec3(CHUNK_WIDTH*chunk_x+block_x,block_y,chunk_z*CHUNK_DEPTH+block_z);
+                const uint block_idx = block_pos_into_world_idx(world_width,world_area,block_pos);
+                const uint block_id = world[block_idx];
+                const BlockProp block_prop = block_props[block_id];
+                const uint faces_chunk_offsets_idx = chunk_x*constants.chunks_z+chunk_z;
+                block_pos.x+=1;
+                if(block_pos.x<constants.chunks_x*CHUNK_WIDTH){
+                    const uint neighbour_idx = block_pos_into_world_idx(world_width, world_area, block_pos);
+                    const uint neighbour_id = world[neighbour_idx];
+                    const BlockProp neighbour_prop = block_props[neighbour_id];
+                    if(block_prop.opacity != neighbour_prop.opacity){
+                        atomicAdd(faces[faces_chunk_offsets_idx + total_chunks*uint(max(block_prop.opacity,neighbour_prop.opacity) != 1.0)], 1);
+                    }
+                }
+                block_pos.x-=1;
+                block_pos.y+=1;
+                if(block_pos.y<CHUNK_HEIGHT){
+                    const uint neighbour_idx = block_pos_into_world_idx(world_width, world_area, block_pos);
+                    const uint neighbour_id = world[neighbour_idx];
+                    const BlockProp neighbour_prop = block_props[neighbour_id];
+                    if(block_prop.opacity != neighbour_prop.opacity){
+                        atomicAdd(faces[faces_chunk_offsets_idx + total_chunks*uint(max(block_prop.opacity,neighbour_prop.opacity) != 1.0)], 1);
+                    }
+                }
+                block_pos.y-=1;
+                block_pos.z+=1;
+                if(block_pos.z<constants.chunks_z*CHUNK_DEPTH){
+                    const uint neighbour_idx = block_pos_into_world_idx(world_width, world_area, block_pos);
+                    const uint neighbour_id = world[neighbour_idx];
+                    const BlockProp neighbour_prop = block_props[neighbour_id];
+                    if(block_prop.opacity != neighbour_prop.opacity){
+                        atomicAdd(faces[faces_chunk_offsets_idx + total_chunks*uint(max(block_prop.opacity,neighbour_prop.opacity) != 1.0)], 1);
+                    }
+                }
+            }
+        }
+    }
+    ///////////
+    // Now we use information about number of faces,
+    // to compute offsets into the buffer where chunks begin and end
+    ///////////
+    if(gID==0){
+        faces[0] = constants.chunks_x*constants.chunks_z;
+    }
+    ///////////
+    // Finally we populate all those regions of buffer with actual faces
+    ///////////
+    if(gID < CHUNK_WIDTH*CHUNK_HEIGHT*CHUNK_DEPTH){
+        for (int chunk_x=0;chunk_x<constants.chunks_x;chunk_x++){
+            for (int chunk_z=0;chunk_z<constants.chunks_z;chunk_z++){
+                uvec3 block_pos = uvec3(CHUNK_WIDTH*chunk_x+block_x,block_y,chunk_z*CHUNK_DEPTH+block_z);
+                const uint block_idx = block_pos_into_world_idx(world_width,world_area,block_pos);
+                const uint block_id = world[block_idx];
+                const BlockProp block_prop = block_props[block_id];
+                const uint faces_chunk_offsets_idx = chunk_x*constants.chunks_z+chunk_z;
+                if(gID==0){
+                    faces[faces_chunk_offsets_idx] = faces[faces_chunk_offsets_idx-1];
+                }
+                block_pos.x+=1;
+                if(block_pos.x<constants.chunks_x*CHUNK_WIDTH){
+                    const uint neighbour_idx = block_pos_into_world_idx(world_width, world_area, block_pos);
+                    const uint neighbour_id = world[neighbour_idx];
+                    const BlockProp neighbour_prop = block_props[neighbour_id];
+                    if(block_prop.opacity != neighbour_prop.opacity){
+                        uint orientation = block_prop.opacity > neighbour_prop.opacity ? XPlus : XMinus;
+                        faces[faces_chunk_offsets_idx];
+                    }
+                }
+
+            }
+        }
+    }
+}

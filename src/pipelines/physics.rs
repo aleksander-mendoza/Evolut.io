@@ -35,18 +35,12 @@ pub struct PhysicsResources {
 
 
 
-#[derive(Copy, Clone, Debug)]
-#[repr(C, align(16))]
-pub struct ThrowUniform {
-    position: Vec3,
-    velocity: Vec3,
-}
 
 impl PhysicsResources {
     pub fn new(cmd_pool: &CommandPool, _foundations:&FoundationInitializer) -> Result<Self, failure::Error> {
         let collision_detection = ShaderModule::new(include_glsl!("assets/shaders/collision_detection.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let solve_constraints = ShaderModule::new(include_glsl!("assets/shaders/solve_constraints.comp", kind: comp) as &[u32], cmd_pool.device())?;
-        let update_bones = ShaderModule::new(include_glsl!("assets/shaders/bones.comp", kind: comp) as &[u32], cmd_pool.device())?;
+        let update_bones = ShaderModule::new(include_glsl!("assets/shaders/update_bones.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let particle_uniform = HostBuffer::new(cmd_pool.device(), &[ThrowUniform {
             position: Vec3(glm::vec3(0., 0., 0.)),
             velocity: Vec3(glm::vec3(0., 0., 0.)),
@@ -73,6 +67,8 @@ impl ComputeResources for PhysicsResources{
         descriptors.storage_buffer(foundations.indirect_dispatch());
         descriptors.storage_buffer(foundations.bones());
         descriptors.storage_buffer(foundations.world_buffer());
+        descriptors.storage_buffer(foundations.face_buffer());
+        descriptors.storage_buffer(foundations.block_properties());
         let descriptors = descriptors.build(cmd_pool.device())?;
         let collision_detection = descriptors.build("main", collision_detection)?;
         let solve_constraints = descriptors.build("main", solve_constraints)?;

@@ -1,0 +1,24 @@
+#ifndef CONSTRAINT_COMP
+#define CONSTRAINT_COMP
+
+struct Constraint{
+    int particle1; // if negative, then the actual particle ID is obtained by negating this value. Moreover,
+        // negative numbers are used to specify that the constraint is an inequality:
+        // dist(particles[-particle1].position, particles[particle2].position) <= constant_param
+        // If the value is positive, then the constraint is an equality
+        // dist(particles[particle1].position, particles[particle2].position) == constant_param
+    int particle2;
+    float constant_param; // If this value is negative, then the constraint is an inequality
+        // that keeps the particles away from one another
+        // dist(particles[particle1].position, particles[particle2].position) >= -constant_param
+};
+
+Constraint collision_constraint(uint particle1, uint particle2){
+    Constraint c;
+    c.particle1 = int(particle1);
+    c.particle2 = int(particle2);
+    c.constant_param = -PARTICLE_DIAMETER;
+    return c;
+}
+
+#endif // CONSTRAINT_COMP
