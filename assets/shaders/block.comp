@@ -1,5 +1,5 @@
-#ifndef FACE_COMP
-#define FACE_COMP
+#ifndef BLOCK_COMP
+#define BLOCK_COMP
 
 #define Block uint
 #define BLOCK_ID_AIR 0
@@ -26,4 +26,4 @@ struct BlockProp{
     float mass;
 };
 
-#endif // FACE_COMP
+#endif // BLOCK_COMP

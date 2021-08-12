@@ -25,12 +25,15 @@ use crate::render::buffer_type::{Storage, Cpu, Uniform, GpuIndirect};
 use crate::render::buffer::{make_shader_buffer_barrier, Buffer};
 use crate::pipelines::foundations::{Foundations, FoundationInitializer};
 use crate::pipelines::computable::{ComputeResources, Computable};
+use crate::render::submitter::Submitter;
+use crate::blocks::world_size::{CHUNK_VOLUME_IN_CELLS, CHUNK_VOLUME};
+use crate::pipelines::player_event::{PlayerEvent, EventType};
 
 pub struct PhysicsResources {
     collision_detection: ShaderModule<Compute>,
     solve_constraints: ShaderModule<Compute>,
     update_bones: ShaderModule<Compute>,
-    particle_uniform: HostBuffer<ThrowUniform, Uniform>,
+    particle_uniform: HostBuffer<PlayerEvent, Uniform>,
 }
 
 
@@ -38,13 +41,11 @@ pub struct PhysicsResources {
 
 impl PhysicsResources {
     pub fn new(cmd_pool: &CommandPool, _foundations:&FoundationInitializer) -> Result<Self, failure::Error> {
+        // let generate_faces = ShaderModule::new(include_glsl!("assets/shaders/generate_faces.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let collision_detection = ShaderModule::new(include_glsl!("assets/shaders/collision_detection.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let solve_constraints = ShaderModule::new(include_glsl!("assets/shaders/solve_constraints.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let update_bones = ShaderModule::new(include_glsl!("assets/shaders/update_bones.comp", kind: comp) as &[u32], cmd_pool.device())?;
-        let particle_uniform = HostBuffer::new(cmd_pool.device(), &[ThrowUniform {
-            position: Vec3(glm::vec3(0., 0., 0.)),
-            velocity: Vec3(glm::vec3(0., 0., 0.)),
-        }])?;
+        let particle_uniform = HostBuffer::new(cmd_pool.device(), &[PlayerEvent::nothing()])?;
         Ok(Self { collision_detection, solve_constraints, particle_uniform, update_bones })
     }
 }
@@ -66,8 +67,8 @@ impl ComputeResources for PhysicsResources{
         descriptors.storage_buffer(foundations.constraints());
         descriptors.storage_buffer(foundations.indirect_dispatch());
         descriptors.storage_buffer(foundations.bones());
-        descriptors.storage_buffer(foundations.world_buffer());
-        descriptors.storage_buffer(foundations.face_buffer());
+        descriptors.storage_buffer(foundations.world());
+        descriptors.storage_buffer(foundations.faces());
         descriptors.storage_buffer(foundations.block_properties());
         let descriptors = descriptors.build(cmd_pool.device())?;
         let collision_detection = descriptors.build("main", collision_detection)?;
@@ -78,7 +79,7 @@ impl ComputeResources for PhysicsResources{
             solve_constraints,
             update_bones,
             uniform_binding,
-            particle_uniform,
+            player_event_uniform: particle_uniform,
         })
     }
 }
@@ -86,11 +87,11 @@ impl ComputeResources for PhysicsResources{
 
 pub struct Physics {
     //The order matters because of drop!
-    uniform_binding: UniformBufferBinding<ThrowUniform>,
+    uniform_binding: UniformBufferBinding<PlayerEvent>,
     collision_detection: ComputePipeline,
     solve_constraints: ComputePipeline,
     update_bones: ComputePipeline,
-    particle_uniform: HostBuffer<ThrowUniform, Uniform>,
+    player_event_uniform: HostBuffer<PlayerEvent, Uniform>,
 }
 
 impl Computable for Physics {
@@ -113,10 +114,12 @@ impl Computable for Physics {
         Ok(())
     }
 
-    fn update_uniforms(&mut self, player: &Player) {
-        let throw_uniform = &mut self.particle_uniform.as_slice_mut()[0];
-        throw_uniform.position.0 = player.location().clone();
-        throw_uniform.velocity.0 = player.throw_velocity().clone();
+    fn update_uniforms(&mut self, player: &mut Player) {
+        if let Some(event) = player.pop_event(){
+            self.player_event_uniform.as_slice_mut()[0] = event;
+        }else{
+            self.player_event_uniform.as_slice_mut()[0].make_nothing();
+        }
     }
 
 }

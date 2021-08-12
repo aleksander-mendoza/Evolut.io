@@ -103,7 +103,7 @@ impl Renderable for Particles {
         Ok(())
     }
 
-    fn update_uniforms(&mut self, _image_idx: SwapchainImageIdx, _player: &Player) {}
+    fn update_uniforms(&mut self, _image_idx: SwapchainImageIdx, _player: &mut Player) {}
     fn recreate(&mut self, render_pass: &SingleRenderPass) -> Result<(), Error> {
         self.particle_compiled = self.particle_builder.create_pipeline(render_pass)?;
         Ok(())

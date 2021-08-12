@@ -1,13 +1,42 @@
 #ifndef FACE_COMP
 #define FACE_COMP
 
-#define Face uint
+#include "constants.comp"
+#include "world.comp"
 
-#define YPlus 0
-#define YMinus 1
-#define XPlus 2
-#define XMinus 3
+#define Face uvec2
+
+#define XPlus 0
+#define XMinus 1
+#define YPlus 2
+#define YMinus 3
 #define ZPlus 4
 #define ZMinus 5
+
+uint block_pos_relative_to_chunk_and_orientation_into_face_coords(uvec4 position_relative_to_chunk_and_orientation) {
+    return ((
+    position_relative_to_chunk_and_orientation.x*256+
+    position_relative_to_chunk_and_orientation.y)*256+
+    position_relative_to_chunk_and_orientation.z)*256+
+    position_relative_to_chunk_and_orientation.w;
+}
+
+uvec4 face_coords_into_block_pos_relative_to_chunk_and_orientation(uint face_coords) {
+    uint orientation = face_coords & 255u;
+    uint z = face_coords/256 & 255u;
+    uint y = face_coords/(256*256) & 255u;
+    uint x = face_coords/(256*256*256) & 255u;
+    return uvec4(x,y,z,orientation);
+}
+
+uint pack_chunk_pos_and_tex_id(uint chunk_x, uint chunk_z, uint texture_id) {
+    return (chunk_x*256 + chunk_z)*256*256+texture_id;
+}
+
+Face new_face(uvec3 block_position_relative_to_chunk, uint orientation, uint chunk_x, uint chunk_z, uint texture_id){
+    uint face_coords = block_pos_relative_to_chunk_and_orientation_into_face_coords(uvec4(block_position_relative_to_chunk,orientation));
+    uint tex_id = pack_chunk_pos_and_tex_id(chunk_x, chunk_z, texture_id);
+    return uvec2(face_coords,tex_id);
+}
 
 #endif // FACE_COMP

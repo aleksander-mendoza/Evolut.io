@@ -3,6 +3,8 @@ use crate::blocks::face_orientation::FaceOrientation;
 pub const CHUNK_WIDTH: usize = 16;
 pub const CHUNK_DEPTH: usize = 16;
 pub const CHUNK_HEIGHT: usize = 256;
+pub const CHUNK_AREA: usize = CHUNK_WIDTH*CHUNK_DEPTH;
+pub const CHUNK_VOLUME: usize = CHUNK_AREA*CHUNK_HEIGHT;
 pub const GRID_GRANULARITY:usize = 8; // the total number of cells in a block is GRID_GRANULARITY raised to the power of 3
 pub const CELL_SIZE:f32 = 1./GRID_GRANULARITY as f32;
 pub const CELL_DIAGONAL:f32 = 1.73205080757*CELL_SIZE; // sqrt(3)=1.73205080757

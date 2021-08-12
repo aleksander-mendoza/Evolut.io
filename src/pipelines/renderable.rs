@@ -14,6 +14,6 @@ pub trait RenderResources:Sized{
 pub trait Renderable:Sized{
     fn record_cmd_buffer(&self, cmd: &mut CommandBuffer, image_idx:SwapchainImageIdx,descriptors:&Descriptors, render_pass:&SingleRenderPass, foundations:&Foundations)->Result<(),failure::Error>;
     fn record_compute_cmd_buffer(&self, cmd: &mut CommandBuffer, foundations:&Foundations)->Result<(),failure::Error>;
-    fn update_uniforms(&mut self, image_idx:SwapchainImageIdx, player:&Player);
+    fn update_uniforms(&mut self, image_idx:SwapchainImageIdx, player:&mut Player);
     fn recreate(&mut self, render_pass: &SingleRenderPass, ) -> Result<(), failure::Error>;
 }

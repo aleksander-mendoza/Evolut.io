@@ -2,10 +2,10 @@
 #[repr(u8)]
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum FaceOrientation {
-    YPlus = 0,
-    YMinus = 1,
-    XPlus = 2,
-    XMinus = 3,
+    XPlus = 0,
+    XMinus = 1,
+    YPlus = 2,
+    YMinus = 3,
     ZPlus = 4,
     ZMinus = 5,
 }
@@ -13,10 +13,10 @@ pub enum FaceOrientation {
 impl From<u8> for FaceOrientation{
     fn from(m: u8) -> Self {
        match m{
-           0 => Self::YPlus,
-           1 => Self::YMinus,
-           2 => Self::XPlus,
-           3 => Self::XMinus,
+           0 => Self::XPlus,
+           1 => Self::XMinus,
+           2 => Self::YPlus,
+           3 => Self::YMinus,
            4 => Self::ZPlus,
            5 => Self::ZMinus,
            t => panic!("Invalid enum {} for FaceOrientation",t)
@@ -25,8 +25,14 @@ impl From<u8> for FaceOrientation{
 }
 
 impl FaceOrientation {
+    pub fn from_dim(dim: usize, plus:bool) -> Self {
+        Self::from((dim as u8)*2u8 + if plus{0u8}else{1u8})
+    }
     pub fn is_side(&self) -> bool {
         (self.clone() as u8) > 1
+    }
+    pub fn is_plus(&self) -> bool {
+        (self.clone() as u8) % 2 == 0
     }
     pub fn opposite(&self) -> FaceOrientation {
         assert_eq!(std::mem::size_of::<Self>(), std::mem::size_of::<u8>());

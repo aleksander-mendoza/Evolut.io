@@ -6,17 +6,22 @@ pub struct BlockPropExtra{
     pub prop:BlockProp
 }
 /**This data is copied to GPU*/
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C, packed)]
 pub struct BlockProp{ // this thing needs to be aligned according to GLSL rules!
     texture_ids:[u32;6],
     opacity:f32, // the higher, the more opaque
     mass:f32,
 }
+impl BlockProp{
+    const fn new(texture_ids:[u32;6], opacity:f32)->Self{
+        Self{texture_ids, opacity, mass:0.}
+    }
+}
 
 impl BlockPropExtra{
     const fn regular_transparent(name:&'static str, texture_id:u32, opacity:f32) ->Self{
-        Self{name,prop:BlockProb{texture_ids:[texture_id;6],opacity}}
+        Self{name,prop:BlockProp::new([texture_id;6],opacity)}
     }
     const fn regular(name:&'static str, texture_id:u32)->Self{
         Self::regular_transparent(name,texture_id,1.)
@@ -25,19 +30,19 @@ impl BlockPropExtra{
         Self::top_sides_bottom_transparent(name,texture_id_top,texture_id_side,texture_id_bottom,1.)
     }
     const fn top_sides_bottom_transparent(name:&'static str, texture_id_top:u32,texture_id_side:u32,texture_id_bottom:u32,opacity:f32)->Self{
-        Self{name,prop:BlockProb{texture_ids:[texture_id_top,texture_id_bottom,texture_id_side,texture_id_side,texture_id_side,texture_id_side],opacity}}
+        Self{name,prop:BlockProp::new([texture_id_side,texture_id_side,texture_id_top,texture_id_bottom,texture_id_side,texture_id_side],opacity)}
     }
     const fn top_sides_bottom_front(name:&'static str, texture_id_top:u32,texture_id_side:u32,texture_id_bottom:u32,texture_id_front:u32)->Self{
-        Self{name,prop:BlockProb{texture_ids:[texture_id_top,texture_id_bottom,texture_id_side,texture_id_side,texture_id_side,texture_id_front],opacity:1.}}
+        Self{name,prop:BlockProp::new([texture_id_side,texture_id_side,texture_id_top,texture_id_bottom,texture_id_side,texture_id_front],1.)}
     }
-    pub fn get_texture_id(&self, ort:FaceOrientation)->u32{
-        self.texture_ids[ort as usize]
+    pub const fn get_texture_id(&self, ort:FaceOrientation)->u32{
+        self.prop.texture_ids[ort as usize]
     }
-    pub fn name(&self)->&'static str{
+    pub const fn name(&self)->&'static str{
         self.name
     }
-    pub fn opacity(&self)->f32{
-        self.opacity
+    pub const fn opacity(&self)->f32{
+        self.prop.opacity
     }
 }
 pub const AIR:Block = Block::new(0);

@@ -1,6 +1,10 @@
 #version 450
+#include "constants.comp"
+
+//#extension GL_EXT_debug_printf : enable
+
 layout (location = 0) in uvec4 coords;
-layout (location = 1) in uint tex_id;
+layout (location = 1) in uvec4 chunk_x_chunk_y_tex_id;
 layout (location = 0) out vec2 UV;
 
 layout (push_constant) uniform Chunk{
@@ -23,14 +27,14 @@ void main()
     const vec3 H = vec3(0,1,1);// left top front
 
     const vec3[6*6] vertices = vec3[6*6](
-    // YPlus ortientation = block's top face
-    G, F, E, G, E, H,
-     // YMinus ortientation = block's bottom face
-    C, A, B, C, D, A,
      // XPlus ortientation = block's right face
     G, B, F, B, G, C,
     // XMinus ortientation = block's left face
     A, D, H, A, H, E,
+    // YPlus ortientation = block's top face
+    G, F, E, G, E, H,
+    // YMinus ortientation = block's bottom face
+    C, A, B, C, D, A,
     // ZPlus ortientation = block's front face
     H, D, C, G, H, C,
     // ZMinus ortientation = block's back face
@@ -44,27 +48,29 @@ void main()
     const vec2 N = vec2(0,1);// left top
 
     const vec2[6*6] texture_uv = vec2[6*6](
-        // YPlus ortientation = block's top face
-        M, L, K, M, K, N,
-        // YMinus ortientation = block's bottom face
-        M, K, L, M, N, K,
         // XPlus ortientation = block's right face
         M, K, N, K, M, L,
         // XMinus ortientation = block's left face
         L, K, N, L, N, M,
+        // YPlus ortientation = block's top face
+        M, L, K, M, K, N,
+        // YMinus ortientation = block's bottom face
+        M, K, L, M, N, K,
         // ZPlus ortientation = block's front face
         N, K, L, M, N, L,
         // ZMinus ortientation = block's back face
         M, L, K, M, K, N
     );
-    uint x = coords.x;
-    uint y = coords.y;
-    uint z = coords.z;
     uint orientation = coords.w;
-    vec3 block_position = vec3(float(x),float(y),float(z));
+    vec3 block_position_relative_to_chunk = vec3(coords.xyz);
     vec3 vertex_pos = vertices[orientation*uint(6) + uint(gl_VertexIndex)];
-    gl_Position = MVP * vec4(vertex_pos+block_position+chunk_location, 1.0);
+    vec3 chunk_location = vec3(chunk_x_chunk_y_tex_id.x*CHUNK_WIDTH,0,chunk_x_chunk_y_tex_id.y*CHUNK_DEPTH);
+    uint tex_id = chunk_x_chunk_y_tex_id.w*255+chunk_x_chunk_y_tex_id.z;
+    gl_Position = MVP * vec4(vertex_pos+block_position_relative_to_chunk+chunk_location, 1.0);
     gl_Position.y = -gl_Position.y;
     vec2 uv = texture_uv[orientation*uint(6) + uint(gl_VertexIndex)];
     UV = vec2(uv.x + float(tex_id)*single_block_u,uv.y);
+//    if(gl_InstanceIndex==0){
+//        debugPrintfEXT("%v3f , %v3f , %d , %d",block_position_relative_to_chunk,chunk_location, tex_id, orientation);
+//    }
 }

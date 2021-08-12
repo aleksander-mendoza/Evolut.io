@@ -61,7 +61,7 @@ fn run() -> Result<(),failure::Error>{
     let video_subsystem = sdl.video().map_err(err_msg)?;
     let timer = sdl.timer().map_err(err_msg)?;
     let window = video_subsystem
-        .window("Game", 900, 700)
+        .window("∑volut-io", 900, 700)
         .vulkan()
         .resizable()
         .build()?;
@@ -89,7 +89,7 @@ fn run() -> Result<(),failure::Error>{
         }
         player.update(&mut display, &input, &fps_counter);
         // player.send_events(sx);
-        if display.render(false,&player)? {
+        if display.render(false,&mut player)? {
             display.device().device_wait_idle()?;
             display.recreate()?;
             display.rerecord_all_cmd_buffers()?;

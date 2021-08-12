@@ -1,102 +1,167 @@
-#version 450
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+// This code does not work too well on GPU. It's probably better to leave initial face generation to CPU
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include "constants.comp"
-#include "data.comp"
-
-layout (local_size_x = 32) in;
-
-#include "physics_descriptors.comp"
-
-void main() {
-    uint gID = gl_GlobalInvocationID.x;
-    const uint total_chunks = constants.chunks_x*constants.chunks_z;
-    if(gID==0){
-        for(int i=0;i<2*total_chunks;i++){
-            faces[i] = 0;
-        }
-    }
-    uint block_x = (gID / 255) % 16;
-    uint block_y = gID % 255;
-    uint block_z = gID / (255*16);
-    const uint world_width = constants.chunks_x*CHUNK_WIDTH;
-    const uint world_area = total_chunks*CHUNK_DEPTH*CHUNK_WIDTH;
-
-    ///////////
-    // First we count the number of faces in every chunk
-    ///////////
-    if(gID < CHUNK_WIDTH*CHUNK_HEIGHT*CHUNK_DEPTH){
-        for (int chunk_x=0;chunk_x<constants.chunks_x;chunk_x++){
-            for (int chunk_z=0;chunk_z<constants.chunks_z;chunk_z++){
-                uvec3 block_pos = uvec3(CHUNK_WIDTH*chunk_x+block_x,block_y,chunk_z*CHUNK_DEPTH+block_z);
-                const uint block_idx = block_pos_into_world_idx(world_width,world_area,block_pos);
-                const uint block_id = world[block_idx];
-                const BlockProp block_prop = block_props[block_id];
-                const uint faces_chunk_offsets_idx = chunk_x*constants.chunks_z+chunk_z;
-                block_pos.x+=1;
-                if(block_pos.x<constants.chunks_x*CHUNK_WIDTH){
-                    const uint neighbour_idx = block_pos_into_world_idx(world_width, world_area, block_pos);
-                    const uint neighbour_id = world[neighbour_idx];
-                    const BlockProp neighbour_prop = block_props[neighbour_id];
-                    if(block_prop.opacity != neighbour_prop.opacity){
-                        atomicAdd(faces[faces_chunk_offsets_idx + total_chunks*uint(max(block_prop.opacity,neighbour_prop.opacity) != 1.0)], 1);
-                    }
-                }
-                block_pos.x-=1;
-                block_pos.y+=1;
-                if(block_pos.y<CHUNK_HEIGHT){
-                    const uint neighbour_idx = block_pos_into_world_idx(world_width, world_area, block_pos);
-                    const uint neighbour_id = world[neighbour_idx];
-                    const BlockProp neighbour_prop = block_props[neighbour_id];
-                    if(block_prop.opacity != neighbour_prop.opacity){
-                        atomicAdd(faces[faces_chunk_offsets_idx + total_chunks*uint(max(block_prop.opacity,neighbour_prop.opacity) != 1.0)], 1);
-                    }
-                }
-                block_pos.y-=1;
-                block_pos.z+=1;
-                if(block_pos.z<constants.chunks_z*CHUNK_DEPTH){
-                    const uint neighbour_idx = block_pos_into_world_idx(world_width, world_area, block_pos);
-                    const uint neighbour_id = world[neighbour_idx];
-                    const BlockProp neighbour_prop = block_props[neighbour_id];
-                    if(block_prop.opacity != neighbour_prop.opacity){
-                        atomicAdd(faces[faces_chunk_offsets_idx + total_chunks*uint(max(block_prop.opacity,neighbour_prop.opacity) != 1.0)], 1);
-                    }
-                }
-            }
-        }
-    }
-    ///////////
-    // Now we use information about number of faces,
-    // to compute offsets into the buffer where chunks begin and end
-    ///////////
-    if(gID==0){
-        faces[0] = constants.chunks_x*constants.chunks_z;
-    }
-    ///////////
-    // Finally we populate all those regions of buffer with actual faces
-    ///////////
-    if(gID < CHUNK_WIDTH*CHUNK_HEIGHT*CHUNK_DEPTH){
-        for (int chunk_x=0;chunk_x<constants.chunks_x;chunk_x++){
-            for (int chunk_z=0;chunk_z<constants.chunks_z;chunk_z++){
-                uvec3 block_pos = uvec3(CHUNK_WIDTH*chunk_x+block_x,block_y,chunk_z*CHUNK_DEPTH+block_z);
-                const uint block_idx = block_pos_into_world_idx(world_width,world_area,block_pos);
-                const uint block_id = world[block_idx];
-                const BlockProp block_prop = block_props[block_id];
-                const uint faces_chunk_offsets_idx = chunk_x*constants.chunks_z+chunk_z;
-                if(gID==0){
-                    faces[faces_chunk_offsets_idx] = faces[faces_chunk_offsets_idx-1];
-                }
-                block_pos.x+=1;
-                if(block_pos.x<constants.chunks_x*CHUNK_WIDTH){
-                    const uint neighbour_idx = block_pos_into_world_idx(world_width, world_area, block_pos);
-                    const uint neighbour_id = world[neighbour_idx];
-                    const BlockProp neighbour_prop = block_props[neighbour_id];
-                    if(block_prop.opacity != neighbour_prop.opacity){
-                        uint orientation = block_prop.opacity > neighbour_prop.opacity ? XPlus : XMinus;
-                        faces[faces_chunk_offsets_idx];
-                    }
-                }
-
-            }
-        }
-    }
-}
+//#version 450
+//#extension GL_EXT_debug_printf : enable
+//#include "constants.comp"
+//#include "data.comp"
+//#include "world.comp"
+//
+//layout (local_size_x = 32) in;
+//
+//#include "physics_descriptors.comp"
+//
+//void main() {
+//    uint gID = gl_GlobalInvocationID.x;
+//    const uint total_chunks = constants.chunks_x*constants.chunks_z;
+//    if(gID==0){
+//        for(int i=0;i<2*total_chunks;i++){
+//            faces[i] = uvec2(0,0);
+//        }
+//    }
+//    uint block_x = (gID / 255) % 16;
+//    uint block_y = gID % 255;
+//    uint block_z = gID / (255*16);
+//    const uint world_width = constants.chunks_x*CHUNK_WIDTH;
+//    const uint world_area = total_chunks*CHUNK_DEPTH*CHUNK_WIDTH;
+//
+//    ///////////
+//    // First we count the number of faces in every chunk
+//    ///////////
+//
+//    if(gID < CHUNK_WIDTH*CHUNK_HEIGHT*CHUNK_DEPTH){
+//        for (int chunk_x=0;chunk_x<constants.chunks_x;chunk_x++){
+//            for (int chunk_z=0;chunk_z<constants.chunks_z;chunk_z++){
+//                uvec3 block_pos = uvec3(CHUNK_WIDTH*chunk_x+block_x,block_y,chunk_z*CHUNK_DEPTH+block_z);
+//                const uint block_idx = block_pos_into_world_idx(world_width,world_area,block_pos);
+//                const uint block_id = world[block_idx];
+//                const BlockProp block_prop = block_props[block_id];
+//                const uint current_chunk_idx = chunk_pos_into_chunk_idx(constants.chunks_x,chunk_x,chunk_z);
+//                block_pos.x+=1;
+//                if(block_pos.x<constants.chunks_x*CHUNK_WIDTH){
+//                    const uint neighbour_idx = block_pos_into_world_idx(world_width, world_area, block_pos);
+//                    const uint neighbour_id = world[neighbour_idx];
+//                    const BlockProp neighbour_prop = block_props[neighbour_id];
+//                    if(block_prop.opacity != neighbour_prop.opacity){ // If two neighboring blocks differ in opacities, then
+//                        // we must put a block face on the more opaque block, facing towards the less opaque block.
+//                        // If either block_prop.opacity==1 or neighbour_prop.opacity==1 then it's obvious that the face will be opaque.
+//                        // If both blocks are transparent (have opacity less than 1.0), then the face itself must be transparent.
+//                        // Chunks offsets for opaque faces are stored at faces[0..total_chunks]
+//                        // Chunks offsets for transparent faces are stored at faces[total_chunks..2*total_chunks]
+//                        atomicAdd(faces[current_chunk_idx + total_chunks*uint(max(block_prop.opacity,neighbour_prop.opacity) != 1.0)].x, 1);
+//                    }
+//                }
+//                block_pos.x-=1;
+//                block_pos.y+=1;
+//                if(block_pos.y<CHUNK_HEIGHT){
+//                    const uint neighbour_idx = block_pos_into_world_idx(world_width, world_area, block_pos);
+//                    const uint neighbour_id = world[neighbour_idx];
+//                    const BlockProp neighbour_prop = block_props[neighbour_id];
+//                    if(block_prop.opacity != neighbour_prop.opacity){
+//                        atomicAdd(faces[current_chunk_idx + total_chunks*uint(max(block_prop.opacity,neighbour_prop.opacity) != 1.0)].x, 1);
+//                    }
+//                }
+//                block_pos.y-=1;
+//                block_pos.z+=1;
+//                if(block_pos.z<constants.chunks_z*CHUNK_DEPTH){
+//                    const uint neighbour_idx = block_pos_into_world_idx(world_width, world_area, block_pos);
+//                    const uint neighbour_id = world[neighbour_idx];
+//                    const BlockProp neighbour_prop = block_props[neighbour_id];
+//                    if(block_prop.opacity != neighbour_prop.opacity){
+//                        atomicAdd(faces[current_chunk_idx + total_chunks*uint(max(block_prop.opacity,neighbour_prop.opacity) != 1.0)].x, 1);
+//                    }
+//                }
+//                if(gID==CHUNK_WIDTH*CHUNK_HEIGHT*CHUNK_DEPTH-1){
+//                    debugPrintfEXT("c: %d c0: %v2d c1: %v2d c2: %v2d c3: %v2d C0: %v2d C1: %v2d C2: %v2d C3: %v2d",
+//                        current_chunk_idx,faces[0],faces[1],faces[2],faces[3],faces[4],faces[5],faces[6],faces[7]);
+//                }
+//            }
+//        }
+//        uint total_number_of_opaque_faces = 0;
+//        for(int chunk_idx=0;chunk_idx<total_chunks;chunk_idx++){
+//            total_number_of_opaque_faces += faces[chunk_idx].x;
+//        }
+//        ///////////
+//        // Finally we populate all those regions of buffer with actual faces
+//        ///////////
+//        uint index_of_first_opaque_face_in_current_chunk = 2*total_chunks;
+//        uint index_of_first_transparent_face_in_current_chunk = index_of_first_opaque_face_in_current_chunk+total_number_of_opaque_faces;
+//
+//        for (int chunk_x=0;chunk_x<constants.chunks_x;chunk_x++){
+//            for (int chunk_z=0;chunk_z<constants.chunks_z;chunk_z++){
+//                const uvec3 block_pos = uvec3(CHUNK_WIDTH*chunk_x+block_x,block_y,chunk_z*CHUNK_DEPTH+block_z);
+//                const uint block_idx = block_pos_into_world_idx(world_width,world_area,block_pos);
+//                const uint block_id = world[block_idx];
+//                const BlockProp block_prop = block_props[block_id];
+//                const uint current_chunk_idx = chunk_pos_into_chunk_idx(constants.chunks_x,chunk_x,chunk_z);
+//                uvec3 neighbour_pos = block_pos;
+//                neighbour_pos.x+=1;
+//                if(neighbour_pos.x<constants.chunks_x*CHUNK_WIDTH){
+//                    const uint neighbour_idx = block_pos_into_world_idx(world_width, world_area, neighbour_pos);
+//                    const uint neighbour_id = world[neighbour_idx];
+//                    const BlockProp neighbour_prop = block_props[neighbour_id];
+//                    if(block_prop.opacity != neighbour_prop.opacity){
+//                        const uint orientation = block_prop.opacity > neighbour_prop.opacity ? XPlus : XMinus;
+//                        const uvec3 face_position = block_prop.opacity > neighbour_prop.opacity ? block_pos : neighbour_pos;
+//                        const uint texture_id = (block_prop.opacity > neighbour_prop.opacity ? block_prop : neighbour_prop).texture_ids[orientation];
+//                        const bool is_opaque = max(block_prop.opacity,neighbour_prop.opacity) != 1.0;
+//                        const uint face_idx_in_current_chunk = atomicAdd(faces[current_chunk_idx + total_chunks*uint(is_opaque)].y, 1);
+//                        const uint index_of_first_face_in_current_chunk = is_opaque?index_of_first_opaque_face_in_current_chunk:index_of_first_transparent_face_in_current_chunk;
+//
+//                        faces[index_of_first_face_in_current_chunk + face_idx_in_current_chunk] = new_face(face_position,orientation,chunk_x,chunk_z,texture_id);
+//                    }
+//                }
+//                neighbour_pos.x-=1;
+//                neighbour_pos.y+=1;
+//                if(neighbour_pos.y<CHUNK_HEIGHT){
+//                    const uint neighbour_idx = block_pos_into_world_idx(world_width, world_area, neighbour_pos);
+//                    const uint neighbour_id = world[neighbour_idx];
+//                    const BlockProp neighbour_prop = block_props[neighbour_id];
+//                    if(block_prop.opacity != neighbour_prop.opacity){
+//                        const uint orientation = block_prop.opacity > neighbour_prop.opacity ? XPlus : XMinus;
+//                        const uvec3 face_position = block_prop.opacity > neighbour_prop.opacity ? block_pos : neighbour_pos;
+//                        const uint texture_id = (block_prop.opacity > neighbour_prop.opacity ? block_prop : neighbour_prop).texture_ids[orientation];
+//                        const bool is_opaque = max(block_prop.opacity,neighbour_prop.opacity) != 1.0;
+//                        const uint face_idx_in_current_chunk = atomicAdd(faces[current_chunk_idx + total_chunks*uint(is_opaque)].y, 1);
+//                        const uint index_of_first_face_in_current_chunk = is_opaque?index_of_first_opaque_face_in_current_chunk:index_of_first_transparent_face_in_current_chunk;
+//
+//                        faces[index_of_first_face_in_current_chunk + face_idx_in_current_chunk] = new_face(face_position,orientation,chunk_x,chunk_z,texture_id);
+//                    }
+//                }
+//                neighbour_pos.y-=1;
+//                neighbour_pos.z+=1;
+//                if(neighbour_pos.z<constants.chunks_z*CHUNK_DEPTH){
+//                    const uint neighbour_idx = block_pos_into_world_idx(world_width, world_area, neighbour_pos);
+//                    const uint neighbour_id = world[neighbour_idx];
+//                    const BlockProp neighbour_prop = block_props[neighbour_id];
+//                    if(block_prop.opacity != neighbour_prop.opacity){
+//                        const uint orientation = block_prop.opacity > neighbour_prop.opacity ? XPlus : XMinus;
+//                        const uvec3 face_position = block_prop.opacity > neighbour_prop.opacity ? block_pos : neighbour_pos;
+//                        const uint texture_id = (block_prop.opacity > neighbour_prop.opacity ? block_prop : neighbour_prop).texture_ids[orientation];
+//                        const bool is_opaque = max(block_prop.opacity,neighbour_prop.opacity) != 1.0;
+//                        const uint face_idx_in_current_chunk = atomicAdd(faces[current_chunk_idx + total_chunks*uint(is_opaque)].y, 1);
+//                        const uint index_of_first_face_in_current_chunk = is_opaque?index_of_first_opaque_face_in_current_chunk:index_of_first_transparent_face_in_current_chunk;
+//
+//                        faces[index_of_first_face_in_current_chunk + face_idx_in_current_chunk] = new_face(face_position,orientation,chunk_x,chunk_z,texture_id);
+//                    }
+//                }
+//                index_of_first_opaque_face_in_current_chunk += faces[current_chunk_idx].x;
+//                index_of_first_transparent_face_in_current_chunk += faces[total_chunks+current_chunk_idx].x;
+//            }
+//        }
+//        if(gID==CHUNK_WIDTH*CHUNK_HEIGHT*CHUNK_DEPTH-1){
+//            // at this point we can be sure that index_of_first_transparent_face_in_current_chunk holds in fact the total number of faces
+//            draw_indirect[DRAW_INDIRECT_BLOCK].instance_count = index_of_first_transparent_face_in_current_chunk;
+//            debugPrintfEXT("chunk0: %v2d", faces[0]);
+//            debugPrintfEXT("chunk1: %v2d", faces[1]);
+//            debugPrintfEXT("chunk2: %v2d", faces[2]);
+//            debugPrintfEXT("chunk3: %v2d", faces[3]);
+//            debugPrintfEXT("Chunk0: %v2d", faces[4]);
+//            debugPrintfEXT("Chunk1: %v2d", faces[5]);
+//            debugPrintfEXT("Chunk2: %v2d", faces[6]);
+//            debugPrintfEXT("Chunk3: %v2d", faces[7]);
+//            debugPrintfEXT("Total faces: %d", index_of_first_transparent_face_in_current_chunk);
+//        }
+//    }
+//}

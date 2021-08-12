@@ -102,7 +102,7 @@ impl Renderable for Game {
 
     }
 
-    fn update_uniforms(&mut self, image_idx: SwapchainImageIdx, player: &Player) {
+    fn update_uniforms(&mut self, image_idx: SwapchainImageIdx, player: &mut Player) {
         self.global.update_uniforms(image_idx, player);
         self.physics.update_uniforms(player);
     }

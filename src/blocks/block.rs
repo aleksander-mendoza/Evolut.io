@@ -7,7 +7,7 @@ use ash::vk::VertexInputAttributeDescription;
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 #[repr(C, packed)]
 pub struct Block {
-    idx: u32,
+    id: u32,
 }
 
 impl VertexSource for Block{
@@ -17,7 +17,7 @@ impl VertexSource for Block{
                 location: 0,
                 binding,
                 format: u32::FORMAT,
-                offset: offset_of!(Block, idx) as u32
+                offset: offset_of!(Block, id) as u32
             }
         ]
     }
@@ -33,26 +33,29 @@ impl Block {
     pub const fn air() -> Self {
         Self::new(0)
     }
-    pub const fn new(idx: u32) -> Self {
-        Self { idx }
+    pub const fn new(id: u32) -> Self {
+        Self { id }
     }
     pub fn weight(&self) -> u32 {
-        (self.idx - 10).max(0)
+        (self.id - 10).max(0)
+    }
+    pub fn id(&self) -> u32 {
+        self.id
     }
     pub fn is_solid(&self) -> bool {
-        self.idx > 0
+        self.id > 0
     }
-    pub fn opacity(&self) -> f32 {
-        BLOCKS[self.idx as usize].opacity()
+    pub const fn opacity(&self) -> f32 {
+        BLOCKS[self.id as usize].opacity()
     }
     pub fn is_air(&self) -> bool {
-        self.idx == 0
+        self.id == 0
     }
     pub fn texture_id(&self, ort: FaceOrientation) -> u32 {
-        BLOCKS[self.idx as usize].get_texture_id(ort)
+        BLOCKS[self.id as usize].get_texture_id(ort)
     }
     pub fn name(&self) -> &'static str {
-        BLOCKS[self.idx as usize].name()
+        BLOCKS[self.id as usize].name()
     }
     pub fn show_neighboring_faces(&self) -> bool { self.is_transparent() }
     pub fn show_my_faces(&self) -> bool { !self.is_air() }

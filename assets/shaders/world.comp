@@ -11,6 +11,14 @@ uint block_pos_into_chunk_idx(uint chunks_x, uint x,uint z){
 uint block_pos_into_world_idx(uint world_width,uint world_area, uvec3 pos){
     return pos.z * world_width + pos.x + pos.y * world_area;
 }
+uint block_pos_relative_to_chunk_into_block_idx_relative_to_chunk(uvec3 position_relative_to_chunk) {
+    //Notice that this conversion could equivalently be expressed as
+    // position_relative_to_chunk.x + position_relative_to_chunk.z << 4 + position_relative_to_chunk.y << 8
+    return position_relative_to_chunk.x+(position_relative_to_chunk.y*CHUNK_DEPTH+position_relative_to_chunk.z)*CHUNK_WIDTH;
+}
+//uvec3 block_idx_relative_to_chunk_into_block_pos_relative_to_chunk(uint index_relative_to_chunk) {
+//    return position_relative_to_chunk.x+(position_relative_to_chunk.y*CHUNK_DEPTH+position_relative_to_chunk.z)*CHUNK_WIDTH;
+//}
 //uvec3 world_idx_into_block_pos(uint world_width,uint world_area, uint idx) {
 //    uint z = idx / world_area;
 //    uint z_rem = idx - z * world_area; // == idx % world_area

@@ -59,6 +59,9 @@ impl u8_u8_u8_u8 {
     pub fn as_u32(&self) -> &u32 {
         unsafe { std::mem::transmute::<&u8_u8_u8_u8, &u32>(self) }
     }
+    pub fn as_mut_u32(&mut self) -> &mut u32 {
+        unsafe { std::mem::transmute::<&mut u8_u8_u8_u8, &mut u32>(self) }
+    }
     pub fn new(d0: u8, d1: u8, d2: u8, d3: u8) -> u8_u8_u8_u8 {
         u8_u8_u8_u8 { d0, d1, d2, d3 }
     }
@@ -115,6 +118,62 @@ impl From<(u8, u8)> for u8_u8 {
 impl From<&[u8; 2]> for u8_u8 {
     fn from(other: &[u8; 2]) -> Self {
         u8_u8::new(other[0], other[1])
+    }
+}
+
+
+#[allow(non_camel_case_types)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[repr(C, packed)]
+pub struct u16_u16 {
+    pub d0: u16,
+    pub d1: u16,
+}
+
+impl u16_u16 {
+    pub fn new(d0: u16, d1: u16) -> u16_u16 {
+        u16_u16 { d0, d1 }
+    }
+}
+
+impl VertexAttrib for u16_u16 {
+    const FORMAT: Format = vk::Format::R16G16_UINT;
+}
+
+impl From<(u16, u16)> for u16_u16 {
+    fn from(other: (u16, u16)) -> Self {
+        u16_u16::new(other.0, other.1)
+    }
+}
+
+impl From<&[u16; 2]> for u16_u16 {
+    fn from(other: &[u16; 2]) -> Self {
+        u16_u16::new(other[0], other[1])
+    }
+}
+
+#[allow(non_camel_case_types)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[repr(C, packed)]
+pub struct u8_u8_u16 {
+    pub d0: u8,
+    pub d1: u8,
+    pub d2: u16,
+}
+
+impl u8_u8_u16 {
+    pub fn new(d0: u8, d1: u8, d2:u16) -> u8_u8_u16 {
+        u8_u8_u16 { d0, d1, d2 }
+    }
+}
+
+impl VertexAttrib for u8_u8_u16 {
+    const FORMAT: Format = vk::Format::R16G16_UINT;
+}
+
+impl From<(u8, u8, u16)> for u8_u8_u16 {
+    fn from(other: (u8,u8, u16)) -> Self {
+        u8_u8_u16::new(other.0, other.1,other.2)
     }
 }
 

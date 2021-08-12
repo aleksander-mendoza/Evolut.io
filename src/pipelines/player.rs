@@ -4,6 +4,8 @@ use crate::fps::FpsCounter;
 use crate::pipelines::mvp_uniforms::MvpUniforms;
 use crate::pipelines::display::Display;
 use crate::pipelines::game::GameResources;
+use std::collections::VecDeque;
+use crate::pipelines::player_event::PlayerEvent;
 
 pub struct Player {
     projection_matrix: glm::Mat4,
@@ -15,19 +17,19 @@ pub struct Player {
     movement_speed: f32,
     player_reach: f32,
     rotation_speed: f32,
-    throw_velocity: glm::Vec3,
+    events:VecDeque<PlayerEvent>,
     ray_trace_vector: glm::Vec4,
 }
 
 impl Player {
+    pub fn pop_event(&mut self) -> Option<PlayerEvent> {
+        self.events.pop_front()
+    }
     pub fn mvp_uniforms(&self) -> &MvpUniforms{
         &self.mvp_uniforms
     }
     pub fn location(&self) -> &glm::Vec3{
         &self.location
-    }
-    pub fn throw_velocity(&self) -> &glm::Vec3{
-        &self.throw_velocity
     }
     pub fn new() -> Self {
         Self {
@@ -40,7 +42,7 @@ impl Player {
             movement_speed: 0.005f32,
             player_reach: 4f32,
             rotation_speed: 1f32,
-            throw_velocity: glm::zero(),
+            events: VecDeque::with_capacity(4),
             ray_trace_vector: glm::zero()
         }
     }
@@ -68,20 +70,18 @@ impl Player {
         self.location += movement_vector;
         self.ray_trace_vector = glm::quat_rotate_vec(&inverse_rotation, &glm::vec4(0f32, 0., -self.player_reach, 0.));
         if input.has_mouse_left_click() || input.has_mouse_right_click() {
-            let world = display.pipeline_mut().block_world_mut().world_mut();
-            if input.has_mouse_left_click() {
-                world.ray_cast_remove_block(self.location.as_slice(), self.ray_trace_vector.as_slice());
-            } else {
-                world.ray_cast_place_block(self.location.as_slice(), self.ray_trace_vector.as_slice(), self.block_in_hand);
-            }
-            world.flush_all_chunks();
-            world.reset();
-            display.rerecord_all_cmd_buffers()?;
+            // let world = display.pipeline_mut().block_world_mut().world_mut();
+            // if input.has_mouse_left_click() {
+            //     world.ray_cast_remove_block(self.location.as_slice(), self.ray_trace_vector.as_slice());
+            // } else {
+            //     world.ray_cast_place_block(self.location.as_slice(), self.ray_trace_vector.as_slice(), self.block_in_hand);
+            // }
+            // world.flush_all_chunks();
+            // world.reset();
+            // display.rerecord_all_cmd_buffers()?;
         }
         if input.is_q(){
-            self.throw_velocity = self.ray_trace_vector.xyz()*0.01;
-        }else{
-            self.throw_velocity = glm::zero();
+            self.events.push_back(PlayerEvent::throw(self.location, self.ray_trace_vector.xyz()*0.01));
         }
         if input.number() > -1 {
             self.block_in_hand = Block::new((input.number() + 1) as u32)

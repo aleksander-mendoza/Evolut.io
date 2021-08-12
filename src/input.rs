@@ -85,6 +85,7 @@ impl Input {
         self.has_mouse_move = false;
         self.has_mouse_left_click = false;
         self.has_mouse_right_click = false;
+        self.q = false;
         self.number = -1;
         for event in self.event_pump.poll_iter() {
             match event {

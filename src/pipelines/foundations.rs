@@ -18,16 +18,17 @@ use crate::render::subbuffer::SubBuffer;
 use crate::pipelines::constraint::Constraint;
 use crate::render::buffer::Buffer;
 use crate::pipelines::particle_constants::ParticleConstants;
-use crate::blocks::{WorldSize, Block, Face};
+use crate::blocks::{WorldSize, Block, Face, WorldBlocks, WorldFaces};
 use crate::render::sampler::Sampler;
 use crate::pipelines::bone::Bone;
-use crate::blocks::block_properties::{BLOCKS, BlockProp};
+use crate::blocks::block_properties::{BLOCKS, BlockProp, BEDROCK, DIRT, GRASS, GLASS, PLANK};
 
 pub struct Indirect {
     collision_detection: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
     solve_constraints: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
     update_bones: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
     draw_bones: SubBuffer<vk::DrawIndirectCommand, GpuIndirect>,
+    draw_blocks: SubBuffer<vk::DrawIndirectCommand, GpuIndirect>,
 }
 
 impl Indirect {
@@ -36,15 +37,20 @@ impl Indirect {
         let solve_constraints = indirect_dispatch.gpu().element(1);
         let update_bones = indirect_dispatch.gpu().element(2);
         let draw_bones = indirect_draw.gpu().element(0);
+        let draw_blocks = indirect_draw.gpu().element(1);
         Self {
             collision_detection,
             solve_constraints,
             update_bones,
             draw_bones,
+            draw_blocks,
         }
     }
     pub fn draw_bones(&self) -> &SubBuffer<vk::DrawIndirectCommand, GpuIndirect> {
         &self.draw_bones
+    }
+    pub fn draw_blocks(&self) -> &SubBuffer<vk::DrawIndirectCommand, GpuIndirect> {
+        &self.draw_blocks
     }
     pub fn collision_detection(&self) -> &SubBuffer<vk::DispatchIndirectCommand, GpuIndirect> {
         &self.collision_detection
@@ -59,8 +65,10 @@ impl Indirect {
 
 pub struct FoundationInitializer {
     particles: Submitter<StageSubBuffer<Particle, Cpu, Storage>>,
-    world_buffer:SubBuffer<Block, Storage>,
-    face_buffer:SubBuffer<Face, Storage>,
+    world: Submitter<StageSubBuffer<Block,Cpu,Storage>>,
+    faces: Submitter<StageSubBuffer<Face,Cpu,Storage>>,
+    face_count_per_chunk_buffer:SubBuffer<Face, Storage>,
+    opaque_and_transparent_face_buffer:SubBuffer<Face, Storage>,
     collision_grid: Submitter<SubBuffer<u32, Storage>>,
     constraints: Submitter<StageSubBuffer<Constraint, Cpu, Storage>>,
     block_properties: Submitter<StageSubBuffer<BlockProp, Cpu, Storage>>,
@@ -74,6 +82,12 @@ pub struct FoundationInitializer {
 }
 
 impl FoundationInitializer {
+    pub fn face_count_per_chunk_buffer(&self)->&SubBuffer<Face, Storage>{
+        &self.face_count_per_chunk_buffer
+    }
+    pub fn opaque_and_transparent_face_buffer(&self)->&SubBuffer<Face, Storage>{
+        &self.opaque_and_transparent_face_buffer
+    }
     pub fn indirect(&self) -> &Indirect {
         &self.indirect
     }
@@ -95,26 +109,35 @@ impl FoundationInitializer {
     pub fn world_size(&self) -> &WorldSize {
         &self.world_size
     }
-    pub fn world_buffer(&self) -> &SubBuffer<Block, Storage> {
-        &self.world_buffer
+    pub fn world(&self) -> &StageSubBuffer<Block, Cpu,Storage> {
+        &self.world
     }
-    pub fn face_buffer(&self) -> &SubBuffer<Face, Storage> {
-        &self.face_buffer
+    pub fn faces(&self) -> &StageSubBuffer<Face, Cpu,Storage> {
+        &self.faces
     }
+
     pub fn block_properties(&self) -> &StageSubBuffer<BlockProp, Cpu, Storage> {
         &self.block_properties
     }
     pub fn new(cmd_pool: &CommandPool) -> Result<Self, failure::Error> {
-        let world_size = WorldSize::new(2, 2);
+        let world_size = WorldSize::new(2,2);
         let particles = 512u64;
         let bones = 128u64;
-        let faces = 512u64;
+        let faces = 2048u64*world_size.total_chunks() as u64;
         let max_constraints = 128u64;
         let grid_size = CHUNK_VOLUME_IN_CELLS as u64;
         let solid_particles = 256;
         let phantom_particles = 256;
         debug_assert!(solid_particles + phantom_particles <= particles);
 
+        let mut world_blocks = WorldBlocks::new(world_size.clone());
+        world_blocks.no_update_fill_level(0, 1, BEDROCK);
+        world_blocks.no_update_fill_level(1, 1, DIRT);
+        world_blocks.no_update_fill_level(2, 1, GRASS);
+        world_blocks.no_update_fill_level(10, 1, GLASS);
+        world_blocks.no_update_outline(5, 2, 5, 5, 5, 5, PLANK);
+        let mut world_faces = WorldFaces::with_capacity(world_size.clone(), faces as usize);
+        world_faces.generate_faces(&world_blocks);
         let w2 = 0.4f32;
         let w = w2/2.;
         let h2 = 0.4f32;
@@ -269,12 +292,18 @@ impl FoundationInitializer {
 
         let particles = StageBuffer::wrap(cmd_pool, &particles_data, particle_buffer)?;
 
+        let face_count_per_chunk_buffer = face_buffer.sub(..std::mem::size_of::<Face>() as u64 *world_size.total_chunks() as u64*2);
+        let opaque_and_transparent_face_buffer = face_buffer.sub(std::mem::size_of::<Face>() as u64  * world_size.total_chunks() as u64*2..);
+        let faces = StageBuffer::wrap(cmd_pool,  world_faces.as_slice(), face_buffer)?;
+
         let mut collision_grid = Submitter::new(grid_buffer, cmd_pool)?;
         fill_submit(&mut collision_grid, u32::MAX)?;
 
         let block_properties = StageBuffer::wrap(cmd_pool, &block_properties_data, block_properties_buffer)?;
 
         let bones = StageBuffer::wrap(cmd_pool, &bone_data, bones_buffer)?;
+
+        let world = StageBuffer::wrap(cmd_pool,  world_blocks.as_slice(), world_buffer)?;
 
         let constraints = StageBuffer::wrap(cmd_pool, &predefined_constraints, constraint_buffer)?;
 
@@ -298,10 +327,11 @@ impl FoundationInitializer {
         let indirect_dispatch_data = vec![
             dispatch_indirect(phantom_particles.max(solid_particles) as f32),// collision_detection.comp
             dispatch_indirect(0.), // solve_constraints.comp
-            dispatch_indirect(bone_data.len() as f32) // bones.comp
+            dispatch_indirect(bone_data.len() as f32) // update_bones.comp
         ];
         let indirect_draw_data = vec![
             draw_indirect(36, bone_data.len() as u32),// bones.vert
+            draw_indirect(6, world_faces.len() as u32),// block.vert
         ];
         let indirect_dispatch_in_bytes = std::mem::size_of_val(indirect_dispatch_data.as_slice()) as u64;
         let indirect_draw_in_bytes = std::mem::size_of_val(indirect_draw_data.as_slice()) as u64;
@@ -320,9 +350,11 @@ impl FoundationInitializer {
         let indirect = Indirect::new(&indirect_dispatch, &indirect_draw);
 
         Ok(Self {
+            face_count_per_chunk_buffer,
+            opaque_and_transparent_face_buffer,
             block_properties,
-            world_buffer,
-            face_buffer,
+            faces,
+            world,
             world_size,
             sampler,
             particles,
@@ -337,12 +369,14 @@ impl FoundationInitializer {
     }
     pub fn build(self) -> Result<Foundations, Error> {
         let Self {
+            face_count_per_chunk_buffer,
+            opaque_and_transparent_face_buffer,
             block_properties,
             indirect_dispatch,
             indirect_draw,
             world_size,
-            face_buffer,
-            world_buffer,
+            faces,
+            world,
             bones,
             particles,
             collision_grid,
@@ -359,10 +393,14 @@ impl FoundationInitializer {
         let particle_constants = particle_constants.take()?.take_gpu();
         let indirect_dispatch = indirect_dispatch.take()?.take_gpu();
         let indirect_draw = indirect_draw.take()?.take_gpu();
+        let world = world.take()?.take_gpu(); //wait for completion and then dispose of the staging buffer
+        let faces = faces.take()?.take_gpu();
         Ok(Foundations {
+            face_count_per_chunk_buffer,
+            opaque_and_transparent_face_buffer,
             block_properties,
-            face_buffer,
-            world_buffer,
+            faces,
+            world,
             indirect_draw,
             indirect_dispatch,
             world_size,
@@ -380,8 +418,10 @@ impl FoundationInitializer {
 pub struct Foundations {
     world_size: WorldSize,
     block_properties: SubBuffer<BlockProp, Storage>,
-    face_buffer: SubBuffer<Face, Storage>,
-    world_buffer: SubBuffer<Block, Storage>,
+    faces: SubBuffer<Face, Storage>,
+    face_count_per_chunk_buffer: SubBuffer<Face, Storage>,
+    opaque_and_transparent_face_buffer: SubBuffer<Face, Storage>,
+    world: SubBuffer<Block, Storage>,
     particles: SubBuffer<Particle, Storage>,
     constraints: SubBuffer<Constraint, Storage>,
     bones: SubBuffer<Bone, Storage>,
@@ -394,6 +434,15 @@ pub struct Foundations {
 }
 
 impl Foundations {
+    pub fn face_count_per_chunk_buffer(&self)->&SubBuffer<Face, Storage>{
+        &self.face_count_per_chunk_buffer
+    }
+    pub fn opaque_and_transparent_face_buffer(&self)->&SubBuffer<Face, Storage>{
+        &self.opaque_and_transparent_face_buffer
+    }
+    pub fn world_size(&self) -> &WorldSize {
+        &self.world_size
+    }
     pub fn indirect(&self) -> &Indirect {
         &self.indirect
     }
@@ -403,14 +452,14 @@ impl Foundations {
     pub fn bones(&self) -> &SubBuffer<Bone, Storage> {
         &self.bones
     }
-    pub fn world_buffer(&self) -> &SubBuffer<Block, Storage> {
-        &self.world_buffer
+    pub fn world(&self) -> &SubBuffer<Block, Storage> {
+        &self.world
     }
     pub fn block_properties(&self) -> &SubBuffer<BlockProp, Storage> {
         &self.block_properties
     }
-    pub fn face_buffer(&self) -> &SubBuffer<Face, Storage> {
-        &self.face_buffer
+    pub fn faces(&self) -> &SubBuffer<Face, Storage> {
+        &self.faces
     }
     pub fn constants(&self) -> &SubBuffer<ParticleConstants, Storage> {
         &self.particle_constants

@@ -39,14 +39,14 @@ void main() {
     const vec2 H = vec2(3,-width);// left top back
 
     const vec2[6*6] particle_id_per_vertex = vec2[6*6](
-        // YPlus ortientation = block's top face
-        G, F, E, G, E, H,
-        // YMinus ortientation = block's bottom face
-        C, A, B, C, D, A,
         // XPlus ortientation = block's right face
         G, B, F, B, G, C,
         // XMinus ortientation = block's left face
         A, D, H, A, H, E,
+        // YPlus ortientation = block's top face
+        G, F, E, G, E, H,
+        // YMinus ortientation = block's bottom face
+        C, A, B, C, D, A,
         // ZPlus ortientation = block's back face
         H, D, C, G, H, C,
         // ZMinus ortientation = block's front face
@@ -60,14 +60,14 @@ void main() {
     const vec2 N = vec2(0,1);// left top
 
     const vec2[6*6] texture_uv = vec2[6*6](
-        // YPlus ortientation = block's top face
-        M, L, K, M, K, N,
-        // YMinus ortientation = block's bottom face
-        M, K, L, M, N, K,
         // XPlus ortientation = block's right face
         M, K, N, K, M, L,
         // XMinus ortientation = block's left face
         L, K, N, L, N, M,
+        // YPlus ortientation = block's top face
+        M, L, K, M, K, N,
+        // YMinus ortientation = block's bottom face
+        M, K, L, M, N, K,
         // ZPlus ortientation = block's back face
         M, L, K, N, M, K,
         // ZMinus ortientation = block's front face
@@ -78,53 +78,53 @@ void main() {
     const float pixel = 1./64.; //size of a single texture pixel measured in UV coordinates
     const vec2[6*4*2] tex_offset_and_size = vec2[6*4*2](
         /////// Zombie leg
-        // YPlus
-        vec2(pixel*4.,pixel*12.),vec2(pixel*4.,pixel*4.),
-        // YMinus
-        vec2(pixel*8.,pixel*12.),vec2(pixel*4.,pixel*4.),
         // XPlus
         vec2(pixel*8.,pixel*0.),vec2(pixel*4.,pixel*12.),
         // XMinus
         vec2(pixel*0.,pixel*0.),vec2(pixel*4.,pixel*12.),
+        // YPlus
+        vec2(pixel*4.,pixel*12.),vec2(pixel*4.,pixel*4.),
+        // YMinus
+        vec2(pixel*8.,pixel*12.),vec2(pixel*4.,pixel*4.),
         // ZPlus
         vec2(pixel*12.,pixel*0.),vec2(pixel*4.,pixel*12.),
         // ZMinus
         vec2(pixel*4.,pixel*0.),vec2(pixel*4.,pixel*12.),
         /////// Zombie arm
-        // YPlus
-        vec2(pixel*(4.+16.),pixel*12.),vec2(pixel*4.,pixel*4.),
-        // YMinus
-        vec2(pixel*(8.+16.),pixel*12.),vec2(pixel*4.,pixel*4.),
         // XPlus
         vec2(pixel*(8.+16.),pixel*0.),vec2(pixel*4.,pixel*12.),
         // XMinus
         vec2(pixel*(0.+16.),pixel*0.),vec2(pixel*4.,pixel*12.),
+        // YPlus
+        vec2(pixel*(4.+16.),pixel*12.),vec2(pixel*4.,pixel*4.),
+        // YMinus
+        vec2(pixel*(8.+16.),pixel*12.),vec2(pixel*4.,pixel*4.),
         // ZPlus
         vec2(pixel*(12.+16.),pixel*0.),vec2(pixel*4.,pixel*12.),
         // ZMinus
         vec2(pixel*(4.+16.),pixel*0.),vec2(pixel*4.,pixel*12.),
         /////// Zombie torso
-        // YPlus
-        vec2(pixel*4.,pixel*28.),vec2(pixel*8.,pixel*4.),
-        // YMinus
-        vec2(pixel*12.,pixel*28.),vec2(pixel*8.,pixel*4.),
         // XPlus
         vec2(pixel*12.,pixel*16.),vec2(pixel*4.,pixel*12.),
         // XMinus
         vec2(pixel*0.,pixel*16.),vec2(pixel*4.,pixel*12.),
+        // YPlus
+        vec2(pixel*4.,pixel*28.),vec2(pixel*8.,pixel*4.),
+        // YMinus
+        vec2(pixel*12.,pixel*28.),vec2(pixel*8.,pixel*4.),
         // ZPlus
         vec2(pixel*16.,pixel*16.),vec2(pixel*8.,pixel*12.),
         // ZMinus
         vec2(pixel*4.,pixel*16.),vec2(pixel*8.,pixel*12.),
         /////// Zombie head
-        // YPlus
-        vec2(pixel*8.,pixel*40.),vec2(pixel*8.,pixel*8.),
-        // YMinus
-        vec2(pixel*16.,pixel*40.),vec2(pixel*8.,pixel*8.),
         // XPlus
         vec2(pixel*16.,pixel*32.),vec2(pixel*8.,pixel*8.),
         // XMinus
         vec2(pixel*0.,pixel*32.),vec2(pixel*8.,pixel*8.),
+        // YPlus
+        vec2(pixel*8.,pixel*40.),vec2(pixel*8.,pixel*8.),
+        // YMinus
+        vec2(pixel*16.,pixel*40.),vec2(pixel*8.,pixel*8.),
         // ZPlus
         vec2(pixel*0.,pixel*40.),vec2(pixel*8.,pixel*8.),
         // ZMinus

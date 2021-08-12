@@ -1,8 +1,16 @@
 
-layout (set = 0, binding = 0) uniform Throw{
-    vec3 position;
-    vec3 velocity;
-}throw;
+#define PLAYER_EVENT_NOTHING 0
+#define PLAYER_EVENT_THROW 1
+#define PLAYER_EVENT_SET_BLOCK 2
+
+layout (set = 0, binding = 0) uniform PlayerEvent{
+    vec3 vec3_slot0;
+    uint u32_slot0;
+    vec3 vec3_slot1;
+    uint u32_slot1;
+    uvec3 uvec3_slot0;
+    uint event_type;
+}player_event;
 
 layout (std430, set = 0, binding = 1) buffer ParticleConstant{
     ParticleConstants constants;
@@ -20,8 +28,15 @@ layout(std430, set = 0, binding = 4) buffer Constraints{
     Constraint constraints[];
 };
 
+#define DISPATCH_INDIRECT_COLLISION_DETECTION 0
+#define DISPATCH_INDIRECT_SOLVE_CONSTRAINTS 1
+#define DISPATCH_INDIRECT_UPDATE_BONES 2
+#define DRAW_INDIRECT_BONES 0
+#define DRAW_INDIRECT_BLOCK 1
+
 layout(std430, set = 0, binding = 5) buffer Indirect{
-    DispatchIndirectCommand[] indirect;
+    DispatchIndirectCommand[3] dispatch_indirect;
+    DrawIndirectCommand[2] draw_indirect;
 };
 
 layout(std430, set = 0, binding = 6) buffer Bones{
@@ -33,6 +48,19 @@ layout(std430, set = 0, binding = 7) buffer World{
 };
 
 layout(std430, set = 0, binding = 8) buffer Faces{
+    // The first few faces are in fact, not faces at all!
+    // Instead the faces at possitons 0..total_chunks are used to store the number of faces in eahc chunk.
+    // For example faces[0].x stores the number of faces in first chunk, faces[1].x is second chunk and so on.
+    // The chunks are indexed according to chunk_pos_into_chunk_idx().
+    // Opaque faces need to be rendered first, before the transparent faces! For this reason the faces[] is split into
+    // two regions, first for opaque, second for transparent. The faces at indices total_chunks..2*total_chunks store
+    // the number of transparent faces at each chunk. So faces[0].x is the number of opaque faces in first chunk, while
+    // faces[total_chunks].x is the number of transparent faces in first chunk. The very first actual face can be found at index
+    // faces[2*total_chunks].
+    // Notice that every face holds two numbers: coords and tex_idx. The faces at indices 0..2*total_chunks store the
+    // number of faces in first component but  do not make
+    // any use of the second component. Its value is undefined. However! Some algorithms do make use of the y component,
+    // as a temporary storage purely for the purpose of some computations.
     Face faces[];
 };
 

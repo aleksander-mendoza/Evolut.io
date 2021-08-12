@@ -143,7 +143,7 @@ impl <P: RenderResources> Display<P> {
         Ok(())
     }
 
-    pub fn render(&mut self, _rerecord_cmd:bool, player:&Player) -> Result<bool, failure::Error> {
+    pub fn render(&mut self, _rerecord_cmd:bool, player:&mut Player) -> Result<bool, failure::Error> {
         let Self{ command_buffers, pipeline, render_pass,foundations: _, vulkan,descriptors, uniforms_binding, .. } = self;
         let fence = vulkan.frames_in_flight().current_fence();
         fence.wait(None)?;

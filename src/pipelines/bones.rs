@@ -115,7 +115,7 @@ impl Renderable for Bones {
         Ok(())
     }
 
-    fn update_uniforms(&mut self, _image_idx: SwapchainImageIdx, _player:&Player) {
+    fn update_uniforms(&mut self, _image_idx: SwapchainImageIdx, _player:&mut Player) {
     }
 
     fn recreate(&mut self, render_pass: &SingleRenderPass) -> Result<(), Error> {
