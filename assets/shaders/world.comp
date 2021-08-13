@@ -2,15 +2,18 @@
 #define WORLD_COMP
 #include "constants.comp"
 
-uint chunk_pos_into_chunk_idx(uint chunks_x, uint x, uint z) {
-    return z * chunks_x + x;
+#ifdef IS_AVAILABLE_BUFFER_CONSTANTS
+uint chunk_pos_into_chunk_idx(uint x, uint z) {
+    return z * constants.chunks_x + x;
 }
-uint block_pos_into_chunk_idx(uint chunks_x, uint x,uint z){
-    return chunk_pos_into_chunk_idx(chunks_x, x / CHUNK_WIDTH, z / CHUNK_DEPTH);
+uint block_pos_into_chunk_idx(uint x,uint z){
+    return chunk_pos_into_chunk_idx(x / CHUNK_WIDTH, z / CHUNK_DEPTH);
 }
-uint block_pos_into_world_idx(uint world_width,uint world_area, uvec3 pos){
-    return pos.z * world_width + pos.x + pos.y * world_area;
+uint block_pos_into_world_idx(uvec3 pos){
+    return pos.z * constants.world_width + pos.x + pos.y * constants.world_area;
 }
+#endif //IS_AVAILABLE_BUFFER_CONSTANTS
+
 uint block_pos_relative_to_chunk_into_block_idx_relative_to_chunk(uvec3 position_relative_to_chunk) {
     //Notice that this conversion could equivalently be expressed as
     // position_relative_to_chunk.x + position_relative_to_chunk.z << 4 + position_relative_to_chunk.y << 8

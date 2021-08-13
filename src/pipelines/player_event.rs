@@ -1,6 +1,7 @@
 
 use crate::blocks::{Block, WorldSize};
 use std::fmt::{Debug, Formatter};
+use crate::blocks::block_properties::AIR;
 
 #[derive(Copy, Clone, Debug)]
 #[repr(u32)]
@@ -48,15 +49,18 @@ impl PlayerEvent{
     pub fn make_nothing(&mut self){
         self.event_type = EventType::Nothing;
     }
-    pub fn set_block(block_idx:u32, block:&Block)->Self{
+    pub fn set_block(position:glm::Vec3,ray_cast_direction:glm::Vec3, block:Block)->Self{
         Self {
             event_type: EventType::SetBlock,
-            vec3_slot0: Default::default(),
-            u32_slot0: block_idx,
-            vec3_slot1: Default::default(),
-            u32_slot1: block.id(),
+            vec3_slot0: position,
+            u32_slot0: block.id(),
+            vec3_slot1: ray_cast_direction,
+            u32_slot1: 0,
             uvec3_slot1: Default::default()
         }
+    }
+    pub fn break_block(position:glm::Vec3,ray_cast_direction:glm::Vec3)->Self{
+        Self::set_block(position,ray_cast_direction,AIR)
     }
     pub fn throw(position:glm::Vec3,velocity:glm::Vec3)->Self{
         Self{

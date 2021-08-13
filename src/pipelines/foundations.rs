@@ -241,7 +241,11 @@ impl FoundationInitializer {
             chunks_x: world_size.width() as i32,
             chunks_z: world_size.depth() as i32,
             bones: bone_data.len() as i32,
-            dummy: 0,
+            world_width: world_size.world_width()as i32,
+            world_area: world_size.world_area()as i32,
+            total_chunks: world_size.total_chunks()as i32,
+            dummy0: 0,
+            dummy1: 0
         };
 
         let particles_in_bytes = std::mem::size_of::<Particle>() as u64 * particles;

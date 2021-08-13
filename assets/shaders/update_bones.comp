@@ -1,7 +1,8 @@
 #version 450
-
+#define IS_AVAILABLE_BUFFER_CONSTANTS
+#define IS_AVAILABLE_BUFFER_BONES
+#define IS_AVAILABLE_BUFFER_PARTICLES
 #include "constants.comp"
-#include "data.comp"
 
 layout (local_size_x = 32) in;
 

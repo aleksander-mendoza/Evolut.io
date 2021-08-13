@@ -1,0 +1,9 @@
+#ifndef UTIL_COMP
+#define UTIL_COMP
+uint max_vec3_component(vec3 v){
+    return v.x > v.y ? (v.x > v.z ? 0 : 2) : (v.y > v.z ? 1 : 2);
+}
+uint min_vec3_component(vec3 v){
+    return v.x < v.y ? (v.x < v.z ? 0 : 2) : (v.y < v.z ? 1 : 2);
+}
+#endif // UTIL_COMP

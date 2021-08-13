@@ -1,0 +1,45 @@
+#ifdef IS_AVAILABLE_BUFFER_WORLD
+#ifdef IS_AVAILABLE_BUFFER_CONSTANTS
+
+#ifndef RAY_CAST_TEMPLATE_COMP
+#define RAY_CAST_TEMPLATE_COMP
+
+#include "util.comp"
+#include "world.comp"
+#include "constants.comp"
+
+struct RayCastResult{
+    vec3 v;
+    vec3 prev_v;
+    bool found;
+};
+
+
+RayCastResult ray_cast(vec3 start, vec3 distance_and_direction) {
+    //current voxel boundary
+    vec3 v = floor(start);
+    if(world[block_pos_into_world_idx(uvec3(v))]!=0) {
+        return RayCastResult(v,v,true);
+    }
+    //final voxel boundary B
+    vec3 b = start + distance_and_direction;
+    vec3 bv = floor(b);
+    vec3 step = sign(distance_and_direction);
+    vec3 t_max = (max(step, 0) + v - start) / distance_and_direction; //notice that the signs will cancel out and the result will be positive
+    vec3 t_delta = step / distance_and_direction;//notice that the signs will cancel out. Division by zero will yield +inf
+
+    while(v != bv){
+        uint min_dim = min_vec3_component(t_max);
+        vec3 new_v = v;
+        new_v[min_dim] += step[min_dim];
+        if(world[block_pos_into_world_idx(uvec3(new_v))]!=0){
+            return RayCastResult(new_v,v,true);
+        }
+        v = new_v;
+        t_max[min_dim] += t_delta[min_dim];
+    }
+    return RayCastResult(v,v,false);
+}
+#endif //RAY_CAST_TEMPLATE_COMP
+#endif //IS_AVAILABLE_BUFFER_WORLD
+#endif //IS_AVAILABLE_BUFFER_CONSTANTS

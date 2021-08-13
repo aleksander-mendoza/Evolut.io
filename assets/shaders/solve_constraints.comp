@@ -1,7 +1,9 @@
 #version 450
 #extension GL_EXT_shader_atomic_float : enable
+#define IS_AVAILABLE_BUFFER_CONSTANTS
+#define IS_AVAILABLE_BUFFER_CONSTRAINTS
+#define IS_AVAILABLE_BUFFER_PARTICLES
 #include "constants.comp"
-#include "data.comp"
 
 layout (local_size_x = 32) in;
 

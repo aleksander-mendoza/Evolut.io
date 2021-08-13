@@ -1,0 +1,14 @@
+#ifndef INDIRECT_COMP
+#define INDIRECT_COMP
+struct DispatchIndirectCommand{
+    uint    x;
+    uint    y;
+    uint    z;
+};
+struct DrawIndirectCommand{
+    uint vertex_count;
+    uint instance_count;
+    uint first_vertex;
+    uint first_instance;
+};
+#endif

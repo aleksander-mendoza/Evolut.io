@@ -1,7 +1,9 @@
 #version 450
 #extension GL_EXT_debug_printf : enable
 
-#include "data.comp"
+#define IS_AVAILABLE_BUFFER_MVP
+#define IS_AVAILABLE_BUFFER_PARTICLES
+#include "render_vertex_descriptors.comp"
 
 layout(location = 0) in uint[4] particle_ids;
 layout(location = 4) in vec3 center;
@@ -9,23 +11,8 @@ layout(location = 5) in uint texture_variant;
 layout(location = 6) in uint part_variant;
 layout(location = 7) in vec3 normal;
 layout(location = 8) in float thickness;
-
-
-//layout(location = 0) out vec3 fragColor;
 layout(location = 0) out vec2 fragTex;
 
-layout (binding = 0) uniform Matrices{
-    mat4 MVP;
-    mat4 MV;
-};
-
-layout(std430, binding = 2) buffer Particles{
-    Particle particles[];
-};
-//
-//layout(std430, binding = 3) buffer Bones{
-//    Bone bones[];
-//};
 
 void main() {
     const float width = 1;

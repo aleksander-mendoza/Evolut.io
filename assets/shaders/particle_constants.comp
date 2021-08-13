@@ -13,7 +13,11 @@ struct ParticleConstants{
     int chunks_x;
     int chunks_z;
     int bones;
-    int dummy;
+    int world_width; // precomputed chunks_x*CHUNK_WIDTH
+    int world_area; // chunks_z*CHUNK_DEPTH * world_width
+    int total_chunks; // chunks_x * chunks_z
+    int dummy0;
+    int dummy1;
 };
 
 
