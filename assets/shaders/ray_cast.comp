@@ -15,10 +15,10 @@ struct RayCastResult{
 };
 
 
-RayCastResult ray_cast(vec3 start, vec3 distance_and_direction) {
+RayCastResult ray_cast(ParticleConstants c,vec3 start, vec3 distance_and_direction) {
     //current voxel boundary
     vec3 v = floor(start);
-    if(world[block_pos_into_world_idx(uvec3(v))]!=0) {
+    if(world[block_pos_into_world_idx(c, uvec3(v))]!=0) {
         return RayCastResult(v,v,true);
     }
     //final voxel boundary B
@@ -32,7 +32,7 @@ RayCastResult ray_cast(vec3 start, vec3 distance_and_direction) {
         uint min_dim = min_vec3_component(t_max);
         vec3 new_v = v;
         new_v[min_dim] += step[min_dim];
-        if(world[block_pos_into_world_idx(uvec3(new_v))]!=0){
+        if(world[block_pos_into_world_idx(c, uvec3(new_v))]!=0){
             return RayCastResult(new_v,v,true);
         }
         v = new_v;

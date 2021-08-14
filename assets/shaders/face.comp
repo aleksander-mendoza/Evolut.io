@@ -15,18 +15,22 @@
 
 uint block_pos_relative_to_chunk_and_orientation_into_face_coords(uvec4 position_relative_to_chunk_and_orientation) {
     return ((
-    position_relative_to_chunk_and_orientation.x*256+
-    position_relative_to_chunk_and_orientation.y)*256+
+    position_relative_to_chunk_and_orientation.w*256+
     position_relative_to_chunk_and_orientation.z)*256+
-    position_relative_to_chunk_and_orientation.w;
+    position_relative_to_chunk_and_orientation.y)*256+
+    position_relative_to_chunk_and_orientation.x;
 }
 
 uvec4 face_coords_into_block_pos_relative_to_chunk_and_orientation(uint face_coords) {
-    uint orientation = face_coords & 255u;
-    uint z = face_coords/256 & 255u;
-    uint y = face_coords/(256*256) & 255u;
-    uint x = face_coords/(256*256*256) & 255u;
-    return uvec4(x,y,z,orientation);
+    uint x = face_coords & 255u;
+    uint y = face_coords/256 & 255u;
+    uint z = face_coords/(256*256) & 255u;
+    uint w = face_coords/(256*256*256) & 255u;
+    return uvec4(x,y,z,w);
+}
+
+bool face_coords_have_the_same_pos(uint face_coords1, uint face_coords2) {
+    return (face_coords1 | 0xFF000000u) == (face_coords2 | 0xFF000000u);
 }
 
 uint pack_chunk_pos_and_tex_id(uint chunk_x, uint chunk_z, uint texture_id) {

@@ -117,7 +117,7 @@ impl Computable for Physics {
     fn update_uniforms(&mut self, player: &mut Player) {
         if let Some(event) = player.pop_event(){
             self.player_event_uniform.as_slice_mut()[0] = event;
-        }else{
+        }else {
             self.player_event_uniform.as_slice_mut()[0].make_nothing();
         }
     }

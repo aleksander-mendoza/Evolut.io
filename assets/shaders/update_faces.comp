@@ -1,24 +1,49 @@
-#version 450
 
+#ifndef UPDATE_FACES_COMP
+#define UPDATE_FACES_COMP
+#ifdef IS_AVAILABLE_BUFFER_FACES
+#ifdef IS_AVAILABLE_BUFFER_BLOCK_PROPS
+#include "particle_constants.comp"
 #include "constants.comp"
-#include "data.comp"
+#include "face.comp"
+#include "world.comp"
 
-layout (local_size_x = 32) in;
+uint set_block_faces(const ParticleConstants c, uvec3 block_pos, bool was_transparent){
 
-#include "physics_descriptors.comp"
-
-/*
-This shader is not very parallel.
-*/
-void main() {
-    uint gID = gl_GlobalInvocationID.x;
-    if(gID < constants.bones){
-        const uint[4] particle_ids = bones[gID].particle_ids;
-        const vec3 p1 = particles[particle_ids[0]].new_position;
-        const vec3 p2 = particles[particle_ids[1]].new_position;
-        const vec3 p3 = particles[particle_ids[2]].new_position;
-        const vec3 p4 = particles[particle_ids[3]].new_position;
-        bones[gID].center = (p1+p2+p3+p4)/4.;
-        bones[gID].normal = normalize(cross(p2-p1,p3-p1));
+    uint chunk_x = block_pos.x / CHUNK_WIDTH;
+    uint chunk_z = block_pos.z / CHUNK_DEPTH;
+    block_pos.x -= chunk_x * CHUNK_WIDTH;
+    block_pos.z -= chunk_z * CHUNK_DEPTH;
+    uint chunk_idx = chunk_pos_into_chunk_idx(c,chunk_x,chunk_z);
+    uint face_offset = c.total_chunks*2;
+    uint i=0;
+    for(;i<chunk_idx+(was_transparent?c.total_chunks:0);i++){
+        face_offset += faces[i].x;
     }
+    uint length = faces[i].x;
+    uint searched_face_coords = block_pos_relative_to_chunk_and_orientation_into_face_coords(uvec4(block_pos,XPlus));
+    uint number_of_removed_faces = 0;
+    for(uint face_idx=face_offset;face_idx < face_offset+length;face_idx++){
+        while(face_coords_have_the_same_pos(faces[face_idx].x,searched_face_coords)){
+            number_of_removed_faces += 1;
+            length -= 1;
+            faces[face_idx] = faces[face_offset+length];
+        }
+    }
+    faces[i].x = length;
+    face_offset += length;
+    for(i+=1;i<c.total_chunks*2;i++){
+        length = faces[i].x;
+        for(int j=0;j<number_of_removed_faces;j++){
+            length -= 1;
+            faces[face_offset+j] = faces[face_offset+number_of_removed_faces+length]; // 390 + 256 = 646
+        }
+        faces[i].x = length;
+        face_offset += length+number_of_removed_faces;
+    }
+    return face_offset;
 }
+
+#endif // IS_AVAILABLE_BUFFER_BLOCK_PROPS
+#endif // IS_AVAILABLE_BUFFER_FACES
+#endif // UPDATE_FACES_COMP

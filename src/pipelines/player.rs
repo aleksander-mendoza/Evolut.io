@@ -6,6 +6,7 @@ use crate::pipelines::display::Display;
 use crate::pipelines::game::GameResources;
 use std::collections::VecDeque;
 use crate::pipelines::player_event::PlayerEvent;
+use crate::blocks::block_properties::AIR;
 
 pub struct Player {
     projection_matrix: glm::Mat4,
@@ -70,15 +71,8 @@ impl Player {
         self.location += movement_vector;
         self.ray_trace_vector = glm::quat_rotate_vec(&inverse_rotation, &glm::vec4(0f32, 0., -self.player_reach, 0.));
         if input.has_mouse_left_click() || input.has_mouse_right_click() {
-            // let world = display.pipeline_mut().block_world_mut().world_mut();
-            // if input.has_mouse_left_click() {
-            //     world.ray_cast_remove_block(self.location.as_slice(), self.ray_trace_vector.as_slice());
-            // } else {
-            //     world.ray_cast_place_block(self.location.as_slice(), self.ray_trace_vector.as_slice(), self.block_in_hand);
-            // }
-            // world.flush_all_chunks();
-            // world.reset();
-            // display.rerecord_all_cmd_buffers()?;
+            let block = if input.has_mouse_left_click() { AIR } else { self.block_in_hand };
+            self.events.push_back(PlayerEvent::set_block(self.location,self.ray_trace_vector.xyz().clone_owned(), block));
         }
         if input.is_q(){
             self.events.push_back(PlayerEvent::throw(self.location, self.ray_trace_vector.xyz()*0.01));
