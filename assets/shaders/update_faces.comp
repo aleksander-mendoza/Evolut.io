@@ -3,47 +3,116 @@
 #define UPDATE_FACES_COMP
 #ifdef IS_AVAILABLE_BUFFER_FACES
 #ifdef IS_AVAILABLE_BUFFER_BLOCK_PROPS
+#ifdef IS_AVAILABLE_BUFFER_WORLD
 #include "particle_constants.comp"
 #include "constants.comp"
 #include "face.comp"
 #include "world.comp"
 
+
 uint set_block_faces(const ParticleConstants c, uvec3 block_pos, bool was_transparent){
 
     uint chunk_x = block_pos.x / CHUNK_WIDTH;
     uint chunk_z = block_pos.z / CHUNK_DEPTH;
+    uint chunk_idx = chunk_pos_into_chunk_idx(c,chunk_x,chunk_z);
+    uint[6] orientations = uint[6](
+        ZPlus,//these guys are sorted is such a way that iterating them will visit chunks by increasing chunk_idx order
+        XPlus,
+        YPlus,
+        YMinus,
+        XMinus,
+        ZMinus
+    );
+    uvec3[6] neighbour_block_pos = uvec3[6](
+        block_pos-uvec3(0,0,1),
+        block_pos-uvec3(1,0,0),
+        block_pos-uvec3(0,1,0),
+        block_pos+uvec3(0,1,0),
+        block_pos+uvec3(1,0,0),
+        block_pos+uvec3(0,0,1)
+    );
+    uint[6] neighbour_block_ids = uint[6](
+        block_pos.z>0 ? world[block_pos_into_world_idx(c, neighbour_block_pos[0])] : 0,
+        block_pos.x>0 ? world[block_pos_into_world_idx(c, neighbour_block_pos[1])] : 0,
+        block_pos.y>0 ? world[block_pos_into_world_idx(c, neighbour_block_pos[2])] : 0,
+        block_pos.y+1<CHUNK_HEIGHT ? world[block_pos_into_world_idx(c, neighbour_block_pos[3])] : 0,
+        block_pos.x+1<c.world_width ? world[block_pos_into_world_idx(c, neighbour_block_pos[4])] : 0,
+        block_pos.z+1<c.world_depth ? world[block_pos_into_world_idx(c, neighbour_block_pos[5])] : 0
+    );
     block_pos.x -= chunk_x * CHUNK_WIDTH;
     block_pos.z -= chunk_z * CHUNK_DEPTH;
-    uint chunk_idx = chunk_pos_into_chunk_idx(c,chunk_x,chunk_z);
+    uint searched_face_coords = block_pos_relative_to_chunk_and_orientation_into_face_coords(uvec4(block_pos,XPlus));
+    uint number_of_opaque_blocks = 0;
+    for(int i=0;i<6;i++){
+        if(neighbour_block_ids[i] >= NO_OF_TRANSPARENT_BLOCKS) {
+            number_of_opaque_blocks++;
+        }
+    }
+
+    uvec3[7] faces_to_insert;
+    uint[2] faces_to_insert_len = uint[](/*opaque index*/0,/*transparent index*/number_of_opaque_blocks);
+    for(int i=0;i<6;i++){
+        uint neighbour = neighbour_block_ids[i];
+        uint orientation = orientations[i];
+        if(0 < neighbour){
+            uint chunk_x = neighbour_block_pos[i].x / CHUNK_WIDTH;
+            uint chunk_z = neighbour_block_pos[i].z / CHUNK_DEPTH;
+            neighbour_block_pos[i].x -= chunk_x * CHUNK_WIDTH;
+            neighbour_block_pos[i].z -= chunk_z * CHUNK_DEPTH;
+
+            uvec2 face_to_insert = new_face(neighbour_block_pos[i], orientation, chunk_x, chunk_z, block_props[neighbour].texture_ids[orientation]);
+            uint is_transparent = uint(neighbour < NO_OF_TRANSPARENT_BLOCKS);
+            uint chunk_idx = chunk_pos_into_chunk_idx(c,chunk_x,chunk_z) + is_transparent*c.total_chunks;
+            faces_to_insert[faces_to_insert_len[is_transparent]++] = uvec3(face_to_insert,chunk_idx);
+        }
+    }
+    faces_to_insert[faces_to_insert_len[1]].z = 0xFFFFFFFFu; //Every cube has 6 faces. We use array of length 7, to ensure that array overflow never occurs.
+    // The 0xFFFFFFFFu value has analogical purpose to the 0 in null terminated strings in C.
+
+    int number_of_removed_faces = 0;
     uint face_offset = c.total_chunks*2;
     uint i=0;
-    for(;i<chunk_idx+(was_transparent?c.total_chunks:0);i++){
-        face_offset += faces[i].x;
-    }
-    uint length = faces[i].x;
-    uint searched_face_coords = block_pos_relative_to_chunk_and_orientation_into_face_coords(uvec4(block_pos,XPlus));
-    uint number_of_removed_faces = 0;
-    for(uint face_idx=face_offset;face_idx < face_offset+length;face_idx++){
-        while(face_coords_have_the_same_pos(faces[face_idx].x,searched_face_coords)){
-            number_of_removed_faces += 1;
-            length -= 1;
-            faces[face_idx] = faces[face_offset+length];
+    int length = 0;
+    for(;i<2*c.total_chunks;i++){
+        length += int(faces[i].x);
+        face_offset += length;
+        int faces_to_insert_idx = 0;
+        while (i==faces_to_insert[faces_to_insert_idx].z) { // 390 + 256*3 + 512 * 4 + 8 = 3214
+            uvec2 new_face = faces_to_insert[faces_to_insert_idx].xy;
+            uvec2 replaced_face = faces[face_offset];
+            faces_to_insert[faces_to_insert_idx].xy = replaced_face;
+            faces[face_offset] = new_face;
+            faces_to_insert[faces_to_insert_idx].z++;
+            faces_to_insert_idx++;
+            face_offset++;
         }
+        faces[i].x = length + faces_to_insert_idx;
+        length = -faces_to_insert_idx;
     }
-    faces[i].x = length;
-    face_offset += length;
-    for(i+=1;i<c.total_chunks*2;i++){
-        length = faces[i].x;
-        for(int j=0;j<number_of_removed_faces;j++){
-            length -= 1;
-            faces[face_offset+j] = faces[face_offset+number_of_removed_faces+length]; // 390 + 256 = 646
-        }
-        faces[i].x = length;
-        face_offset += length+number_of_removed_faces;
-    }
+//    uint length = faces[i].x;
+//
+//
+//    for(uint face_idx=face_offset;face_idx < face_offset+length;face_idx++){
+//        while(face_coords_have_the_same_pos(faces[face_idx].x,searched_face_coords)){
+//            number_of_removed_faces += 1;
+//            length -= 1;
+//            faces[face_idx] = faces[face_offset+length];
+//        }
+//    }
+//    faces[i].x = length;
+//    face_offset += length;
+//    for(i+=1;i<c.total_chunks*2;i++){
+//        length = faces[i].x;
+//        for(int j=0;j<number_of_removed_faces;j++){
+//            length -= 1;
+//            faces[face_offset+j] = faces[face_offset+number_of_removed_faces+length]; // 390 + 256 = 646
+//        }
+//        faces[i].x = length;
+//        face_offset += length+number_of_removed_faces;
+//    }
     return face_offset;
 }
-
+#endif // IS_AVAILABLE_BUFFER_WORLD
 #endif // IS_AVAILABLE_BUFFER_BLOCK_PROPS
 #endif // IS_AVAILABLE_BUFFER_FACES
 #endif // UPDATE_FACES_COMP

@@ -13,6 +13,9 @@
 #define ZPlus 4
 #define ZMinus 5
 
+uint orientation_for_dim_and_dir(uint dimension, bool minus_direction) {
+    return dimension*2+uint(minus_direction);
+}
 uint block_pos_relative_to_chunk_and_orientation_into_face_coords(uvec4 position_relative_to_chunk_and_orientation) {
     return ((
     position_relative_to_chunk_and_orientation.w*256+
@@ -34,7 +37,7 @@ bool face_coords_have_the_same_pos(uint face_coords1, uint face_coords2) {
 }
 
 uint pack_chunk_pos_and_tex_id(uint chunk_x, uint chunk_z, uint texture_id) {
-    return (chunk_x*256 + chunk_z)*256*256+texture_id;
+    return texture_id*256*256+(chunk_x + chunk_z*256);
 }
 
 Face new_face(uvec3 block_position_relative_to_chunk, uint orientation, uint chunk_x, uint chunk_z, uint texture_id){
@@ -43,4 +46,7 @@ Face new_face(uvec3 block_position_relative_to_chunk, uint orientation, uint chu
     return uvec2(face_coords,tex_id);
 }
 
+//uvec3 unpack_chunk_pos_and_tex_id(uint packed){
+//    return (chunk_x*256 + chunk_z)*256*256+texture_id;
+//}
 #endif // FACE_COMP

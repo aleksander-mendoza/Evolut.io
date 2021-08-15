@@ -29,22 +29,27 @@ pub struct Indirect {
     update_bones: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
     draw_bones: SubBuffer<vk::DrawIndirectCommand, GpuIndirect>,
     draw_blocks: SubBuffer<vk::DrawIndirectCommand, GpuIndirect>,
+    super_indirect_buffer: SubBuffer<u8, GpuIndirect>
 }
 
 impl Indirect {
-    fn new(indirect_dispatch: &Submitter<IndirectDispatchSubBuffer>, indirect_draw: &Submitter<IndirectSubBuffer>) -> Self {
+    fn new(super_indirect_buffer: SubBuffer<u8, GpuIndirect>, indirect_dispatch: &Submitter<IndirectDispatchSubBuffer>, indirect_draw: &Submitter<IndirectSubBuffer>) -> Self {
         let collision_detection = indirect_dispatch.gpu().element(0);
         let solve_constraints = indirect_dispatch.gpu().element(1);
         let update_bones = indirect_dispatch.gpu().element(2);
         let draw_bones = indirect_draw.gpu().element(0);
         let draw_blocks = indirect_draw.gpu().element(1);
         Self {
+            super_indirect_buffer,
             collision_detection,
             solve_constraints,
             update_bones,
             draw_bones,
             draw_blocks,
         }
+    }
+    pub fn super_buffer(&self) -> &SubBuffer<u8, GpuIndirect> {
+        &self.super_indirect_buffer
     }
     pub fn draw_bones(&self) -> &SubBuffer<vk::DrawIndirectCommand, GpuIndirect> {
         &self.draw_bones
@@ -242,9 +247,9 @@ impl FoundationInitializer {
             chunks_z: world_size.depth() as i32,
             bones: bone_data.len() as i32,
             world_width: world_size.world_width()as i32,
+            world_depth: world_size.world_depth() as i32,
             world_area: world_size.world_area()as i32,
             total_chunks: world_size.total_chunks()as i32,
-            dummy0: 0,
             dummy1: 0
         };
 
@@ -351,7 +356,7 @@ impl FoundationInitializer {
         let indirect_dispatch = StageBuffer::wrap(cmd_pool, &indirect_dispatch_data, indirect_dispatch_buffer)?;
         let indirect_draw = StageBuffer::wrap(cmd_pool, &indirect_draw_data, indirect_draw_buffer)?;
 
-        let indirect = Indirect::new(&indirect_dispatch, &indirect_draw);
+        let indirect = Indirect::new(super_indirect_buffer, &indirect_dispatch, &indirect_draw);
 
         Ok(Self {
             face_count_per_chunk_buffer,
@@ -395,8 +400,8 @@ impl FoundationInitializer {
         let constraints = constraints.take()?.take_gpu();
         let bones = bones.take()?.take_gpu();
         let particle_constants = particle_constants.take()?.take_gpu();
-        let indirect_dispatch = indirect_dispatch.take()?.take_gpu();
-        let indirect_draw = indirect_draw.take()?.take_gpu();
+        let _ = indirect_dispatch.take()?.take_gpu();
+        let _ = indirect_draw.take()?.take_gpu();
         let world = world.take()?.take_gpu(); //wait for completion and then dispose of the staging buffer
         let faces = faces.take()?.take_gpu();
         Ok(Foundations {
@@ -405,8 +410,6 @@ impl FoundationInitializer {
             block_properties,
             faces,
             world,
-            indirect_draw,
-            indirect_dispatch,
             world_size,
             bones,
             collision_grid,
@@ -431,8 +434,6 @@ pub struct Foundations {
     bones: SubBuffer<Bone, Storage>,
     particle_constants: SubBuffer<ParticleConstants, Storage>,
     collision_grid: SubBuffer<u32, Storage>,
-    indirect_dispatch: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
-    indirect_draw: SubBuffer<vk::DrawIndirectCommand, GpuIndirect>,
     indirect: Indirect,
     sampler: Sampler,
 }
@@ -467,12 +468,6 @@ impl Foundations {
     }
     pub fn constants(&self) -> &SubBuffer<ParticleConstants, Storage> {
         &self.particle_constants
-    }
-    pub fn indirect_dispatch(&self) -> &SubBuffer<vk::DispatchIndirectCommand, GpuIndirect> {
-        &self.indirect_dispatch
-    }
-    pub fn indirect_draw(&self) -> &SubBuffer<vk::DrawIndirectCommand, GpuIndirect> {
-        &self.indirect_draw
     }
     pub fn constraints(&self) -> &SubBuffer<Constraint, Storage> {
         &self.constraints

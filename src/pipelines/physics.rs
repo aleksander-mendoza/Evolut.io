@@ -65,7 +65,7 @@ impl ComputeResources for PhysicsResources{
         descriptors.storage_buffer(foundations.particles());
         descriptors.storage_buffer(foundations.collision_grid());
         descriptors.storage_buffer(foundations.constraints());
-        descriptors.storage_buffer(foundations.indirect_dispatch());
+        descriptors.storage_buffer(foundations.indirect().super_buffer());
         descriptors.storage_buffer(foundations.bones());
         descriptors.storage_buffer(foundations.world());
         descriptors.storage_buffer(foundations.faces());
