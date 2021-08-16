@@ -10,8 +10,7 @@
 #include "world.comp"
 
 
-uint set_block_faces(const ParticleConstants c, uvec3 block_pos, bool was_transparent){
-
+uint add_block_neighboring_faces(const ParticleConstants c, uvec3 block_pos){
     uint chunk_x = block_pos.x / CHUNK_WIDTH;
     uint chunk_z = block_pos.z / CHUNK_DEPTH;
     uint chunk_idx = chunk_pos_into_chunk_idx(c,chunk_x,chunk_z);
@@ -77,7 +76,7 @@ uint set_block_faces(const ParticleConstants c, uvec3 block_pos, bool was_transp
         length += int(faces[i].x);
         face_offset += length;
         int faces_to_insert_idx = 0;
-        while (i==faces_to_insert[faces_to_insert_idx].z) { // 390 + 256*3 + 512 * 4 + 8 = 3214
+        while (i==faces_to_insert[faces_to_insert_idx].z) {
             uvec2 new_face = faces_to_insert[faces_to_insert_idx].xy;
             uvec2 replaced_face = faces[face_offset];
             faces_to_insert[faces_to_insert_idx].xy = replaced_face;
@@ -85,32 +84,49 @@ uint set_block_faces(const ParticleConstants c, uvec3 block_pos, bool was_transp
             faces_to_insert[faces_to_insert_idx].z++;
             faces_to_insert_idx++;
             face_offset++;
+
         }
         faces[i].x = length + faces_to_insert_idx;
         length = -faces_to_insert_idx;
     }
-//    uint length = faces[i].x;
-//
-//
-//    for(uint face_idx=face_offset;face_idx < face_offset+length;face_idx++){
-//        while(face_coords_have_the_same_pos(faces[face_idx].x,searched_face_coords)){
-//            number_of_removed_faces += 1;
-//            length -= 1;
-//            faces[face_idx] = faces[face_offset+length];
-//        }
-//    }
-//    faces[i].x = length;
-//    face_offset += length;
-//    for(i+=1;i<c.total_chunks*2;i++){
-//        length = faces[i].x;
-//        for(int j=0;j<number_of_removed_faces;j++){
-//            length -= 1;
-//            faces[face_offset+j] = faces[face_offset+number_of_removed_faces+length]; // 390 + 256 = 646
-//        }
-//        faces[i].x = length;
-//        face_offset += length+number_of_removed_faces;
-//    }
-    return face_offset;
+    return face_offset-c.total_chunks*2;
+}
+
+
+uint remove_block_faces(const ParticleConstants c, uvec3 block_pos, bool was_transparent){
+
+    uint chunk_x = block_pos.x / CHUNK_WIDTH;
+    uint chunk_z = block_pos.z / CHUNK_DEPTH;
+    block_pos.x -= chunk_x * CHUNK_WIDTH;
+    block_pos.z -= chunk_z * CHUNK_DEPTH;
+    uint chunk_idx = chunk_pos_into_chunk_idx(c,chunk_x,chunk_z);
+    uint face_offset = c.total_chunks*2;
+    uint i=0;
+    for(;i<chunk_idx+(was_transparent?c.total_chunks:0);i++){
+        face_offset += faces[i].x;
+    }
+    uint length = faces[i].x;
+    uint searched_face_coords = block_pos_relative_to_chunk_and_orientation_into_face_coords(uvec4(block_pos,XPlus));
+    uint number_of_removed_faces = 0;
+    for(uint face_idx=face_offset;face_idx < face_offset+length;face_idx++){
+        while(face_coords_have_the_same_pos(faces[face_idx].x,searched_face_coords) && face_idx < face_offset+length){
+            number_of_removed_faces += 1;
+            length -= 1;
+            faces[face_idx] = faces[face_offset+length];
+
+        }
+    }
+    faces[i].x = length;
+    face_offset += length;
+    for(i+=1;i<c.total_chunks*2;i++){
+        length = faces[i].x;
+        for(int j=0;j<number_of_removed_faces;j++){
+            length -= 1;
+            faces[face_offset+j] = faces[face_offset+number_of_removed_faces+length];
+        }
+        face_offset += length+number_of_removed_faces;
+    }
+    return face_offset-c.total_chunks*2;
 }
 #endif // IS_AVAILABLE_BUFFER_WORLD
 #endif // IS_AVAILABLE_BUFFER_BLOCK_PROPS

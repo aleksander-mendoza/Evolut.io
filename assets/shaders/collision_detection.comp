@@ -69,7 +69,8 @@ void main()
                 uint prev_block = world[hit_idx];
                 world[hit_idx] = player_event.u32_slot0;
                 if(player_event.u32_slot0==0){
-                    const uint number_of_faces = set_block_faces(c,hit_pos,prev_block<NO_OF_TRANSPARENT_BLOCKS);
+                    remove_block_faces(c,hit_pos,prev_block<NO_OF_TRANSPARENT_BLOCKS);
+                    const uint number_of_faces = add_block_neighboring_faces(c,hit_pos);
                     draw_indirect[DRAW_INDIRECT_BLOCK].instance_count = number_of_faces;
                 }
 

@@ -21,7 +21,7 @@ use crate::pipelines::particle_constants::ParticleConstants;
 use crate::blocks::{WorldSize, Block, Face, WorldBlocks, WorldFaces};
 use crate::render::sampler::Sampler;
 use crate::pipelines::bone::Bone;
-use crate::blocks::block_properties::{BLOCKS, BlockProp, BEDROCK, DIRT, GRASS, GLASS, PLANK};
+use crate::blocks::block_properties::{BLOCKS, BlockProp, BEDROCK, DIRT, GRASS, GLASS, PLANK, AIR};
 
 pub struct Indirect {
     collision_detection: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
@@ -125,7 +125,7 @@ impl FoundationInitializer {
         &self.block_properties
     }
     pub fn new(cmd_pool: &CommandPool) -> Result<Self, failure::Error> {
-        let world_size = WorldSize::new(2,2);
+        let world_size = WorldSize::new(1,1);
         let particles = 512u64;
         let bones = 128u64;
         let faces = 2048u64*world_size.total_chunks() as u64;
@@ -141,6 +141,7 @@ impl FoundationInitializer {
         world_blocks.no_update_fill_level(2, 1, GRASS);
         world_blocks.no_update_fill_level(10, 1, GLASS);
         world_blocks.no_update_outline(5, 2, 5, 5, 5, 5, PLANK);
+        // world_blocks.no_update_set_block(1,2,1,AIR);
         let mut world_faces = WorldFaces::with_capacity(world_size.clone(), faces as usize);
         world_faces.generate_faces(&world_blocks);
         let w2 = 0.4f32;
