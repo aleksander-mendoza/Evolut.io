@@ -69,48 +69,73 @@ uint set_block_faces(const ParticleConstants c, uvec3 block_pos, bool was_transp
     faces_to_insert[faces_to_insert_len[1]].z = 0xFFFFFFFFu; //Every cube has 6 faces. We use array of length 7, to ensure that array overflow never occurs.
     // The 0xFFFFFFFFu value has analogical purpose to the 0 in null terminated strings in C.
 
-    int number_of_removed_faces = 0;
-    uint face_offset = c.total_chunks*2;
+    uint offset_to_original_chunk = c.total_chunks*2;
     uint i=0;
-    int length = 0;
-    for(;i<2*c.total_chunks;i++){
-        length += int(faces[i].x);
-        face_offset += length;
-        int faces_to_insert_idx = 0;
-        while (i==faces_to_insert[faces_to_insert_idx].z) { // 390 + 256*3 + 512 * 4 + 8 = 3214
-            uvec2 new_face = faces_to_insert[faces_to_insert_idx].xy;
-            uvec2 replaced_face = faces[face_offset];
-            faces_to_insert[faces_to_insert_idx].xy = replaced_face;
-            faces[face_offset] = new_face;
-            faces_to_insert[faces_to_insert_idx].z++;
-            faces_to_insert_idx++;
-            face_offset++;
+    int number_of_faces_taken_from_insertion_list = 0;
+    int number_of_faces_removed_in_total = 0;
+    int chunk_length = int(faces[i].x);
+    if (i == chunk_idx){
+        int number_of_faces_removed_from_chunk = 0;
+        for(uint face_idx=offset_to_original_chunk;face_idx < offset_to_original_chunk+chunk_length-number_of_faces_removed_from_chunk;face_idx++){
+            while(face_coords_have_the_same_pos(faces[face_idx].x,searched_face_coords)){
+                if (i==faces_to_insert[number_of_faces_taken_from_insertion_list].z){
+                    faces[face_idx] = faces_to_insert[number_of_removed_faces];
+                    number_of_faces_taken_from_insertion_list += 1;
+                }else{
+                    number_of_faces_removed_from_chunk += 1;
+                    faces[face_idx] = faces[offset_to_original_chunk+chunk_length-number_of_faces_removed_from_chunk];
+                }
+            }
         }
-        faces[i].x = length + faces_to_insert_idx;
-        length = -faces_to_insert_idx;
+        number_of_faces_removed_in_total += number_of_faces_removed_from_chunk;
     }
-//    uint length = faces[i].x;
-//
-//
-//    for(uint face_idx=face_offset;face_idx < face_offset+length;face_idx++){
-//        while(face_coords_have_the_same_pos(faces[face_idx].x,searched_face_coords)){
-//            number_of_removed_faces += 1;
-//            length -= 1;
-//            faces[face_idx] = faces[face_offset+length];
-//        }
-//    }
-//    faces[i].x = length;
-//    face_offset += length;
-//    for(i+=1;i<c.total_chunks*2;i++){
-//        length = faces[i].x;
-//        for(int j=0;j<number_of_removed_faces;j++){
-//            length -= 1;
-//            faces[face_offset+j] = faces[face_offset+number_of_removed_faces+length]; // 390 + 256 = 646
-//        }
-//        faces[i].x = length;
-//        face_offset += length+number_of_removed_faces;
-//    }
-    return face_offset;
+    while(true){
+
+        int faces_to_insert_idx = 0;
+        while (i==faces_to_insert[number_of_faces_taken_from_insertion_list+faces_to_insert_idx].z) {
+            uvec2 new_face = faces_to_insert[number_of_faces_taken_from_insertion_list+faces_to_insert_idx].xy;
+            uvec2 replaced_face = faces[offset_to_original_chunk+chunk_length-number_of_faces_removed_in_total+faces_to_insert_idx];
+            faces[offset_to_original_chunk+chunk_length-number_of_faces_removed_in_total+faces_to_insert_idx] = new_face;
+            if(number_of_faces_removed_in_total>0){
+                number_of_faces_taken_from_insertion_list++;
+                number_of_faces_removed_in_total--;
+            }else{
+                faces_to_insert[number_of_faces_taken_from_insertion_list+faces_to_insert_idx].xy = replaced_face;
+                faces_to_insert[number_of_faces_taken_from_insertion_list+faces_to_insert_idx].z++;
+                faces_to_insert_idx++;
+            }
+        }
+        offset_to_original_chunk += chunk_length;
+        faces[i].x = chunk_length + faces_to_insert_idx - number_of_faces_removed_in_total;
+        i++;
+        if(i>=2*c.total_chunks){
+            break;
+        }
+        chunk_length = int(faces[i].x);
+
+        if (i == chunk_idx){
+            int number_of_faces_removed_from_chunk = 0;
+            for(uint face_idx=offset_to_original_chunk;face_idx < offset_to_original_chunk+chunk_length-number_of_faces_removed_from_chunk;face_idx++){
+                while(face_coords_have_the_same_pos(faces[face_idx].x,searched_face_coords)){
+                    if (i==faces_to_insert[number_of_faces_taken_from_insertion_list].z){
+                        faces[face_idx] = faces_to_insert[number_of_removed_faces];
+                        number_of_faces_taken_from_insertion_list += 1;
+                    }else{
+                        number_of_faces_removed_from_chunk += 1;
+                        faces[face_idx] = faces[offset_to_original_chunk+chunk_length-number_of_faces_removed_from_chunk];
+                    }
+                }
+            }
+            number_of_faces_removed_in_total += number_of_faces_removed_from_chunk;
+        }
+
+        for(int j=0;j<number_of_faces_removed_in_total;j++) {
+            faces[offset_to_original_chunk-number_of_faces_removed_in_total+j] = faces[offset_to_original_chunk+chunk_length-j];
+        }
+    }
+
+
+    return offset_to_original_chunk;
 }
 #endif // IS_AVAILABLE_BUFFER_WORLD
 #endif // IS_AVAILABLE_BUFFER_BLOCK_PROPS
