@@ -29,7 +29,7 @@ use crate::pipelines::computable::{Computable, ComputeResources};
 use crate::pipelines::bones::{Bones, BonesBuilder, BoneResources};
 
 pub struct GameResources {
-    res: JointResources<JointResources<BlockWorldResources,ParticleResources>,BoneResources>,
+    res: JointResources<JointResources<ParticleResources, BoneResources>,BlockWorldResources>,
     physics:PhysicsResources
 }
 
@@ -47,7 +47,7 @@ impl GameResources {
         let world = BlockWorldResources::new(cmd_pool, foundations)?;
         let bones = BoneResources::new(cmd_pool, foundations)?;
 
-        let res = JointResources::new(JointResources::new(world, particles), bones);
+        let res = JointResources::new(JointResources::new(particles, bones), world );
         let physics = PhysicsResources::new(cmd_pool,foundations)?;
         Ok(Self { res , physics})
     }
@@ -72,22 +72,22 @@ impl RenderResources for GameResources {
 
 
 pub struct Game {
-    global: Joint<Joint<BlockWorld, Particles>,Bones>,
+    global: Joint<Joint<Particles, Bones>, BlockWorld>,
     physics: Physics,
 }
 
 impl Game {
     pub fn block_world(&self) -> &BlockWorld {
-        self.global.a().a()
+        self.global.b()
     }
     pub fn particles(&self) -> &Particles {
-        self.global.a().b()
+        self.global.a().a()
     }
     pub fn block_world_mut(&mut self) -> &mut BlockWorld {
-        self.global.a_mut().a_mut()
+        self.global.b_mut()
     }
     pub fn particles_mut(&mut self) -> &mut Particles {
-        self.global.a_mut().b_mut()
+        self.global.a_mut().a_mut()
     }
 }
 

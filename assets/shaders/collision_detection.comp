@@ -70,7 +70,10 @@ void main()
                 world[hit_idx] = player_event.u32_slot0;
                 if(player_event.u32_slot0==0){
                     remove_block_faces(c,hit_pos,prev_block<NO_OF_TRANSPARENT_BLOCKS);
-                    const uint number_of_faces = add_block_neighboring_faces(c,hit_pos);
+                    const uint number_of_faces = add_block_neighboring_faces(c,block_props[prev_block],hit_pos);
+                    draw_indirect[DRAW_INDIRECT_BLOCK].instance_count = number_of_faces;
+                }else{
+                    const uint number_of_faces = add_block_faces(c, hit_pos, player_event.u32_slot0);
                     draw_indirect[DRAW_INDIRECT_BLOCK].instance_count = number_of_faces;
                 }
 

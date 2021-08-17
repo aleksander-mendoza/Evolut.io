@@ -1,8 +1,11 @@
 #version 450
+#define IS_AVAILABLE_SAMPLER_BLOCKS
+#include "render_fragment_descriptors.comp"
+
 layout (location = 0) out vec4 FragColor;
 layout (location = 0) in vec2 UV;
-layout(binding = 1) uniform sampler2D texSampler;
+
 void main()
 {
-    FragColor = texture( texSampler, UV );
+    FragColor = texture( blocksSampler, UV );
 }

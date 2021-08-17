@@ -1,0 +1,13 @@
+#ifndef PHYSICS_DESCRIPTORS_COMP
+#define PHYSICS_DESCRIPTORS_COMP
+
+#ifdef IS_AVAILABLE_SAMPLER_MOBS
+layout(binding = 2) uniform sampler2D mobsSampler;
+#endif
+
+#ifdef IS_AVAILABLE_SAMPLER_BLOCKS
+layout(binding = 3) uniform sampler2D blocksSampler;
+#endif
+
+
+#endif //PHYSICS_DESCRIPTORS_COMP
