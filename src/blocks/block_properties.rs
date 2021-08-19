@@ -67,9 +67,9 @@ pub const BLOCKS:[BlockPropExtra;34] = [
     BlockPropExtra::regular_transparent("air", /*Some dummy value*/256, 0.),
     BlockPropExtra::regular_transparent("glass", 28, 0.1),
     BlockPropExtra::regular_transparent("ice", 55, 0.7),
-    BlockPropExtra::regular_transparent("spawner", 53, 0.),
+    BlockPropExtra::regular_transparent("spawner", 53, 0.9),
     BlockPropExtra::regular_transparent("water", 31, 0.5),
-    BlockPropExtra::top_sides_bottom_transparent("leaves", 51,52, 51, 0.),
+    BlockPropExtra::top_sides_bottom_transparent("leaves", 51,52, 51, 0.8),
     // blocks above are transparent. Blocks below are not
     BlockPropExtra::regular("stone", 1),
     BlockPropExtra::regular("dirt", 2),

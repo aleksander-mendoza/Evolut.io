@@ -12,7 +12,9 @@
 #define YMinus 3
 #define ZPlus 4
 #define ZMinus 5
-
+uint opposite_orientation(uint orientation) {
+    return orientation + (bool(orientation & 1u) ? -1:+1);
+}
 uint orientation_for_dim_and_dir(uint dimension, bool minus_direction) {
     return dimension*2+uint(minus_direction);
 }

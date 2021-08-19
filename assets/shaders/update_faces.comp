@@ -46,7 +46,7 @@ uint add_block_neighboring_faces(const ParticleConstants c, const BlockProp p, u
     for(int i=0;i<6;i++){
         neighbour_block_ids[i] = has_neighbour[i] ? world[block_pos_into_world_idx(c, neighbour_block_pos[i])] : 0;
         neighbour_opacity[i] = has_neighbour[i] ? block_props[neighbour_block_ids[i]].opacity : 0;
-        if(neighbour_opacity[i] <= p.opacity) {
+        if(neighbour_opacity[i] <= p.opacity && neighbour_block_ids[i] >= NO_OF_TRANSPARENT_BLOCKS) {
             number_of_opaque_blocks++;
         }
     }
@@ -112,25 +112,23 @@ uint remove_block_faces(const ParticleConstants c, uvec3 block_pos, bool was_tra
     uint length = faces[i].x;
     uint searched_face_coords = block_pos_relative_to_chunk_and_orientation_into_face_coords(uvec4(block_pos,XPlus));
     uint number_of_removed_faces = 0;
-    for(uint face_idx=face_offset;face_idx < face_offset+length;face_idx++){
-        while(face_coords_have_the_same_pos(faces[face_idx].x,searched_face_coords) && face_idx < face_offset+length){
+    for(uint face_idx=face_offset;face_idx < face_offset+length-number_of_removed_faces;face_idx++){
+        while(face_coords_have_the_same_pos(faces[face_idx].x,searched_face_coords) && face_idx < face_offset+length-number_of_removed_faces){
             number_of_removed_faces += 1;
-            length -= 1;
-            faces[face_idx] = faces[face_offset+length];
-
+            faces[face_idx] = faces[face_offset+length-number_of_removed_faces];
         }
     }
-    faces[i].x = length;
+    faces[i].x = length-number_of_removed_faces;
     face_offset += length;
     for(i+=1;i<c.total_chunks*2;i++){
         length = faces[i].x;
-        for(int j=0;j<number_of_removed_faces;j++){
-            length -= 1;
-            faces[face_offset+j] = faces[face_offset+number_of_removed_faces+length];
+        for(int j=0;j<number_of_removed_faces;){
+            j++;
+            faces[face_offset-j] = faces[face_offset+length-j];
         }
-        face_offset += length+number_of_removed_faces;
+        face_offset += length;
     }
-    return face_offset-c.total_chunks*2;
+    return face_offset-number_of_removed_faces-c.total_chunks*2;
 }
 
 
@@ -168,22 +166,80 @@ uint add_block_faces(const ParticleConstants c, uvec3 block_pos, uint block_id){
     block_pos.x -= chunk_x * CHUNK_WIDTH;
     block_pos.z -= chunk_z * CHUNK_DEPTH;
 
-    Face[6] faces_to_insert;
-    uint faces_to_insert_len=0;
+    float[6] neighbour_block_opacities;
+    uint[6] neighbour_block_ids;
+    uint opaque_neighbours = 0;
     for(int neighbour=0;neighbour<6;neighbour++){
         if(has_neighbour[neighbour]){
-            uint neighbour_block_id = world[block_pos_into_world_idx(c, neighbour_block_pos[neighbour])];
-            const BlockProp neighbour_p = block_props[neighbour_block_id];
-            if(neighbour_p.opacity < p.opacity){
-                uint orientation = orientations[neighbour];
-                faces_to_insert[faces_to_insert_len++] = new_face(block_pos,orientation,chunk_x,chunk_z,p.texture_ids[orientation]);
+            uvec3 neighbour_pos = neighbour_block_pos[neighbour];
+            neighbour_block_ids[neighbour] = world[block_pos_into_world_idx(c, neighbour_pos)];
+            neighbour_block_opacities[neighbour] = block_props[neighbour_block_ids[neighbour]].opacity;
+            if( neighbour_block_opacities[neighbour] <= p.opacity && neighbour_block_ids[neighbour]>0 && neighbour_block_opacities[neighbour] == 1){
+                opaque_neighbours++;
             }
         }
     }
 
+    Face[6] faces_to_insert;
+    uint faces_to_insert_len=0;
+    uvec2[7] faces_to_remove;//first element are face coords. Second element is the face chunk index
+    uint[2] faces_to_remove_len=uint[2](0,opaque_neighbours);
+    for(int neighbour=0;neighbour<6;neighbour++){
+        if(has_neighbour[neighbour]){
+            uvec3 neighbour_pos = neighbour_block_pos[neighbour];
+            uint neighbour_block_id = neighbour_block_ids[neighbour];
+            float neighbour_opacity = neighbour_block_opacities[neighbour];
+            uint orientation = orientations[neighbour];
+            if(neighbour_opacity < p.opacity){
+                Face f = new_face(block_pos,orientation,chunk_x,chunk_z,p.texture_ids[orientation]);
+                faces_to_insert[faces_to_insert_len++] = f;
+            }
+            if( neighbour_opacity <= p.opacity && neighbour_block_id>0 ){
+                uint neighbour_chunk_x = neighbour_pos.x / CHUNK_WIDTH;
+                uint neighbour_chunk_z = neighbour_pos.z / CHUNK_DEPTH;
+                neighbour_pos.x -= neighbour_chunk_x * CHUNK_WIDTH;
+                neighbour_pos.z -= neighbour_chunk_z * CHUNK_DEPTH;
+                uint opposite = opposite_orientation(orientation);
+                uint face_coords = block_pos_relative_to_chunk_and_orientation_into_face_coords(uvec4(neighbour_pos,opposite));
+                uint is_transparent = uint(neighbour_opacity<1);
+                uint neighbour_chunk_idx = chunk_pos_into_chunk_idx(c,neighbour_chunk_x,neighbour_chunk_z) + is_transparent*c.total_chunks;
+                faces_to_remove[faces_to_remove_len[is_transparent]++] = uvec2(face_coords,neighbour_chunk_idx);
+            }
+        }
+    }
+    faces_to_remove[faces_to_remove_len[1]].y = 0xFFFFFFFFu;
+
+
+
     uint face_offset = c.total_chunks*2;
     uint i=0;
     uint chunk_faces_idx = chunk_idx + (is_transparent?c.total_chunks:0);
+    int faces_to_remove_idx = 0;
+    for(;i<2*c.total_chunks;i++){
+        uint length = faces[i].x;
+
+        for(uint j=0;j<faces_to_remove_idx;){
+            j++;
+
+            faces[face_offset-j] = faces[face_offset+length-j];
+        }
+        uint removed_faces = 0;
+        while (i==faces_to_remove[faces_to_remove_idx].y) {
+            uint coords = faces_to_remove[faces_to_remove_idx].x;
+            for(uint j=face_offset-faces_to_remove_idx;j<face_offset-faces_to_remove_idx+length-removed_faces;j++){
+                if(faces[j].x == coords){
+                    removed_faces++;
+                    faces[j] = faces[face_offset+length-removed_faces];
+                    break;
+                }
+            }
+            faces_to_remove_idx++;
+        }
+        faces[i].x = length - removed_faces;
+        face_offset += length;
+    }
+    face_offset = c.total_chunks*2;
+    i=0;
     for (;i<chunk_faces_idx;i++) {
         face_offset += faces[i].x;
     }
@@ -191,14 +247,13 @@ uint add_block_faces(const ParticleConstants c, uvec3 block_pos, uint block_id){
         face_offset += faces[i].x;
         for(int faces_to_insert_idx=0;faces_to_insert_idx<faces_to_insert_len;faces_to_insert_idx++){
             Face new_face = faces_to_insert[faces_to_insert_idx];
-            Face replaced_face = faces[face_offset];
+            Face replaced_face = faces[face_offset+faces_to_insert_idx];
             faces_to_insert[faces_to_insert_idx] = replaced_face;
-            faces[face_offset] = new_face;
-            face_offset++;
+            faces[face_offset+faces_to_insert_idx] = new_face;
         }
     }
     faces[chunk_faces_idx].x += faces_to_insert_len;
-    return face_offset-c.total_chunks*2;
+    return face_offset+faces_to_insert_len-c.total_chunks*2;
 }
 #endif // IS_AVAILABLE_BUFFER_WORLD
 #endif // IS_AVAILABLE_BUFFER_BLOCK_PROPS
