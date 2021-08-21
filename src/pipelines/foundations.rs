@@ -29,6 +29,7 @@ pub struct Indirect {
     update_bones: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
     draw_bones: SubBuffer<vk::DrawIndirectCommand, GpuIndirect>,
     draw_blocks: SubBuffer<vk::DrawIndirectCommand, GpuIndirect>,
+    draw_particles: SubBuffer<vk::DrawIndirectCommand, GpuIndirect>,
     super_indirect_buffer: SubBuffer<u8, GpuIndirect>
 }
 
@@ -39,6 +40,7 @@ impl Indirect {
         let update_bones = indirect_dispatch.gpu().element(2);
         let draw_bones = indirect_draw.gpu().element(0);
         let draw_blocks = indirect_draw.gpu().element(1);
+        let draw_particles = indirect_draw.gpu().element(2);
         Self {
             super_indirect_buffer,
             collision_detection,
@@ -46,6 +48,7 @@ impl Indirect {
             update_bones,
             draw_bones,
             draw_blocks,
+            draw_particles,
         }
     }
     pub fn super_buffer(&self) -> &SubBuffer<u8, GpuIndirect> {
@@ -56,6 +59,9 @@ impl Indirect {
     }
     pub fn draw_blocks(&self) -> &SubBuffer<vk::DrawIndirectCommand, GpuIndirect> {
         &self.draw_blocks
+    }
+    pub fn draw_particles(&self) -> &SubBuffer<vk::DrawIndirectCommand, GpuIndirect> {
+        &self.draw_particles
     }
     pub fn collision_detection(&self) -> &SubBuffer<vk::DispatchIndirectCommand, GpuIndirect> {
         &self.collision_detection
@@ -131,8 +137,8 @@ impl FoundationInitializer {
         let faces = 2048u64*world_size.total_chunks() as u64;
         let max_constraints = 128u64;
         let grid_size = CHUNK_VOLUME_IN_CELLS as u64;
-        let solid_particles = 256;
-        let phantom_particles = 256;
+        let solid_particles = 32;
+        let phantom_particles = 8;
         debug_assert!(solid_particles + phantom_particles <= particles);
 
         let mut world_blocks = WorldBlocks::new(world_size.clone());
@@ -154,7 +160,7 @@ impl FoundationInitializer {
         let diag_l = (w2 * w2 +l*l).sqrt();
         let diag_sl = (s*s+l*l).sqrt();
         let diag_wl = (w*w+l*l).sqrt();
-        let mut particles_data: Vec<Particle> = std::iter::repeat_with(Particle::random).take(particles as usize).collect();
+        let mut particles_data: Vec<Particle> = std::iter::repeat_with(Particle::random).take((solid_particles+phantom_particles) as usize).collect();
         particles_data[1].new_position = glm::vec3(2., 7., 2.);
         particles_data[1].old_position = particles_data[1].new_position;
         particles_data[2].new_position = particles_data[1].new_position + glm::vec3(w2, 0., 0.);
@@ -181,14 +187,14 @@ impl FoundationInitializer {
         particles_data[12].old_position = particles_data[12].new_position;
         particles_data[13].new_position = particles_data[1].new_position + glm::vec3(w, 0., 0.);
         particles_data[13].old_position = particles_data[13].new_position;
-        particles_data[phantom_particles as usize+0].new_position = particles_data[1].new_position + glm::vec3(0., 0., 0.);
-        particles_data[phantom_particles as usize+0].old_position = particles_data[phantom_particles as usize+0].new_position;
-        particles_data[phantom_particles as usize+1].new_position = particles_data[1].new_position + glm::vec3(w2, 0., 0.);
-        particles_data[phantom_particles as usize+1].old_position = particles_data[phantom_particles as usize +1].new_position;
-        particles_data[phantom_particles as usize+2].new_position = particles_data[1].new_position + glm::vec3(w, -l, 0.);
-        particles_data[phantom_particles as usize+2].old_position = particles_data[phantom_particles as usize +2].new_position;
-        particles_data[phantom_particles as usize+3].new_position = particles_data[1].new_position + glm::vec3(w, -l, 0.);
-        particles_data[phantom_particles as usize+3].old_position = particles_data[phantom_particles as usize +3].new_position;
+        particles_data[solid_particles as usize+0].new_position = particles_data[1].new_position + glm::vec3(0., 0., 0.);
+        particles_data[solid_particles as usize+0].old_position = particles_data[solid_particles as usize+0].new_position;
+        particles_data[solid_particles as usize+1].new_position = particles_data[1].new_position + glm::vec3(w2, 0., 0.);
+        particles_data[solid_particles as usize+1].old_position = particles_data[solid_particles as usize +1].new_position;
+        particles_data[solid_particles as usize+2].new_position = particles_data[1].new_position + glm::vec3(w, -l, 0.);
+        particles_data[solid_particles as usize+2].old_position = particles_data[solid_particles as usize +2].new_position;
+        particles_data[solid_particles as usize+3].new_position = particles_data[1].new_position + glm::vec3(w, -l, 0.);
+        particles_data[solid_particles as usize+3].old_position = particles_data[solid_particles as usize +3].new_position;
 
         let predefined_constraints = vec![
             Constraint::distance(1, 2, w2),
@@ -204,27 +210,27 @@ impl FoundationInitializer {
             Constraint::distance(6, 3, diag),
             Constraint::distance(3, 7, s),
             Constraint::distance(7, 10, l),
-            Constraint::distance(10, phantom_particles as u32+1, s),
-            Constraint::distance(phantom_particles as u32+1, 3,l),
-            Constraint::distance(phantom_particles as u32+1, 7, diag_sl),
+            Constraint::distance(10, solid_particles as u32+1, s),
+            Constraint::distance(solid_particles as u32+1, 3,l),
+            Constraint::distance(solid_particles as u32+1, 7, diag_sl),
             Constraint::distance(3, 10, diag_sl),
             Constraint::distance(4, 8, s),
             Constraint::distance(8, 9, l),
-            Constraint::distance(9, phantom_particles as u32+0, s),
-            Constraint::distance(phantom_particles as u32+0, 4,l),
-            Constraint::distance(phantom_particles as u32+0, 8,diag_sl),
+            Constraint::distance(9, solid_particles as u32+0, s),
+            Constraint::distance(solid_particles as u32+0, 4,l),
+            Constraint::distance(solid_particles as u32+0, 8,diag_sl),
             Constraint::distance(9, 4,diag_sl),
-            Constraint::distance(11, phantom_particles as u32+2,w),
-            Constraint::distance(phantom_particles as u32+2,13,l),
-            Constraint::distance(phantom_particles as u32+2,1,diag_wl),
+            Constraint::distance(11, solid_particles as u32+2,w),
+            Constraint::distance(solid_particles as u32+2,13,l),
+            Constraint::distance(solid_particles as u32+2,1,diag_wl),
             Constraint::distance(11, 13,diag_wl),
             Constraint::distance(13,1,w),
             Constraint::distance(1,11,l),
-            Constraint::distance(phantom_particles as u32+3,12,w),
+            Constraint::distance(solid_particles as u32+3,12,w),
             Constraint::distance(12,2, l),
             Constraint::distance(2,13, w),
-            Constraint::distance(13, phantom_particles as u32+3,l),
-            Constraint::distance(2, phantom_particles as u32+3,diag_wl),
+            Constraint::distance(13, solid_particles as u32+3,l),
+            Constraint::distance(2, solid_particles as u32+3,diag_wl),
             Constraint::distance(12, 13,diag_wl),
         ];
 
@@ -233,10 +239,10 @@ impl FoundationInitializer {
         let bone_data = vec![
             Bone::new([1, 2, 3, 4], 2, 0.1),
             Bone::new([4, 3, 5, 6], 3, 0.2),
-            Bone::new([phantom_particles as u32+1, 10, 7, 3], 4, 0.1),
-            Bone::new([9,phantom_particles as u32+0, 4, 8], 5, 0.1),
-            Bone::new([11,phantom_particles as u32+2, 13, 1], 0, 0.1),
-            Bone::new([phantom_particles as u32+3, 12,2,13], 1, 0.1),
+            Bone::new([solid_particles as u32+1, 10, 7, 3], 4, 0.1),
+            Bone::new([9,solid_particles as u32+0, 4, 8], 5, 0.1),
+            Bone::new([11,solid_particles as u32+2, 13, 1], 0, 0.1),
+            Bone::new([solid_particles as u32+3, 12,2,13], 1, 0.1),
         ];
 
         let constants = ParticleConstants {
@@ -342,6 +348,7 @@ impl FoundationInitializer {
         let indirect_draw_data = vec![
             draw_indirect(36, bone_data.len() as u32),// bones.vert
             draw_indirect(6, world_faces.len() as u32),// block.vert
+            draw_indirect((solid_particles+phantom_particles) as u32, 1),// particles.vert
         ];
         let indirect_dispatch_in_bytes = std::mem::size_of_val(indirect_dispatch_data.as_slice()) as u64;
         let indirect_draw_in_bytes = std::mem::size_of_val(indirect_draw_data.as_slice()) as u64;

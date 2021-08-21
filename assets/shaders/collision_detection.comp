@@ -23,24 +23,54 @@ layout (local_size_x = 32) in;
 
 vec3 compute_new_position(const ParticleConstants c, uint id){
     const vec3 old_position = particles[id].old_position;
-    const vec3 current_position = particles[id].new_position;
-    vec3 velocity = current_position - old_position;
-    velocity.y -= GRAVITY;
-    vec3 new_position = current_position + velocity;
+    vec3 current_position = particles[id].new_position; // Current position is in fact the output of solve_constraints.comp
+    // Before we can use its value we need to first perform some postprocessing - detect collision with blocks and fix them.
+    // Only then we obtain the "actual" current value of position.
+    uvec3 old_block_position = uvec3(old_position);
+    uvec3 current_block_position = uvec3(current_position);
+    if(current_block_position!=old_block_position){
+        vec3 current_pos_relative_to_old_block = current_position - old_block_position;
+        vec3 current_pos_relative_to_old_block_center = current_pos_relative_to_old_block-vec3(0.5,0.5,0.5);
+        vec3 signum = sign(current_pos_relative_to_old_block_center);
+        vec3 distance = abs(current_pos_relative_to_old_block_center);
+        vec3 colliding_surface_normal=vec3(0,0,0);
+        if (distance.x > 0.5){
+            const uint block_idx = block_pos_into_world_idx(c, old_block_position + ivec3(signum.x, 0, 0));
+            const uint block = world[block_idx];
+            colliding_surface_normal.x = block>0 ? signum.x : 0;
+        }
+        if (distance.y > 0.5){
+            const uint block_idx = block_pos_into_world_idx(c, old_block_position + ivec3(0,signum.y, 0));
+            const uint block = world[block_idx];
+            colliding_surface_normal.y = block>0 ? signum.y : 0;
+        }
+        if (distance.z > 0.5){
+            const uint block_idx = block_pos_into_world_idx(c, old_block_position + ivec3( 0, 0, signum.z));
+            const uint block = world[block_idx];
+            colliding_surface_normal.z = block>0 ? signum.z : 0;
+        }
+        if(colliding_surface_normal==vec3(0,0,0)){
+            const uint block_idx = block_pos_into_world_idx(c, current_block_position);
+            const uint block = world[block_idx];
+            colliding_surface_normal = block > 0 ? signum : vec3(0,0,0);
+        }
+        if(colliding_surface_normal!=vec3(0,0,0)){
+            vec3 position_change = current_position - old_position;
+            colliding_surface_normal = normalize(-colliding_surface_normal);
+            current_position = old_position + position_change - 2*(dot(position_change,colliding_surface_normal)*colliding_surface_normal);
+        }
+    }
+
+    vec3 velocity = (current_position - old_position)/PHYSICS_SIMULATION_DELTA_TIME_PER_STEP;
+    velocity.y -= GRAVITY*PHYSICS_SIMULATION_DELTA_TIME_PER_STEP;
+    vec3 new_position = current_position + velocity*DAMPING_COEFFICIENT*PHYSICS_SIMULATION_DELTA_TIME_PER_STEP;
     //TODO: implement damping, drag, friction, gravity etc. The velocity variable might be useful here
     //The below code is a branchless test for bounding-box collision. It's equivalent to the code
     // if(candidate_position.x<0){candidate_position.x=-candidate_position.x;}
     // if(candidate_position.x>16*constants.chunks_x){candidate_position.x=16*constants.chunks_x-(candidate_position.x-16*constants.chunks_x);}
     //and so on for each x,y,z coordinate.
     new_position = new_position - 2*min(new_position, vec3(0, 0, 0)) + 2*min(vec3(16, 16, 16)-new_position, vec3(0, 0, 0));
-    uvec3 block_position = uvec3(new_position);
-    const uint block_idx = block_pos_into_world_idx(c, block_position);
-    const uint block = world[block_idx];
-    if (block > 0) {
-        vec3 pos_relative_to_block = new_position - block_position;
-        uint max_comp = max_vec3_component(abs(pos_relative_to_block-vec3(0.5,0.5,0.5)));
-        new_position[max_comp] += 2.*(block_position[max_comp] + round(pos_relative_to_block[max_comp]) - new_position[max_comp]);
-    }
+
     particles[id].old_position = current_position;
     particles[id].new_position = new_position;
     return new_position;

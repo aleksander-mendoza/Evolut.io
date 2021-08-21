@@ -22,6 +22,9 @@
 #define MAX_UINT 4294967295
 #define GAUSS_SEIDEL_PASSES 12
 #define GRAVITY 0.0001
+#define DAMPING_COEFFICIENT 1.0
+#define BLOCK_COLLISION_STIFFNESS 0.5
+#define PHYSICS_SIMULATION_DELTA_TIME_PER_STEP 1.
 #define NO_OF_TRANSPARENT_BLOCKS 6 // The blocks are aligned in such a way that transparent blocks come first. Hence in
 // order to check whether a block is transparent or not, it's enough to just check if its ID is below this value
 

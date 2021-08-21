@@ -96,7 +96,7 @@ impl Renderable for Particles {
         cmd.bind_pipeline(self.pipeline())
             .uniform(self.pipeline(), descriptors.descriptor_set(image_idx))
             .vertex_input(self.particle_builder.particle_binding, foundations.particles())
-            .draw(foundations.particles().len() as u32, 1, 0, 0);
+            .draw_indirect(foundations.indirect().draw_particles());
         Ok(())
     }
     fn record_compute_cmd_buffer(&self, _cmd: &mut CommandBuffer, _foundations:&Foundations) -> Result<(), Error> {

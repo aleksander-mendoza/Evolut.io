@@ -49,9 +49,10 @@ layout(std430, set = 0, binding = 4) buffer Constraints{
 #define DISPATCH_INDIRECT_UPDATE_BONES 2
 #define DRAW_INDIRECT_BONES 0
 #define DRAW_INDIRECT_BLOCK 1
+#define DRAW_INDIRECT_PARTICLES 2
 layout(std430, set = 0, binding = 5) buffer Indirect{
     DispatchIndirectCommand[3] dispatch_indirect;
-    DrawIndirectCommand[2] draw_indirect;
+    DrawIndirectCommand[3] draw_indirect;
 };
 #endif //IS_AVAILABLE_BUFFER_INDIRECT
 
