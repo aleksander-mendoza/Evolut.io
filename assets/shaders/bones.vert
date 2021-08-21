@@ -63,33 +63,59 @@ void main() {
     //Now we list a bunch of predefined sizes, that will be used as hands, legs, heads etc.
     //All sizes are specified in a specific unit of minecraft pixels (every block is 16x16 pixels)
     const float pixel = 1./64.; //size of a single texture pixel measured in UV coordinates
-    const vec2[6*4*2] tex_offset_and_size = vec2[6*4*2](
-        /////// Zombie leg
+    const vec2[6*6*2] tex_offset_and_size = vec2[6*6*2](
+        /////// Zombie leg lower
         // XPlus
-        vec2(pixel*8.,pixel*0.),vec2(pixel*4.,pixel*12.),
+        vec2(pixel*8.,pixel*0.),vec2(pixel*4.,pixel*6.),
         // XMinus
-        vec2(pixel*0.,pixel*0.),vec2(pixel*4.,pixel*12.),
+        vec2(pixel*0.,pixel*0.),vec2(pixel*4.,pixel*6.),
         // YPlus
         vec2(pixel*4.,pixel*12.),vec2(pixel*4.,pixel*4.),
         // YMinus
         vec2(pixel*8.,pixel*12.),vec2(pixel*4.,pixel*4.),
         // ZPlus
-        vec2(pixel*12.,pixel*0.),vec2(pixel*4.,pixel*12.),
+        vec2(pixel*12.,pixel*0.),vec2(pixel*4.,pixel*6.),
         // ZMinus
-        vec2(pixel*4.,pixel*0.),vec2(pixel*4.,pixel*12.),
-        /////// Zombie arm
+        vec2(pixel*4.,pixel*0.),vec2(pixel*4.,pixel*6.),
+        /////// Zombie leg upper
         // XPlus
-        vec2(pixel*(8.+16.),pixel*0.),vec2(pixel*4.,pixel*12.),
+        vec2(pixel*8.,pixel*6.),vec2(pixel*4.,pixel*6.),
         // XMinus
-        vec2(pixel*(0.+16.),pixel*0.),vec2(pixel*4.,pixel*12.),
+        vec2(pixel*0.,pixel*6.),vec2(pixel*4.,pixel*6.),
+        // YPlus
+        vec2(pixel*4.,pixel*12.),vec2(pixel*4.,pixel*4.),
+        // YMinus
+        vec2(pixel*8.,pixel*12.),vec2(pixel*4.,pixel*4.),
+        // ZPlus
+        vec2(pixel*12.,pixel*6.),vec2(pixel*4.,pixel*6.),
+        // ZMinus
+        vec2(pixel*4.,pixel*6.),vec2(pixel*4.,pixel*6.),
+        /////// Zombie arm lower
+        // XPlus
+        vec2(pixel*(8.+16.),pixel*0.),vec2(pixel*4.,pixel*6.),
+        // XMinus
+        vec2(pixel*(0.+16.),pixel*0.),vec2(pixel*4.,pixel*6.),
         // YPlus
         vec2(pixel*(4.+16.),pixel*12.),vec2(pixel*4.,pixel*4.),
         // YMinus
         vec2(pixel*(8.+16.),pixel*12.),vec2(pixel*4.,pixel*4.),
         // ZPlus
-        vec2(pixel*(12.+16.),pixel*0.),vec2(pixel*4.,pixel*12.),
+        vec2(pixel*(12.+16.),pixel*0.),vec2(pixel*4.,pixel*6.),
         // ZMinus
-        vec2(pixel*(4.+16.),pixel*0.),vec2(pixel*4.,pixel*12.),
+        vec2(pixel*(4.+16.),pixel*0.),vec2(pixel*4.,pixel*6.),
+        /////// Zombie arm upper
+        // XPlus
+        vec2(pixel*(8.+16.),pixel*6.),vec2(pixel*4.,pixel*6.),
+        // XMinus
+        vec2(pixel*(0.+16.),pixel*6.),vec2(pixel*4.,pixel*6.),
+        // YPlus
+        vec2(pixel*(4.+16.),pixel*12.),vec2(pixel*4.,pixel*4.),
+        // YMinus
+        vec2(pixel*(8.+16.),pixel*12.),vec2(pixel*4.,pixel*4.),
+        // ZPlus
+        vec2(pixel*(12.+16.),pixel*6.),vec2(pixel*4.,pixel*6.),
+        // ZMinus
+        vec2(pixel*(4.+16.),pixel*6.),vec2(pixel*4.,pixel*6.),
         /////// Zombie torso
         // XPlus
         vec2(pixel*12.,pixel*16.),vec2(pixel*4.,pixel*12.),
@@ -117,16 +143,22 @@ void main() {
         // ZMinus
         vec2(pixel*8.,pixel*32.),vec2(pixel*8.,pixel*8.)
     );
-    const uint[6] body_part_to_bone_idx = uint[6](
-        uint(0), // Zombie left leg
-        uint(0), // Zombie right leg
-        uint(2), // Zombie torso
-        uint(3), // Zombie head
-        uint(1), // Zombie left hand
-        uint(1) // Zombie right hand
+    const uint[10] body_part_to_bone_idx = uint[10](
+        uint(0), // Zombie left leg lower
+        uint(1), // Zombie left leg upper
+        uint(0), // Zombie right leg lower
+        uint(1), // Zombie right leg upper
+        uint(2), // Zombie left hand lower
+        uint(3), // Zombie left hand upper
+        uint(2), // Zombie right hand lower
+        uint(3), // Zombie right hand upper
+        uint(4), // Zombie torso
+        uint(5) // Zombie head
     );
-    const float[4] tex_stride = float[4](
+    const float[6] tex_stride = float[6](
         pixel*32., // Zombie leg
+        pixel*32., // Zombie leg
+        pixel*32., // Zombie arm
         pixel*32., // Zombie arm
         pixel*24., // Zombie torso
         pixel*24. // Zombie head

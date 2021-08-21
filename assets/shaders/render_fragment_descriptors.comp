@@ -2,11 +2,11 @@
 #define PHYSICS_DESCRIPTORS_COMP
 
 #ifdef IS_AVAILABLE_SAMPLER_MOBS
-layout(binding = 2) uniform sampler2D mobsSampler;
+layout(binding = 3) uniform sampler2D mobsSampler;
 #endif
 
 #ifdef IS_AVAILABLE_SAMPLER_BLOCKS
-layout(binding = 3) uniform sampler2D blocksSampler;
+layout(binding = 4) uniform sampler2D blocksSampler;
 #endif
 
 

@@ -46,6 +46,7 @@ mod fps;
 mod blocks;
 mod pipelines;
 mod physics_timer;
+mod neat;
 
 
 fn main() -> Result<(), failure::Error> {

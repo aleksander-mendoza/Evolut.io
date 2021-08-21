@@ -66,8 +66,9 @@ impl <P: RenderResources> Display<P> {
         let render_pass = vulkan.create_single_render_pass()?;
         let cmd_pool = CommandPool::new(vulkan.device(),true)?;
         let mut descriptors_builder = DescriptorsBuilder::new();
-        let uniforms_binding = descriptors_builder.singleton_uniform_buffer(player.mvp_uniforms());
         let foundations = FoundationInitializer::new(&cmd_pool)?;
+        let uniforms_binding = descriptors_builder.singleton_uniform_buffer(player.mvp_uniforms());
+        let _ = descriptors_builder.storage_buffer(foundations.particle_constants().gpu());
         let render_resources = render(&cmd_pool,&foundations)?;
         render_resources.create_descriptors(&mut descriptors_builder, &foundations)?;
         let descriptors_builder = descriptors_builder.make_layout(cmd_pool.device())?;

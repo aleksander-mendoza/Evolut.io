@@ -93,6 +93,9 @@ pub struct FoundationInitializer {
 }
 
 impl FoundationInitializer {
+    pub fn particle_constants(&self) -> &StageSubBuffer<ParticleConstants, Cpu, Storage>{
+        &self.particle_constants
+    }
     pub fn face_count_per_chunk_buffer(&self)->&SubBuffer<Face, Storage>{
         &self.face_count_per_chunk_buffer
     }
@@ -154,95 +157,149 @@ impl FoundationInitializer {
         let w = w2/2.;
         let h2 = 0.4f32;
         let h = h2/2.;
-        let l = 0.6f32;
+        let l2 = 0.6f32;
+        let l = l2/2.;
         let s = 0.2f32;
-        let diag = (w2 * w2 + h2 * h2).sqrt();
-        let diag_l = (w2 * w2 +l*l).sqrt();
-        let diag_sl = (s*s+l*l).sqrt();
-        let diag_wl = (w*w+l*l).sqrt();
+        let diag_w2_h2 = (w2 * w2 + h2 * h2).sqrt();
+        let diag_w2_l2 = (w2 * w2 + l2 * l2).sqrt();
+        let diag_s_l2 = (s*s+ l2 * l2).sqrt();
+        let diag_w_l2 = (w*w+ l2 * l2).sqrt();
+        let diag_s_l = (s*s+ l * l).sqrt();
+        let diag_w_l = (w*w+ l * l).sqrt();
         let mut particles_data: Vec<Particle> = std::iter::repeat_with(Particle::random).take((solid_particles+phantom_particles) as usize).collect();
         particles_data[1].new_position = glm::vec3(2., 7., 2.);
         particles_data[1].old_position = particles_data[1].new_position;
         particles_data[2].new_position = particles_data[1].new_position + glm::vec3(w2, 0., 0.);
         particles_data[2].old_position = particles_data[2].new_position;
-        particles_data[3].new_position = particles_data[1].new_position + glm::vec3(w2, l, 0.);
+        particles_data[3].new_position = particles_data[1].new_position + glm::vec3(w2, l2, 0.);
         particles_data[3].old_position = particles_data[3].new_position;
-        particles_data[4].new_position = particles_data[1].new_position + glm::vec3(0., l, 0.);
+        particles_data[4].new_position = particles_data[1].new_position + glm::vec3(0., l2, 0.);
         particles_data[4].old_position = particles_data[4].new_position;
-        particles_data[5].new_position = particles_data[1].new_position + glm::vec3(w2, h2 +l, 0.);
+        particles_data[5].new_position = particles_data[1].new_position + glm::vec3(w2, h2 + l2, 0.);
         particles_data[5].old_position = particles_data[5].new_position;
-        particles_data[6].new_position = particles_data[1].new_position + glm::vec3(0., h2 +l, 0.);
+        particles_data[6].new_position = particles_data[1].new_position + glm::vec3(0., h2 + l2, 0.);
         particles_data[6].old_position = particles_data[6].new_position;
-        particles_data[7].new_position = particles_data[1].new_position + glm::vec3(w2 +s, l, 0.);
+        particles_data[7].new_position = particles_data[1].new_position + glm::vec3(w2 +s, l2, 0.);
         particles_data[7].old_position = particles_data[7].new_position;
-        particles_data[8].new_position = particles_data[1].new_position + glm::vec3(-s, l, 0.);
+        particles_data[8].new_position = particles_data[1].new_position + glm::vec3(-s, l2, 0.);
         particles_data[8].old_position = particles_data[8].new_position;
         particles_data[9].new_position = particles_data[1].new_position + glm::vec3(-s, 0., 0.);
         particles_data[9].old_position = particles_data[9].new_position;
         particles_data[10].new_position = particles_data[1].new_position + glm::vec3(w2 +s, 0., 0.);
         particles_data[10].old_position = particles_data[10].new_position;
-        particles_data[11].new_position = particles_data[1].new_position + glm::vec3(0., -l, 0.);
+        particles_data[11].new_position = particles_data[1].new_position + glm::vec3(0., -l2, 0.);
         particles_data[11].old_position = particles_data[11].new_position;
-        particles_data[12].new_position = particles_data[1].new_position + glm::vec3(w2, -l, 0.);
+        particles_data[12].new_position = particles_data[1].new_position + glm::vec3(w2, -l2, 0.);
         particles_data[12].old_position = particles_data[12].new_position;
         particles_data[13].new_position = particles_data[1].new_position + glm::vec3(w, 0., 0.);
         particles_data[13].old_position = particles_data[13].new_position;
+        particles_data[14].new_position = particles_data[1].new_position + glm::vec3(-s, l, 0.);
+        particles_data[14].old_position = particles_data[14].new_position;
+        particles_data[15].new_position = particles_data[1].new_position + glm::vec3(w2+s, l, 0.);
+        particles_data[15].old_position = particles_data[15].new_position;
+        particles_data[16].new_position = particles_data[1].new_position + glm::vec3(0., -l, 0.);
+        particles_data[16].old_position = particles_data[16].new_position;
+        particles_data[17].new_position = particles_data[1].new_position + glm::vec3(w, -l, 0.);
+        particles_data[17].old_position = particles_data[17].new_position;
         particles_data[solid_particles as usize+0].new_position = particles_data[1].new_position + glm::vec3(0., 0., 0.);
         particles_data[solid_particles as usize+0].old_position = particles_data[solid_particles as usize+0].new_position;
         particles_data[solid_particles as usize+1].new_position = particles_data[1].new_position + glm::vec3(w2, 0., 0.);
         particles_data[solid_particles as usize+1].old_position = particles_data[solid_particles as usize +1].new_position;
-        particles_data[solid_particles as usize+2].new_position = particles_data[1].new_position + glm::vec3(w, -l, 0.);
+        particles_data[solid_particles as usize+2].new_position = particles_data[1].new_position + glm::vec3(w, -l2, 0.);
         particles_data[solid_particles as usize+2].old_position = particles_data[solid_particles as usize +2].new_position;
-        particles_data[solid_particles as usize+3].new_position = particles_data[1].new_position + glm::vec3(w, -l, 0.);
+        particles_data[solid_particles as usize+3].new_position = particles_data[1].new_position + glm::vec3(w, -l2, 0.);
         particles_data[solid_particles as usize+3].old_position = particles_data[solid_particles as usize +3].new_position;
-
+        particles_data[solid_particles as usize+4].new_position = particles_data[1].new_position + glm::vec3(0., l, 0.);
+        particles_data[solid_particles as usize+4].old_position = particles_data[solid_particles as usize +4].new_position;
+        particles_data[solid_particles as usize+5].new_position = particles_data[1].new_position + glm::vec3(w2, l, 0.);
+        particles_data[solid_particles as usize+5].old_position = particles_data[solid_particles as usize +5].new_position;
+        particles_data[solid_particles as usize+6].new_position = particles_data[1].new_position + glm::vec3(w, -l, 0.);
+        particles_data[solid_particles as usize+6].old_position = particles_data[solid_particles as usize +6].new_position;
+        particles_data[solid_particles as usize+7].new_position = particles_data[1].new_position + glm::vec3(w, -l, 0.);
+        particles_data[solid_particles as usize+7].old_position = particles_data[solid_particles as usize +7].new_position;
         let predefined_constraints = vec![
+            // Quad(1 2 3 4)
             Constraint::distance(1, 2, w2),
-            Constraint::distance(2, 3, l),
+            Constraint::distance(2, 3, l2),
             Constraint::distance(3, 4, w2),
-            Constraint::distance(4, 1, l),
-            Constraint::distance(4, 2,diag_l),
-            Constraint::distance(1, 3,diag_l),
+            Constraint::distance(4, 1, l2),
+            Constraint::distance(4, 2, diag_w2_l2),
+            Constraint::distance(1, 3, diag_w2_l2),
+            // Quad(6 5 3 4)
             Constraint::distance(6, 5, w2),
             Constraint::distance(5, 3, h2),
             Constraint::distance(6, 4, w2),
-            Constraint::distance(4, 5, diag),
-            Constraint::distance(6, 3, diag),
+            Constraint::distance(4, 5, diag_w2_h2),
+            Constraint::distance(6, 3, diag_w2_h2),
+            // Quad(3 7 15 solid_particles+5)
             Constraint::distance(3, 7, s),
-            Constraint::distance(7, 10, l),
+            Constraint::distance(7, 15, l),
+            Constraint::distance(15, solid_particles as u32+5, s),
+            Constraint::distance(solid_particles as u32+5, 3, l),
+            Constraint::distance(solid_particles as u32+5, 7, diag_s_l),
+            Constraint::distance(3, 15, diag_s_l),
+            // Quad(solid_particles+5 15 10 solid_particles+1)
+            Constraint::distance(15, 10, l),
             Constraint::distance(10, solid_particles as u32+1, s),
-            Constraint::distance(solid_particles as u32+1, 3,l),
-            Constraint::distance(solid_particles as u32+1, 7, diag_sl),
-            Constraint::distance(3, 10, diag_sl),
+            Constraint::distance(solid_particles as u32+1, solid_particles as u32+5, l),
+            Constraint::distance(solid_particles as u32+1, 15, diag_s_l),
+            Constraint::distance(solid_particles as u32+5, 10, diag_s_l),
+            // Quad(4 8 14 solid_particles+4)
             Constraint::distance(4, 8, s),
-            Constraint::distance(8, 9, l),
-            Constraint::distance(9, solid_particles as u32+0, s),
-            Constraint::distance(solid_particles as u32+0, 4,l),
-            Constraint::distance(solid_particles as u32+0, 8,diag_sl),
-            Constraint::distance(9, 4,diag_sl),
+            Constraint::distance(8, 14, l),
+            Constraint::distance(14, solid_particles as u32+4, s),
+            Constraint::distance(solid_particles as u32+4, 4, l),
+            Constraint::distance(solid_particles as u32+4, 8, diag_s_l),
+            Constraint::distance(14, 4, diag_s_l),
+            // Quad(14 solid_particles+4 solid_particles+0 9)
+            Constraint::distance(solid_particles as u32+4, solid_particles as u32+0, l),
+            Constraint::distance(solid_particles as u32+0, 9, s),
+            Constraint::distance(9, 14, l),
+            Constraint::distance(solid_particles as u32+0, 14, diag_s_l),
+            Constraint::distance(9, solid_particles as u32+4, diag_s_l),
+            // Quad(11 solid_particles+2 solid_particles+6 16)
             Constraint::distance(11, solid_particles as u32+2,w),
-            Constraint::distance(solid_particles as u32+2,13,l),
-            Constraint::distance(solid_particles as u32+2,1,diag_wl),
-            Constraint::distance(11, 13,diag_wl),
+            Constraint::distance(solid_particles as u32+2, solid_particles as u32+6, l),
+            Constraint::distance(solid_particles as u32+6,16,w),
+            Constraint::distance(16, 11, l),
+            Constraint::distance(solid_particles as u32+2, 16, diag_w_l),
+            Constraint::distance(11, solid_particles as u32+6, diag_w_l),
+            // Quad(16 solid_particles+6 13 1)
+            Constraint::distance(solid_particles as u32+6, 13, l),
             Constraint::distance(13,1,w),
-            Constraint::distance(1,11,l),
+            Constraint::distance(1, 16, l),
+            Constraint::distance(solid_particles as u32+6, 1, diag_w_l),
+            Constraint::distance(16, 13, diag_w_l),
+            // Quad(solid_particles+3 12 17 solid_particles+7)
             Constraint::distance(solid_particles as u32+3,12,w),
-            Constraint::distance(12,2, l),
+            Constraint::distance(12, 17, l),
+            Constraint::distance(17,solid_particles as u32+7, w),
+            Constraint::distance(solid_particles as u32+7, solid_particles as u32+3, l),
+            Constraint::distance(17, solid_particles as u32+3, diag_w_l),
+            Constraint::distance(12, solid_particles as u32+7, diag_w_l),
+            // Quad(17 solid_particles+7 13 2)
+            Constraint::distance(17, 2, l),
             Constraint::distance(2,13, w),
-            Constraint::distance(13, solid_particles as u32+3,l),
-            Constraint::distance(2, solid_particles as u32+3,diag_wl),
-            Constraint::distance(12, 13,diag_wl),
+            Constraint::distance(13, solid_particles as u32+7, l),
+            Constraint::distance(2, solid_particles as u32+7, diag_w_l),
+            Constraint::distance(17, 13, diag_w_l),
+
+            Constraint::distance(solid_particles as u32+3, 2, 0.37),
         ];
 
         let block_properties_data:Vec<BlockProp> = BLOCKS.iter().map(|p|p.prop).collect();
 
         let bone_data = vec![
-            Bone::new([1, 2, 3, 4], 2, 0.1),
-            Bone::new([4, 3, 5, 6], 3, 0.2),
-            Bone::new([solid_particles as u32+1, 10, 7, 3], 4, 0.1),
-            Bone::new([9,solid_particles as u32+0, 4, 8], 5, 0.1),
-            Bone::new([11,solid_particles as u32+2, 13, 1], 0, 0.1),
-            Bone::new([solid_particles as u32+3, 12,2,13], 1, 0.1),
+            Bone::new([11,solid_particles as u32+2, solid_particles as u32+6, 16], 0, 0.1),
+            Bone::new([16,solid_particles as u32+6, 13, 1], 1, 0.1),
+            Bone::new([solid_particles as u32+3, 12,17,solid_particles as u32+7], 2, 0.1),
+            Bone::new([solid_particles as u32+7, 17,2,13], 3, 0.1),
+            Bone::new([solid_particles as u32+1, 10, 15, solid_particles as u32+5], 4, 0.1),
+            Bone::new([solid_particles as u32+5, 15, 7, 3], 5, 0.1),
+            Bone::new([9,solid_particles as u32+0, solid_particles as u32+4, 14], 6, 0.1),
+            Bone::new([14, solid_particles as u32+4, 4, 8], 7, 0.1),
+            Bone::new([1, 2, 3, 4], 8, 0.1),
+            Bone::new([4, 3, 5, 6], 9, 0.2),
         ];
 
         let constants = ParticleConstants {
