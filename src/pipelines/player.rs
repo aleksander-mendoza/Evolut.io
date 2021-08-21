@@ -75,7 +75,7 @@ impl Player {
             self.events.push_back(PlayerEvent::set_block(self.location,self.ray_trace_vector.xyz().clone_owned(), block));
         }
         if input.is_q(){
-            self.events.push_back(PlayerEvent::throw(self.location, self.ray_trace_vector.xyz()*0.01));
+            self.events.push_back(PlayerEvent::throw(self.location, self.ray_trace_vector.xyz()*0.03));
         }
         if input.number() > -1 {
             self.block_in_hand = Block::new((input.number() + 1) as u32)
