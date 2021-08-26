@@ -28,6 +28,14 @@ impl Particle{
             color: random::<f32>(),
         }
     }
+    pub fn new(pos:glm::Vec3)->Self{
+        Self{
+            old_position: pos,
+            size: 50.+random::<f32>()*50.,
+            new_position: pos,
+            color: random::<f32>()
+        }
+    }
 }
 impl VertexSource for Particle{
     fn get_attribute_descriptions(binding: u32) -> Vec<VertexInputAttributeDescription> {

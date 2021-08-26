@@ -1,5 +1,5 @@
 #version 450
-//#extension GL_EXT_debug_printf : enable
+#extension GL_EXT_debug_printf : enable
 #define IS_AVAILABLE_BUFFER_CONSTANTS
 #define IS_AVAILABLE_BUFFER_CONSTRAINTS
 #define IS_AVAILABLE_BUFFER_WORLD
@@ -71,7 +71,7 @@ vec3 compute_new_position(const ParticleConstants c, uint id){
     // if(candidate_position.x<0){candidate_position.x=-candidate_position.x;}
     // if(candidate_position.x>16*constants.chunks_x){candidate_position.x=16*constants.chunks_x-(candidate_position.x-16*constants.chunks_x);}
     //and so on for each x,y,z coordinate.
-    new_position = new_position - 2*min(new_position, vec3(0, 0, 0)) + 2*min(vec3(16, 16, 16)-new_position, vec3(0, 0, 0));
+    new_position = new_position - 2*min(new_position, vec3(0, 0, 0)) + 2*min(vec3(16, 256, 16)-new_position, vec3(0, 0, 0));
 
     particles[id].old_position = current_position;
     particles[id].new_position = new_position;
@@ -80,6 +80,7 @@ vec3 compute_new_position(const ParticleConstants c, uint id){
 
 void main()
 {
+
     uint gID = gl_GlobalInvocationID.x;
     const ParticleConstants c = constants;
     if(gID==0){

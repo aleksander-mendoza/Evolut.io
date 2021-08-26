@@ -112,6 +112,338 @@ pub struct FoundationInitializer {
     world_size: WorldSize,
 }
 
+struct FoundationsCapacity{
+    world_size: WorldSize,
+    particles: u64,
+    bones: u64,
+    faces: u64,
+    max_constraints: u64,
+    grid_size:  u64,
+    solid_particles: u64,
+    phantom_particles:u64 ,
+    sensors: u64,
+    persistent_floats: u64,
+    neural_net_layers: u64,
+    muscles: u64,
+}
+impl FoundationsCapacity{
+    pub fn new()->Self{
+        let world_size = WorldSize::new(2,2);
+        let particles = 512u64;
+        let bones = 128u64;
+        let faces = 16*1024u64*world_size.total_chunks() as u64;
+        let max_constraints = 128u64;
+        let grid_size = CHUNK_VOLUME_IN_CELLS as u64; // this can also be reinterpreted as extra
+        // non-persistent backing memory for auxiliary matrices and tensors used by neural networks
+        // for carrying out their computations
+        let solid_particles = 256;
+        let phantom_particles = 256;
+        let sensors = 128u64;
+        let persistent_floats = 512u64; // used as backing memory for vectors, matrices and
+        // tensors that make up various neural networks. Especially, the outputs of recursive neural networks
+        // often need to be persistent, because those outputs are later fed as inputs to the same neural net.
+        let neural_net_layers = 128u64;
+        let muscles = 128u64;
+        debug_assert!(solid_particles + phantom_particles <= particles);
+        Self{
+            world_size,
+            particles,
+            bones,
+            faces,
+            max_constraints,
+            grid_size,
+            solid_particles,
+            phantom_particles,
+            sensors,
+            persistent_floats,
+            neural_net_layers,
+            muscles
+        }
+    }
+}
+
+
+
+struct FoundationsData{
+    world_blocks:WorldBlocks,
+    world_faces: WorldFaces,
+    solid_particle_data: Vec<Particle>,
+    phantom_particle_data: Vec<Particle>,
+    constraints_data:Vec<Constraint>,
+    bone_data:Vec<Bone>,
+    sensor_data:Vec<Sensor>,
+    muscle_data:Vec<Muscle>,
+    block_properties_data:Vec<BlockProp>,
+    persistent_floats_data:Vec<f32>,
+    neural_net_layer_data:Vec<NeuralNetLayer>
+}
+
+impl FoundationsData{
+    pub fn new(cap:&FoundationsCapacity)->Self{
+        Self{
+            world_blocks: WorldBlocks::new(cap.world_size.clone()),
+            world_faces: WorldFaces::with_capacity(cap.world_size.clone(), cap.faces as usize),
+            // particles_data: std::iter::repeat_with(Particle::random).take((cap.solid_particles+cap.phantom_particles) as usize).collect(),
+            solid_particle_data: vec![],
+            phantom_particle_data: vec![],
+            constraints_data: vec![],
+            bone_data: vec![],
+            sensor_data: vec![],
+            muscle_data: vec![],
+            neural_net_layer_data: vec![],
+            block_properties_data: BLOCKS.iter().map(|p|p.prop).collect(),
+            persistent_floats_data: (0..cap.persistent_floats).map(|_|rand::random::<f32>()).collect::<Vec<f32>>()
+        }
+    }
+    fn setup_world_blocks(&mut self){
+        for level in 0..16{
+            self.world_blocks.no_update_fill_level(level*8, 1, GRASS);
+        }
+        // self.world_blocks.no_update_fill_level(0, 1, BEDROCK);
+        // self.world_blocks.no_update_fill_level(1, 1, DIRT);
+        // self.world_blocks.no_update_fill_level(2, 1, GRASS);
+        // self.world_blocks.no_update_fill_level(10, 1, GLASS);
+        // self.world_blocks.no_update_outline(5, 2, 5, 5, 5, 5, PLANK);
+    }
+    fn setup_world_faces(&mut self){
+        let Self{ world_blocks, world_faces,.. } = self;
+        world_faces.generate_faces(world_blocks);
+    }
+    fn add_zombie(&mut self, pos:glm::Vec3, cap:&FoundationsCapacity){
+        let w2 = 0.4f32;
+        let w = w2/2.;
+        let h2 = 0.4f32;
+        let h = h2/2.;
+        let l2 = 0.6f32;
+        let l = l2/2.;
+        let s = 0.2f32;
+        let diag_w2_h2 = (w2 * w2 + h2 * h2).sqrt();
+        let diag_w2_l2 = (w2 * w2 + l2 * l2).sqrt();
+        let diag_s_l2 = (s*s+ l2 * l2).sqrt();
+        let diag_w_l2 = (w*w+ l2 * l2).sqrt();
+        let diag_s_l = (s*s+ l * l).sqrt();
+        let diag_w_l = (w*w+ l * l).sqrt();
+        let depth = 0.1;
+        let diag_depth_half_w = (w*w/4.+depth*depth).sqrt();
+        let diag_depth_l_half_w = (w*w/4.+l*l+depth*depth).sqrt();
+        let diag_depth_l_w = (w*w+l*l+depth*depth).sqrt();
+        let stiffness = 0.2f32;
+        let Self{ neural_net_layer_data,solid_particle_data, phantom_particle_data, constraints_data,bone_data, sensor_data, muscle_data, ..} = self;
+        let solid_particles = vec![
+            Particle::new(pos),//0
+            Particle::new(pos+glm::vec3(w2, 0., 0.)),//1
+            Particle::new(pos+glm::vec3(w2, l2, 0.)),//2
+            Particle::new(pos+glm::vec3(0., l2, 0.)),//3
+            Particle::new(pos+glm::vec3(w2, h2 + l2, 0.)),//4
+            Particle::new(pos+glm::vec3(0., h2 + l2, 0.)),//5
+            Particle::new(pos+glm::vec3(w2 +s, l2, 0.)),//6
+            Particle::new(pos+glm::vec3(-s, l2, 0.)),//7
+            Particle::new(pos+glm::vec3(-s, 0., 0.)),//8
+            Particle::new(pos+glm::vec3(w2 +s, 0., 0.)),//9
+            Particle::new(pos+glm::vec3(0., -l2, 0.)),//10
+            Particle::new(pos+glm::vec3(w2, -l2, 0.)),//11
+            Particle::new(pos+glm::vec3(w, 0., 0.)),//12
+            Particle::new(pos+glm::vec3(-s, l, 0.)),//13
+            Particle::new(pos+glm::vec3(w2+s, l, 0.)),//14
+            Particle::new(pos+glm::vec3(0., -l, 0.)),//15
+            Particle::new(pos+glm::vec3(w2, -l, 0.)),//16
+            Particle::new(pos+glm::vec3(w, l, depth)),// 17
+        ];
+        let phantom_particles = vec![
+            Particle::new(pos+glm::vec3(0., 0., 0.)),//0
+            Particle::new(pos+glm::vec3(w2, 0., 0.)),//1
+            Particle::new(pos+glm::vec3(w, -l2, 0.)),//2
+            Particle::new(pos+glm::vec3(w, -l2, 0.)),//3
+            Particle::new(pos+glm::vec3(0., l, 0.)),//4
+            Particle::new(pos+glm::vec3(w2, l, 0.)),//5
+            Particle::new(pos+glm::vec3(w, -l, 0.)),//6
+            Particle::new(pos+glm::vec3(w, -l, 0.)),//7
+            Particle::new(pos+glm::vec3(w/2., -l2, -depth)),//8
+            Particle::new(pos+glm::vec3(w+w/2., -l2, -depth)),//9
+        ];
+        let solid_offset = solid_particle_data.len() as u32;
+        let phantom_offset = cap.solid_particles as u32 + phantom_particle_data.len() as u32;
+        let constraints = vec![
+            // Quad(1 2 3 4)
+            Constraint::distance(stiffness,solid_offset+0, solid_offset+1, w2),
+            Constraint::distance(stiffness,solid_offset+1, solid_offset+2, l2),
+            Constraint::distance(stiffness,solid_offset+2, solid_offset+3, w2),
+            Constraint::distance(stiffness,solid_offset+3, solid_offset+0, l2),
+            Constraint::distance(stiffness,solid_offset+3, solid_offset+1, diag_w2_l2),
+            Constraint::distance(stiffness,solid_offset+0, solid_offset+2, diag_w2_l2),
+            // Quad(6 5 3 4)
+            Constraint::distance(stiffness,solid_offset+5, solid_offset+4, w2),
+            Constraint::distance(stiffness,solid_offset+4, solid_offset+2, h2),
+            Constraint::distance(stiffness,solid_offset+5, solid_offset+3, w2),
+            Constraint::distance(stiffness,solid_offset+3, solid_offset+4, diag_w2_h2),
+            Constraint::distance(stiffness,solid_offset+5, solid_offset+2, diag_w2_h2),
+            // Quad(3 7 15 solid_particles+5)
+            Constraint::distance(stiffness,solid_offset+2, solid_offset+6, s),
+            Constraint::distance(stiffness,solid_offset+6, solid_offset+14, l),
+            Constraint::distance(stiffness,solid_offset+14, phantom_offset+5, s),
+            Constraint::distance(stiffness,phantom_offset+5, solid_offset+3, l),
+            Constraint::distance(stiffness,phantom_offset+5, solid_offset+7, diag_s_l),
+            Constraint::distance(stiffness,solid_offset+2, solid_offset+14, diag_s_l),
+            // Quad(solid_particles+5 15 10 solid_particles+1)
+            Constraint::distance(stiffness,solid_offset+14, solid_offset+9, l),
+            Constraint::distance(stiffness,solid_offset+9, phantom_offset+1, s),
+            Constraint::distance(stiffness,phantom_offset+1, phantom_offset+5, l),
+            Constraint::distance(stiffness,phantom_offset+1, solid_offset+14, diag_s_l),
+            Constraint::distance(stiffness,phantom_offset+5, solid_offset+9, diag_s_l),
+            // Quad(4 8 14 solid_particles+4)
+            Constraint::distance(stiffness,solid_offset+3, solid_offset+7, s),
+            Constraint::distance(stiffness,solid_offset+7, solid_offset+13, l),
+            Constraint::distance(stiffness,solid_offset+13, phantom_offset+4, s),
+            Constraint::distance(stiffness,phantom_offset+4, solid_offset+3, l),
+            Constraint::distance(stiffness,phantom_offset+4, solid_offset+7, diag_s_l),
+            Constraint::distance(stiffness,solid_offset+13, solid_offset+3, diag_s_l),
+            // Quad(14 solid_particles+4 solid_particles+0 9)
+            Constraint::distance(stiffness,phantom_offset+4, phantom_offset+0, l),
+            Constraint::distance(stiffness,phantom_offset+0, solid_offset+8, s),
+            Constraint::distance(stiffness,solid_offset+8, solid_offset+13, l),
+            Constraint::distance(stiffness,phantom_offset+0, solid_offset+13, diag_s_l),
+            Constraint::distance(stiffness,solid_offset+8, phantom_offset+4, diag_s_l),
+            // Quad(11 solid_particles+2 solid_particles+6 16)
+            Constraint::distance(stiffness,solid_offset+10, phantom_offset+2,w),
+            Constraint::distance(stiffness,phantom_offset+2, phantom_offset+6, l),
+            Constraint::distance(stiffness,phantom_offset+6,solid_offset+15,w),
+            Constraint::distance(stiffness,solid_offset+15, solid_offset+10, l),
+            Constraint::distance(stiffness,phantom_offset+2, solid_offset+15, diag_w_l),
+            Constraint::distance(stiffness,solid_offset+10, phantom_offset+6, diag_w_l),
+            // Quad(16 solid_particles+6 13 1)
+            Constraint::distance(stiffness,phantom_offset+6, solid_offset+12, l),
+            Constraint::distance(stiffness,solid_offset+12,solid_offset+0,w),
+            Constraint::distance(stiffness,solid_offset+0, solid_offset+15, l),
+            Constraint::distance(stiffness,phantom_offset+6, solid_offset+0, diag_w_l),
+            Constraint::distance(stiffness,solid_offset+15, solid_offset+12, diag_w_l),
+            // Quad(solid_particles+3 12 17 solid_particles+7)
+            Constraint::distance(stiffness,phantom_offset+3,solid_offset+11,w),
+            Constraint::distance(stiffness,solid_offset+11, solid_offset+16, l),
+            Constraint::distance(stiffness,solid_offset+16,phantom_offset+7, w),
+            Constraint::distance(stiffness,phantom_offset+7, phantom_offset+3, l),
+            Constraint::distance(stiffness,solid_offset+16, phantom_offset+3, diag_w_l),
+            Constraint::distance(stiffness,solid_offset+11, phantom_offset+7, diag_w_l),
+            // Quad(17 solid_particles+7 13 2)
+            Constraint::distance(stiffness,solid_offset+16, solid_offset+1, l),
+            Constraint::distance(stiffness,solid_offset+1,solid_offset+12, w),
+            Constraint::distance(stiffness,solid_offset+12, phantom_offset+7, l),
+            Constraint::distance(stiffness,solid_offset+1, phantom_offset+7, diag_w_l),
+            Constraint::distance(stiffness,solid_offset+16, solid_offset+12, diag_w_l),
+            // Depth constraints
+            Constraint::distance(stiffness, phantom_offset+8, solid_offset+10, diag_depth_half_w),
+            Constraint::distance(stiffness, phantom_offset+8, phantom_offset+2, diag_depth_half_w),
+            Constraint::distance(stiffness,phantom_offset+8, solid_offset+15, diag_depth_l_half_w),
+            Constraint::distance(stiffness, phantom_offset+9, solid_offset+11, diag_depth_half_w),
+            Constraint::distance(stiffness, phantom_offset+9, phantom_offset+3, diag_depth_half_w),
+            Constraint::distance(stiffness,phantom_offset+9, solid_offset+16, diag_depth_l_half_w),
+            Constraint::distance(stiffness,solid_offset+17, solid_offset+0, diag_depth_l_w),
+            Constraint::distance(stiffness,solid_offset+17, solid_offset+1, diag_depth_l_w),
+            Constraint::distance(stiffness,solid_offset+17, solid_offset+2, diag_depth_l_w),
+            Constraint::distance(stiffness,solid_offset+17, solid_offset+3, diag_depth_l_w),
+        ];
+
+        let muscle_constraints = vec![
+            Constraint::distance(stiffness,phantom_offset+8, solid_offset+0, w),
+            Constraint::distance(stiffness,phantom_offset+9, solid_offset+1, w),
+            Constraint::distance(stiffness,phantom_offset+6, solid_offset+17, l),
+            Constraint::distance(stiffness,phantom_offset+7, solid_offset+17, l),
+            Constraint::distance(stiffness,phantom_offset+5, solid_offset+17, l),
+            Constraint::distance(stiffness,phantom_offset+4, solid_offset+17, l),
+            Constraint::distance(stiffness,phantom_offset+1, solid_offset+6, diag_s_l2),
+            Constraint::distance(stiffness,phantom_offset+0, solid_offset+7, diag_s_l2),
+        ];
+        let muscle_constraints_offset = constraints.len() + constraints_data.len();
+        let muscle_constraints_length = muscle_constraints.len();
+
+        let bones = vec![
+            Bone::new([solid_offset+10,phantom_offset+2, phantom_offset+6, solid_offset+15], 0, 0.1),
+            Bone::new([solid_offset+15,phantom_offset+6, solid_offset+12, solid_offset+0], 1, 0.1),
+            Bone::new([phantom_offset+3, solid_offset+11,solid_offset+16,phantom_offset+7], 2, 0.1),
+            Bone::new([phantom_offset+7, solid_offset+16,solid_offset+1,solid_offset+12], 3, 0.1),
+            Bone::new([phantom_offset+1, solid_offset+9, solid_offset+14, phantom_offset+5], 4, 0.1),
+            Bone::new([phantom_offset+5, solid_offset+14, solid_offset+6, solid_offset+2], 5, 0.1),
+            Bone::new([solid_offset+8,phantom_offset+0, phantom_offset+4, solid_offset+13], 6, 0.1),
+            Bone::new([solid_offset+13, phantom_offset+4, solid_offset+3, solid_offset+7], 7, 0.1),
+            Bone::new([solid_offset+0, solid_offset+1, solid_offset+2, solid_offset+3], 8, 0.1),
+            Bone::new([solid_offset+3, solid_offset+2, solid_offset+4, solid_offset+5], 9, 0.2),
+        ];
+
+        let sensors = vec![
+            Sensor::new_movement_sensor(solid_offset+0),
+            Sensor::new_movement_sensor(solid_offset+1),
+            Sensor::new_movement_sensor(solid_offset+2),
+            Sensor::new_movement_sensor(solid_offset+4),
+            Sensor::new_movement_sensor(solid_offset+5),
+            Sensor::new_movement_sensor(solid_offset+6),
+            Sensor::new_movement_sensor(solid_offset+7),
+            Sensor::new_movement_sensor(solid_offset+8),
+            Sensor::new_movement_sensor(solid_offset+9),
+            Sensor::new_movement_sensor(solid_offset+10),
+            Sensor::new_movement_sensor(solid_offset+11),
+            Sensor::new_movement_sensor(solid_offset+15),
+            Sensor::new_movement_sensor(solid_offset+16),
+        ];
+        let muscles = vec![
+            Muscle::new(muscle_constraints_offset as u32,w2,l2),
+            Muscle::new(muscle_constraints_offset as u32+1,w2,l2),
+            Muscle::new(muscle_constraints_offset as u32+2,w2,l2),
+            Muscle::new(muscle_constraints_offset as u32+3,w2,l2),
+            Muscle::new(muscle_constraints_offset as u32+4,w,l+w),
+            Muscle::new(muscle_constraints_offset as u32+5,w,l+w),
+            Muscle::new(muscle_constraints_offset as u32+6,w,diag_s_l2),
+            Muscle::new(muscle_constraints_offset as u32+7,w,diag_s_l2),
+        ];
+        assert_eq!(muscles.len(),muscle_constraints_length);
+        let sensor_input_length = sensors.len() as u32 *3;
+        let recurrent_length = 13;
+        let weights_offset = 32;
+        let neural_net_layers = vec![
+            NeuralNetLayer::new_input_recurrent(sensor_data.len() as u32, sensor_input_length,weights_offset,recurrent_length ),
+            NeuralNetLayer::new_hidden(0,sensor_input_length, weights_offset+recurrent_length, sensor_input_length,recurrent_length+muscle_constraints_length as u32,None,Overwrite),
+            NeuralNetLayer::new_output(sensor_input_length,0, muscle_constraints_length as u32, 0,weights_offset ,recurrent_length),
+        ];
+        append_owned(solid_particle_data, solid_particles);
+        append_owned(phantom_particle_data, phantom_particles);
+        append_owned(constraints_data, constraints);
+        append_owned(constraints_data, muscle_constraints);
+        append_owned(bone_data, bones);
+        append_owned(muscle_data, muscles);
+        append_owned(sensor_data, sensors);
+        append_owned(neural_net_layer_data, neural_net_layers);
+    }
+
+    fn compute_constants(&self,cap:&FoundationsCapacity)->ParticleConstants{
+        let FoundationsCapacity{world_size, solid_particles,..} = cap;
+        let Self{sensor_data,constraints_data,phantom_particle_data,bone_data,..} = self;
+        ParticleConstants {
+            predefined_constraints: constraints_data.len() as i32,
+            collision_constraints: 0,
+            solid_particles: *solid_particles as i32,
+            phantom_particles: phantom_particle_data.len() as i32,
+            chunks_x: world_size.width() as i32,
+            chunks_z: world_size.depth() as i32,
+            bones: bone_data.len() as i32,
+            world_width: world_size.world_width()as i32,
+            world_depth: world_size.world_depth() as i32,
+            world_area: world_size.world_area()as i32,
+            total_chunks: world_size.total_chunks()as i32,
+            sensors: sensor_data.len() as u32
+        }
+    }
+    fn compute_particles(&self,cap:&FoundationsCapacity)->Vec<Particle>{
+        let mut particle_data:Vec<Particle> = vec![];
+        particle_data.extend(self.solid_particle_data.iter());
+        assert!(cap.solid_particles as usize>=self.solid_particle_data.len());
+        particle_data.extend((0..cap.solid_particles-self.solid_particle_data.len() as u64).map(|_|Particle::random()));
+        particle_data.extend(self.phantom_particle_data.iter());
+        particle_data
+    }
+}
+
+fn append_owned<X>(v:&mut Vec<X>,mut v2:Vec<X>){
+    v.append(&mut v2);
+}
+
 impl FoundationInitializer {
     pub fn particle_constants(&self) -> &StageSubBuffer<ParticleConstants, Cpu, Storage>{
         &self.particle_constants
@@ -163,276 +495,27 @@ impl FoundationInitializer {
         &self.block_properties
     }
     pub fn new(cmd_pool: &CommandPool) -> Result<Self, failure::Error> {
-        let world_size = WorldSize::new(2,2);
-        let particles = 512u64;
-        let bones = 128u64;
-        let faces = 2048u64*world_size.total_chunks() as u64;
-        let max_constraints = 128u64;
-        let grid_size = CHUNK_VOLUME_IN_CELLS as u64; // this can also be reinterpreted as extra
-        // non-persistent backing memory for auxiliary matrices and tensors used by neural networks
-        // for carrying out their computations
-        let solid_particles = 256;
-        let phantom_particles = 256;
-        let sensors = 128u64;
-        let persistent_floats = 512u64; // used as backing memory for vectors, matrices and
-        // tensors that make up various neural networks. Especially, the outputs of recursive neural networks
-        // often need to be persistent, because those outputs are later fed as inputs to the same neural net.
-        let neural_net_layers = 128u64;
-        let muscles = 128u64;
-        debug_assert!(solid_particles + phantom_particles <= particles);
+        let cap = FoundationsCapacity::new();
+        let mut data = FoundationsData::new(&cap);
+        data.setup_world_blocks();
+        data.setup_world_faces();
+        data.solid_particle_data.push(Particle::random());//player will be able to throw this particle
+        data.add_zombie(glm::vec3(2.,5.,2.), &cap);
+        let constants = data.compute_constants(&cap);
+        println!("{:?}", constants);
 
-        let mut world_blocks = WorldBlocks::new(world_size.clone());
-        world_blocks.no_update_fill_level(0, 1, BEDROCK);
-        world_blocks.no_update_fill_level(1, 1, DIRT);
-        world_blocks.no_update_fill_level(2, 1, GRASS);
-        world_blocks.no_update_fill_level(10, 1, GLASS);
-        world_blocks.no_update_outline(5, 2, 5, 5, 5, 5, PLANK);
-        // world_blocks.no_update_set_block(1,2,1,AIR);
-        let mut world_faces = WorldFaces::with_capacity(world_size.clone(), faces as usize);
-        world_faces.generate_faces(&world_blocks);
-        let w2 = 0.4f32;
-        let w = w2/2.;
-        let h2 = 0.4f32;
-        let h = h2/2.;
-        let l2 = 0.6f32;
-        let l = l2/2.;
-        let s = 0.2f32;
-        let diag_w2_h2 = (w2 * w2 + h2 * h2).sqrt();
-        let diag_w2_l2 = (w2 * w2 + l2 * l2).sqrt();
-        let diag_s_l2 = (s*s+ l2 * l2).sqrt();
-        let diag_w_l2 = (w*w+ l2 * l2).sqrt();
-        let diag_s_l = (s*s+ l * l).sqrt();
-        let diag_w_l = (w*w+ l * l).sqrt();
-        let depth = 0.1;
-        let diag_depth_half_w = (w*w/4.+depth*depth).sqrt();
-        let diag_depth_l_half_w = (w*w/4.+l*l+depth*depth).sqrt();
-        let diag_depth_l_w = (w*w+l*l+depth*depth).sqrt();
-        let mut particles_data: Vec<Particle> = std::iter::repeat_with(Particle::random).take((solid_particles+phantom_particles) as usize).collect();
-        particles_data[1].new_position = glm::vec3(2., 7., 2.);
-        particles_data[1].old_position = particles_data[1].new_position;
-        particles_data[2].new_position = particles_data[1].new_position + glm::vec3(w2, 0., 0.);
-        particles_data[2].old_position = particles_data[2].new_position;
-        particles_data[3].new_position = particles_data[1].new_position + glm::vec3(w2, l2, 0.);
-        particles_data[3].old_position = particles_data[3].new_position;
-        particles_data[4].new_position = particles_data[1].new_position + glm::vec3(0., l2, 0.);
-        particles_data[4].old_position = particles_data[4].new_position;
-        particles_data[5].new_position = particles_data[1].new_position + glm::vec3(w2, h2 + l2, 0.);
-        particles_data[5].old_position = particles_data[5].new_position;
-        particles_data[6].new_position = particles_data[1].new_position + glm::vec3(0., h2 + l2, 0.);
-        particles_data[6].old_position = particles_data[6].new_position;
-        particles_data[7].new_position = particles_data[1].new_position + glm::vec3(w2 +s, l2, 0.);
-        particles_data[7].old_position = particles_data[7].new_position;
-        particles_data[8].new_position = particles_data[1].new_position + glm::vec3(-s, l2, 0.);
-        particles_data[8].old_position = particles_data[8].new_position;
-        particles_data[9].new_position = particles_data[1].new_position + glm::vec3(-s, 0., 0.);
-        particles_data[9].old_position = particles_data[9].new_position;
-        particles_data[10].new_position = particles_data[1].new_position + glm::vec3(w2 +s, 0., 0.);
-        particles_data[10].old_position = particles_data[10].new_position;
-        particles_data[11].new_position = particles_data[1].new_position + glm::vec3(0., -l2, 0.);
-        particles_data[11].old_position = particles_data[11].new_position;
-        particles_data[12].new_position = particles_data[1].new_position + glm::vec3(w2, -l2, 0.);
-        particles_data[12].old_position = particles_data[12].new_position;
-        particles_data[13].new_position = particles_data[1].new_position + glm::vec3(w, 0., 0.);
-        particles_data[13].old_position = particles_data[13].new_position;
-        particles_data[14].new_position = particles_data[1].new_position + glm::vec3(-s, l, 0.);
-        particles_data[14].old_position = particles_data[14].new_position;
-        particles_data[15].new_position = particles_data[1].new_position + glm::vec3(w2+s, l, 0.);
-        particles_data[15].old_position = particles_data[15].new_position;
-        particles_data[16].new_position = particles_data[1].new_position + glm::vec3(0., -l, 0.);
-        particles_data[16].old_position = particles_data[16].new_position;
-        particles_data[17].new_position = particles_data[1].new_position + glm::vec3(w, -l, 0.);
-        particles_data[17].old_position = particles_data[17].new_position;
-        particles_data[18].new_position = particles_data[1].new_position + glm::vec3(w, l, depth);
-        particles_data[18].old_position = particles_data[18].new_position;
-        particles_data[solid_particles as usize+0].new_position = particles_data[1].new_position + glm::vec3(0., 0., 0.);
-        particles_data[solid_particles as usize+0].old_position = particles_data[solid_particles as usize+0].new_position;
-        particles_data[solid_particles as usize+1].new_position = particles_data[1].new_position + glm::vec3(w2, 0., 0.);
-        particles_data[solid_particles as usize+1].old_position = particles_data[solid_particles as usize +1].new_position;
-        particles_data[solid_particles as usize+2].new_position = particles_data[1].new_position + glm::vec3(w, -l2, 0.);
-        particles_data[solid_particles as usize+2].old_position = particles_data[solid_particles as usize +2].new_position;
-        particles_data[solid_particles as usize+3].new_position = particles_data[1].new_position + glm::vec3(w, -l2, 0.);
-        particles_data[solid_particles as usize+3].old_position = particles_data[solid_particles as usize +3].new_position;
-        particles_data[solid_particles as usize+4].new_position = particles_data[1].new_position + glm::vec3(0., l, 0.);
-        particles_data[solid_particles as usize+4].old_position = particles_data[solid_particles as usize +4].new_position;
-        particles_data[solid_particles as usize+5].new_position = particles_data[1].new_position + glm::vec3(w2, l, 0.);
-        particles_data[solid_particles as usize+5].old_position = particles_data[solid_particles as usize +5].new_position;
-        particles_data[solid_particles as usize+6].new_position = particles_data[1].new_position + glm::vec3(w, -l, 0.);
-        particles_data[solid_particles as usize+6].old_position = particles_data[solid_particles as usize +6].new_position;
-        particles_data[solid_particles as usize+7].new_position = particles_data[1].new_position + glm::vec3(w, -l, 0.);
-        particles_data[solid_particles as usize+7].old_position = particles_data[solid_particles as usize +7].new_position;
-        particles_data[solid_particles as usize+8].new_position = particles_data[1].new_position + glm::vec3(w/2., -l2, -depth);
-        particles_data[solid_particles as usize+8].old_position = particles_data[solid_particles as usize +8].new_position;
-        particles_data[solid_particles as usize+9].new_position = particles_data[1].new_position + glm::vec3(w+w/2., -l2, -depth);
-        particles_data[solid_particles as usize+9].old_position = particles_data[solid_particles as usize +9].new_position;
-        let stiffness = 0.2f32;
-        let mut predefined_constraints = vec![
-            // Quad(1 2 3 4)
-            Constraint::distance(stiffness,1, 2, w2),
-            Constraint::distance(stiffness,2, 3, l2),
-            Constraint::distance(stiffness,3, 4, w2),
-            Constraint::distance(stiffness,4, 1, l2),
-            Constraint::distance(stiffness,4, 2, diag_w2_l2),
-            Constraint::distance(stiffness,1, 3, diag_w2_l2),
-            // Quad(6 5 3 4)
-            Constraint::distance(stiffness,6, 5, w2),
-            Constraint::distance(stiffness,5, 3, h2),
-            Constraint::distance(stiffness,6, 4, w2),
-            Constraint::distance(stiffness,4, 5, diag_w2_h2),
-            Constraint::distance(stiffness,6, 3, diag_w2_h2),
-            // Quad(3 7 15 solid_particles+5)
-            Constraint::distance(stiffness,3, 7, s),
-            Constraint::distance(stiffness,7, 15, l),
-            Constraint::distance(stiffness,15, solid_particles as u32+5, s),
-            Constraint::distance(stiffness,solid_particles as u32+5, 3, l),
-            Constraint::distance(stiffness,solid_particles as u32+5, 7, diag_s_l),
-            Constraint::distance(stiffness,3, 15, diag_s_l),
-            // Quad(solid_particles+5 15 10 solid_particles+1)
-            Constraint::distance(stiffness,15, 10, l),
-            Constraint::distance(stiffness,10, solid_particles as u32+1, s),
-            Constraint::distance(stiffness,solid_particles as u32+1, solid_particles as u32+5, l),
-            Constraint::distance(stiffness,solid_particles as u32+1, 15, diag_s_l),
-            Constraint::distance(stiffness,solid_particles as u32+5, 10, diag_s_l),
-            // Quad(4 8 14 solid_particles+4)
-            Constraint::distance(stiffness,4, 8, s),
-            Constraint::distance(stiffness,8, 14, l),
-            Constraint::distance(stiffness,14, solid_particles as u32+4, s),
-            Constraint::distance(stiffness,solid_particles as u32+4, 4, l),
-            Constraint::distance(stiffness,solid_particles as u32+4, 8, diag_s_l),
-            Constraint::distance(stiffness,14, 4, diag_s_l),
-            // Quad(14 solid_particles+4 solid_particles+0 9)
-            Constraint::distance(stiffness,solid_particles as u32+4, solid_particles as u32+0, l),
-            Constraint::distance(stiffness,solid_particles as u32+0, 9, s),
-            Constraint::distance(stiffness,9, 14, l),
-            Constraint::distance(stiffness,solid_particles as u32+0, 14, diag_s_l),
-            Constraint::distance(stiffness,9, solid_particles as u32+4, diag_s_l),
-            // Quad(11 solid_particles+2 solid_particles+6 16)
-            Constraint::distance(stiffness,11, solid_particles as u32+2,w),
-            Constraint::distance(stiffness,solid_particles as u32+2, solid_particles as u32+6, l),
-            Constraint::distance(stiffness,solid_particles as u32+6,16,w),
-            Constraint::distance(stiffness,16, 11, l),
-            Constraint::distance(stiffness,solid_particles as u32+2, 16, diag_w_l),
-            Constraint::distance(stiffness,11, solid_particles as u32+6, diag_w_l),
-            // Quad(16 solid_particles+6 13 1)
-            Constraint::distance(stiffness,solid_particles as u32+6, 13, l),
-            Constraint::distance(stiffness,13,1,w),
-            Constraint::distance(stiffness,1, 16, l),
-            Constraint::distance(stiffness,solid_particles as u32+6, 1, diag_w_l),
-            Constraint::distance(stiffness,16, 13, diag_w_l),
-            // Quad(solid_particles+3 12 17 solid_particles+7)
-            Constraint::distance(stiffness,solid_particles as u32+3,12,w),
-            Constraint::distance(stiffness,12, 17, l),
-            Constraint::distance(stiffness,17,solid_particles as u32+7, w),
-            Constraint::distance(stiffness,solid_particles as u32+7, solid_particles as u32+3, l),
-            Constraint::distance(stiffness,17, solid_particles as u32+3, diag_w_l),
-            Constraint::distance(stiffness,12, solid_particles as u32+7, diag_w_l),
-            // Quad(17 solid_particles+7 13 2)
-            Constraint::distance(stiffness,17, 2, l),
-            Constraint::distance(stiffness,2,13, w),
-            Constraint::distance(stiffness,13, solid_particles as u32+7, l),
-            Constraint::distance(stiffness,2, solid_particles as u32+7, diag_w_l),
-            Constraint::distance(stiffness,17, 13, diag_w_l),
-            // Depth constraints
-            Constraint::distance(stiffness, solid_particles as u32+8, 11, diag_depth_half_w),
-            Constraint::distance(stiffness, solid_particles as u32+8, solid_particles as u32+2, diag_depth_half_w),
-            Constraint::distance(stiffness,solid_particles as u32+8, 16, diag_depth_l_half_w),
-            Constraint::distance(stiffness, solid_particles as u32+9, 12, diag_depth_half_w),
-            Constraint::distance(stiffness, solid_particles as u32+9, solid_particles as u32+3, diag_depth_half_w),
-            Constraint::distance(stiffness,solid_particles as u32+9, 17, diag_depth_l_half_w),
-            Constraint::distance(stiffness,18, 1, diag_depth_l_w),
-            Constraint::distance(stiffness,18, 2, diag_depth_l_w),
-            Constraint::distance(stiffness,18, 3, diag_depth_l_w),
-            Constraint::distance(stiffness,18, 4, diag_depth_l_w),
-        ];
-        let muscle_constraints_offset = predefined_constraints.len();
-        predefined_constraints.append(&mut vec![
-            Constraint::distance(stiffness,solid_particles as u32+8, 1, w),
-            Constraint::distance(stiffness,solid_particles as u32+9, 2, w),
-            Constraint::distance(stiffness,solid_particles as u32+6, 18, l),
-            Constraint::distance(stiffness,solid_particles as u32+7, 18, l),
-            Constraint::distance(stiffness,solid_particles as u32+5, 18, l),
-            Constraint::distance(stiffness,solid_particles as u32+4, 18, l),
-            Constraint::distance(stiffness,solid_particles as u32+1, 7, diag_s_l2),
-            Constraint::distance(stiffness,solid_particles as u32+0, 8, diag_s_l2),
-        ]);
-        let muscle_constraints_length = predefined_constraints.len() - muscle_constraints_offset;
-
-        let block_properties_data:Vec<BlockProp> = BLOCKS.iter().map(|p|p.prop).collect();
-
-        let bone_data = vec![
-            Bone::new([11,solid_particles as u32+2, solid_particles as u32+6, 16], 0, 0.1),
-            Bone::new([16,solid_particles as u32+6, 13, 1], 1, 0.1),
-            Bone::new([solid_particles as u32+3, 12,17,solid_particles as u32+7], 2, 0.1),
-            Bone::new([solid_particles as u32+7, 17,2,13], 3, 0.1),
-            Bone::new([solid_particles as u32+1, 10, 15, solid_particles as u32+5], 4, 0.1),
-            Bone::new([solid_particles as u32+5, 15, 7, 3], 5, 0.1),
-            Bone::new([9,solid_particles as u32+0, solid_particles as u32+4, 14], 6, 0.1),
-            Bone::new([14, solid_particles as u32+4, 4, 8], 7, 0.1),
-            Bone::new([1, 2, 3, 4], 8, 0.1),
-            Bone::new([4, 3, 5, 6], 9, 0.2),
-        ];
-
-        let sensor_data = vec![
-            Sensor::new_movement_sensor(1),
-            Sensor::new_movement_sensor(2),
-            Sensor::new_movement_sensor(4),
-            Sensor::new_movement_sensor(5),
-            Sensor::new_movement_sensor(6),
-            Sensor::new_movement_sensor(7),
-            Sensor::new_movement_sensor(8),
-            Sensor::new_movement_sensor(9),
-            Sensor::new_movement_sensor(10),
-            Sensor::new_movement_sensor(11),
-            Sensor::new_movement_sensor(12),
-            Sensor::new_movement_sensor(16),
-            Sensor::new_movement_sensor(17),
-        ];
-        let muscle_data = vec![
-            Muscle::new(muscle_constraints_offset as u32,w2,l2),
-            Muscle::new(muscle_constraints_offset as u32+1,w2,l2),
-            Muscle::new(muscle_constraints_offset as u32+2,w2,l2),
-            Muscle::new(muscle_constraints_offset as u32+3,w2,l2),
-            Muscle::new(muscle_constraints_offset as u32+4,w,l+w),
-            Muscle::new(muscle_constraints_offset as u32+5,w,l+w),
-            Muscle::new(muscle_constraints_offset as u32+6,w,diag_s_l2),
-            Muscle::new(muscle_constraints_offset as u32+7,w,diag_s_l2),
-        ];
-        let persistent_floats_data = (0..persistent_floats).map(|_|rand::random::<f32>()).collect::<Vec<f32>>();
-
-        let constants = ParticleConstants {
-            predefined_constraints: predefined_constraints.len() as i32,
-            collision_constraints: 0,
-            solid_particles: solid_particles as i32,
-            phantom_particles: phantom_particles as i32,
-            chunks_x: world_size.width() as i32,
-            chunks_z: world_size.depth() as i32,
-            bones: bone_data.len() as i32,
-            world_width: world_size.world_width()as i32,
-            world_depth: world_size.world_depth() as i32,
-            world_area: world_size.world_area()as i32,
-            total_chunks: world_size.total_chunks()as i32,
-            sensors: sensor_data.len() as u32
-        };
-        let sensor_input_length = 13*3;
-        let recurrent_length = 13;
-        let weights_offset = 32;
-        let neural_net_layer_data = vec![
-            NeuralNetLayer::new_input_recurrent(0, sensor_input_length,weights_offset,recurrent_length ),
-            NeuralNetLayer::new_hidden(0,sensor_input_length, weights_offset+recurrent_length, sensor_input_length,recurrent_length+muscle_constraints_length as u32,None,Overwrite),
-            NeuralNetLayer::new_output(sensor_input_length,0, muscle_constraints_length as u32, 0,weights_offset ,recurrent_length),
-        ];
-
-        let particles_in_bytes = std::mem::size_of::<Particle>() as u64 * particles;
-        let faces_in_bytes = std::mem::size_of::<Face>() as u64 * faces;
-        let grid_in_bytes = std::mem::size_of::<u32>() as u64 * grid_size;
-        let block_properties_in_bytes = std::mem::size_of_val(block_properties_data.as_slice()) as u64;
-        let world_in_bytes = (std::mem::size_of::<Block>()*world_size.world_volume()) as u64;
-        let constraints_in_bytes = std::mem::size_of::<Constraint>() as u64 * max_constraints;
-        let bones_in_bytes = std::mem::size_of::<Bone>() as u64 * bones;
+        let particles_in_bytes = std::mem::size_of::<Particle>() as u64 * cap.particles;
+        let faces_in_bytes = std::mem::size_of::<Face>() as u64 * cap.faces;
+        let grid_in_bytes = std::mem::size_of::<u32>() as u64 * cap.grid_size;
+        let block_properties_in_bytes = std::mem::size_of_val(data.block_properties_data.as_slice()) as u64;
+        let world_in_bytes = (std::mem::size_of::<Block>()*cap.world_size.world_volume()) as u64;
+        let constraints_in_bytes = std::mem::size_of::<Constraint>() as u64 * cap.max_constraints;
+        let bones_in_bytes = std::mem::size_of::<Bone>() as u64 * cap.bones;
         let constants_in_bytes = std::mem::size_of_val(&constants) as u64;
-        let sensors_in_bytes = std::mem::size_of::<Sensor>() as u64 * sensors;
-        let persistent_floats_in_bytes = std::mem::size_of::<f32>() as u64 * persistent_floats;
-        let neural_net_layers_in_bytes = std::mem::size_of::<NeuralNetLayer>() as u64 * neural_net_layers;
-        let muscles_in_bytes = std::mem::size_of::<Muscle>() as u64 * muscles;
+        let sensors_in_bytes = std::mem::size_of::<Sensor>() as u64 * cap.sensors;
+        let persistent_floats_in_bytes = std::mem::size_of::<f32>() as u64 * cap.persistent_floats;
+        let neural_net_layers_in_bytes = std::mem::size_of::<NeuralNetLayer>() as u64 * cap.neural_net_layers;
+        let muscles_in_bytes = std::mem::size_of::<Muscle>() as u64 * cap.muscles;
 
         let super_buffer: SubBuffer<u8, Storage> = SubBuffer::with_capacity(cmd_pool.device(),
                                                                             particles_in_bytes +
@@ -487,30 +570,31 @@ impl FoundationInitializer {
 
         let particle_constants = StageBuffer::wrap(cmd_pool, &[constants], constants_buffer)?;
 
-        let particles = StageBuffer::wrap(cmd_pool, &particles_data, particle_buffer)?;
+        let mut particle_data = data.compute_particles(&cap);
+        let particles = StageBuffer::wrap(cmd_pool, &particle_data, particle_buffer)?;
 
-        let face_count_per_chunk_buffer = face_buffer.sub(..std::mem::size_of::<Face>() as u64 *world_size.total_chunks() as u64*2);
-        let opaque_and_transparent_face_buffer = face_buffer.sub(std::mem::size_of::<Face>() as u64  * world_size.total_chunks() as u64*2..);
-        let faces = StageBuffer::wrap(cmd_pool,  world_faces.as_slice(), face_buffer)?;
+        let face_count_per_chunk_buffer = face_buffer.sub(..std::mem::size_of::<Face>() as u64 *cap.world_size.total_chunks() as u64*2);
+        let opaque_and_transparent_face_buffer = face_buffer.sub(std::mem::size_of::<Face>() as u64  * cap.world_size.total_chunks() as u64*2..);
+        let faces = StageBuffer::wrap(cmd_pool,  data.world_faces.as_slice(), face_buffer)?;
 
         let mut collision_grid = Submitter::new(grid_buffer, cmd_pool)?;
         fill_submit(&mut collision_grid, u32::MAX)?;
 
-        let block_properties = StageBuffer::wrap(cmd_pool, &block_properties_data, block_properties_buffer)?;
+        let block_properties = StageBuffer::wrap(cmd_pool, &data.block_properties_data, block_properties_buffer)?;
 
-        let bones = StageBuffer::wrap(cmd_pool, &bone_data, bones_buffer)?;
+        let bones = StageBuffer::wrap(cmd_pool, &data.bone_data, bones_buffer)?;
 
-        let sensors = StageBuffer::wrap(cmd_pool, &sensor_data, sensors_buffer)?;
+        let sensors = StageBuffer::wrap(cmd_pool, &data.sensor_data, sensors_buffer)?;
 
-        let persistent_floats = StageBuffer::wrap(cmd_pool, &persistent_floats_data, persistent_floats_buffer)?;
+        let persistent_floats = StageBuffer::wrap(cmd_pool, &data.persistent_floats_data, persistent_floats_buffer)?;
 
-        let world = StageBuffer::wrap(cmd_pool,  world_blocks.as_slice(), world_buffer)?;
+        let world = StageBuffer::wrap(cmd_pool,  data.world_blocks.as_slice(), world_buffer)?;
 
-        let constraints = StageBuffer::wrap(cmd_pool, &predefined_constraints, constraint_buffer)?;
+        let constraints = StageBuffer::wrap(cmd_pool, &data.constraints_data, constraint_buffer)?;
 
-        let neural_net_layers = StageBuffer::wrap(cmd_pool, &neural_net_layer_data, neural_net_layers_buffer)?;
+        let neural_net_layers = StageBuffer::wrap(cmd_pool, &data.neural_net_layer_data, neural_net_layers_buffer)?;
 
-        let muscles = StageBuffer::wrap(cmd_pool, &muscle_data, muscles_buffer)?;
+        let muscles = StageBuffer::wrap(cmd_pool, &data.muscle_data, muscles_buffer)?;
 
         let sampler = Sampler::new(cmd_pool.device(), vk::Filter::NEAREST, true)?;
 
@@ -530,20 +614,20 @@ impl FoundationInitializer {
             }
         }
         let indirect_dispatch_data = vec![
-            dispatch_indirect(phantom_particles.max(solid_particles) as usize ),// collision_detection.comp
+            dispatch_indirect(cap.phantom_particles.max(cap.solid_particles) as usize ),// collision_detection.comp
             dispatch_indirect(0), // solve_constraints.comp
-            dispatch_indirect(bone_data.len() ), // update_bones.comp
-            dispatch_indirect(sensor_data.len() ), // agent_sensory_input_update.comp
+            dispatch_indirect(data.bone_data.len() ), // update_bones.comp
+            dispatch_indirect(data.sensor_data.len() ), // agent_sensory_input_update.comp
             vk::DispatchIndirectCommand {  // feed_forward_net.comp
-                x: (neural_net_layer_data.len()/3) as u32,
+                x: (data.neural_net_layer_data.len()/3) as u32,
                 y: 1,
                 z: 1,
             }
         ];
         let indirect_draw_data = vec![
-            draw_indirect(36, bone_data.len() as u32),// bones.vert
-            draw_indirect(6, world_faces.len() as u32),// block.vert
-            draw_indirect((solid_particles+phantom_particles) as u32, 1),// particles.vert
+            draw_indirect(36, data.bone_data.len() as u32),// bones.vert
+            draw_indirect(6, data.world_faces.len() as u32),// block.vert
+            draw_indirect(particle_data.len() as u32, 1),// particles.vert
         ];
         let indirect_dispatch_in_bytes = std::mem::size_of_val(indirect_dispatch_data.as_slice()) as u64;
         let indirect_draw_in_bytes = std::mem::size_of_val(indirect_draw_data.as_slice()) as u64;
@@ -567,7 +651,7 @@ impl FoundationInitializer {
             block_properties,
             faces,
             world,
-            world_size,
+            world_size:cap.world_size.clone(),
             sampler,
             particles,
             constraints,
