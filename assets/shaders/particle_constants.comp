@@ -17,7 +17,7 @@ struct ParticleConstants{
     int world_depth; // precomputed chunks_z*CHUNK_DEPTH
     int world_area; // world_depth * world_width
     int total_chunks; // chunks_x * chunks_z
-    int dummy1;
+    uint sensors;
 };
 
 

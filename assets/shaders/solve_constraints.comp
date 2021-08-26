@@ -5,26 +5,28 @@
 #define IS_AVAILABLE_BUFFER_PARTICLES
 #include "constants.comp"
 
-layout (local_size_x = 32) in;
+#define GROUP_SIZE 32
+
+layout (local_size_x = GROUP_SIZE) in;
 
 #include "physics_descriptors.comp"
 
 void main(){
-    const float stiffness = 0.2;
-    const uint gID = gl_GlobalInvocationID.x;
-    if(gID < constants.collision_constraints){
-        Constraint c = constraints[gID];
-        const float min_dist = 0;
-        const float max_dist = c.constant_param < 0 ? c.constant_param*c.constant_param : uintBitsToFloat(0x7F800000); // 0x7F800000 is infinity
-        c.constant_param = abs(c.constant_param);
+    uint gID = gl_GlobalInvocationID.x;
+    const uint collision_constraints =  constants.collision_constraints;
+    if(gID < collision_constraints){ //contains both predefined constraints + collision constraints
         for (int pass=0;pass<GAUSS_SEIDEL_PASSES;pass++){
+            Constraint c = constraints[gID];
+            const float min_dist = 0;
+            const float max_dist = c.constant_param < 0 ? c.constant_param*c.constant_param : uintBitsToFloat(0x7F800000); // 0x7F800000 is infinity
+            c.constant_param = abs(c.constant_param);
             vec3 p1 = particles[c.particle1].new_position;
             vec3 p2 = particles[c.particle2].new_position;
             const vec3 distance_vector = p1 - p2;
             const float distance_square = dot(distance_vector, distance_vector);
             if (min_dist < distance_square && distance_square <= max_dist ) {
-                const float distance = sqrt(distance_square);//TODO: maybe I should approximate sqrt with less expensive function?
-                const vec3 collision_projection_delta =  stiffness * 0.5 * (distance - c.constant_param)*distance_vector/distance;
+                const float distance = sqrt(distance_square); //TODO: maybe I should approximate sqrt with less expensive function?
+                const vec3 collision_projection_delta =  c.stiffness * 0.5 * (distance - c.constant_param)*distance_vector/distance;
                 atomicAdd(particles[c.particle1].new_position.x, -collision_projection_delta.x);
                 atomicAdd(particles[c.particle1].new_position.y, -collision_projection_delta.y);
                 atomicAdd(particles[c.particle1].new_position.z, -collision_projection_delta.z);
@@ -32,6 +34,13 @@ void main(){
                 atomicAdd(particles[c.particle2].new_position.y, collision_projection_delta.y);
                 atomicAdd(particles[c.particle2].new_position.z, collision_projection_delta.z);
             }
+            gID += GROUP_SIZE; // this rotation of indices allows for making a good tradeoff between
+            if(gID>=collision_constraints)gID-=collision_constraints; // gauss-seidler and jacobi methods.
+            // Also, keep in mind that the order of execution of different work subgroups could be arbitrary.
+            // If we didn't rotate those indices, then it would be possible that first subgroup integrates one half of
+            // some rigid body and afterwards a second subgroup integrates another half. It would result in those two
+            // halves being torn apart. Thanks to this rotation, no subgroup has exclusive ownership of any
+            // constraint and the order of execution no longer has such huge effect on integration.
         }
     }
 }

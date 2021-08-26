@@ -12,5 +12,5 @@ pub struct ParticleConstants {
     pub world_depth:i32, // precomputed chunks_z*CHUNK_DEPTH
     pub world_area:i32, // world_depth * world_width
     pub total_chunks:i32, // chunks_x * chunks_z
-    pub dummy1:i32,
+    pub sensors:u32,
 }

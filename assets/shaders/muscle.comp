@@ -1,0 +1,10 @@
+#ifndef MUSCLE_COMP
+#define MUSCLE_COMP
+
+struct Muscle{
+    uint constraint_id; // distance constraint that represents this muscle
+    float min_length; // length of muscle when it's maximally contracted
+    float max_length; // length of muscle when it's maximally relaxed
+};
+
+#endif // MUSCLE_COMP

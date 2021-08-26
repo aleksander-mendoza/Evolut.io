@@ -35,6 +35,15 @@ layout(std430, set = 0, binding = 3) buffer CollisionGrid{
 };
 #endif // IS_AVAILABLE_BUFFER_COLLISION_GRID
 
+#ifdef IS_AVAILABLE_BUFFER_AUXILIARY_FLOATS
+#ifdef IS_AVAILABLE_BUFFER_COLLISION_GRID
+#error It is not allowed to use both IS_AVAILABLE_BUFFER_COLLISION_GRID and IS_AVAILABLE_BUFFER_AUXILIARY_FLOATS at the same time
+#endif
+layout(std430, set = 0, binding = 3) buffer AuxiliaryFloats{
+    float auxiliary_floats[];
+};
+#endif // IS_AVAILABLE_BUFFER_AUXILIARY_FLOATS
+
 #ifdef IS_AVAILABLE_BUFFER_CONSTRAINTS
 #include "constraint.comp"
 layout(std430, set = 0, binding = 4) buffer Constraints{
@@ -44,14 +53,8 @@ layout(std430, set = 0, binding = 4) buffer Constraints{
 
 #ifdef IS_AVAILABLE_BUFFER_INDIRECT
 #include "indirect.comp"
-#define DISPATCH_INDIRECT_COLLISION_DETECTION 0
-#define DISPATCH_INDIRECT_SOLVE_CONSTRAINTS 1
-#define DISPATCH_INDIRECT_UPDATE_BONES 2
-#define DRAW_INDIRECT_BONES 0
-#define DRAW_INDIRECT_BLOCK 1
-#define DRAW_INDIRECT_PARTICLES 2
 layout(std430, set = 0, binding = 5) buffer Indirect{
-    DispatchIndirectCommand[3] dispatch_indirect;
+    DispatchIndirectCommand[5] dispatch_indirect;
     DrawIndirectCommand[3] draw_indirect;
 };
 #endif //IS_AVAILABLE_BUFFER_INDIRECT
@@ -65,7 +68,6 @@ layout(std430, set = 0, binding = 6) buffer Bones{
 
 
 #ifdef IS_AVAILABLE_BUFFER_WORLD
-#include "block.comp"
 layout(std430, set = 0, binding = 7) buffer World{
     uint world[];
 };
@@ -92,9 +94,40 @@ layout(std430, set = 0, binding = 8) buffer Faces{
 #endif //IS_AVAILABLE_BUFFER_FACES
 
 #ifdef IS_AVAILABLE_BUFFER_BLOCK_PROPS
+#include "block.comp"
 layout(std430, set = 0, binding = 9) buffer BlockProps{
     BlockProp block_props[];
 };
 #endif // IS_AVAILABLE_BUFFER_BLOCK_PROPS
+
+
+#ifdef IS_AVAILABLE_BUFFER_SENSORS
+#include "sensor.comp"
+layout(std430, set = 0, binding = 10) buffer Sensors{
+    Sensor sensors[];
+};
+#endif
+
+#ifdef IS_AVAILABLE_BUFFER_PERSISTENT_FLOATS
+layout(std430, set = 0, binding = 11) buffer PersistentFloats{
+    float persistent_floats[];
+};
+#endif
+
+#ifdef IS_AVAILABLE_BUFFER_NEURAL_NET_LAYERS
+#include "neural_net_layer.comp"
+layout(std430, set = 0, binding = 12) buffer NeuralNetLayers{
+    NeuralNetLayer neural_net_layers[];
+};
+#endif
+
+
+#ifdef IS_AVAILABLE_BUFFER_MUSCLES
+#include "muscle.comp"
+layout(std430, set = 0, binding = 13) buffer Muscles{
+    Muscle muscles[];
+};
+#endif
+
 
 #endif //PHYSICS_DESCRIPTORS_COMP

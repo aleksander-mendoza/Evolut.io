@@ -1,0 +1,20 @@
+#ifndef SENSOR_COMP
+#define SENSOR_COMP
+
+#define SENSOR_TYPE_PARTICLE_MOVEMENT 1
+#define SENSOR_TYPE_PARTICLE_POSITION 2
+struct Sensor{
+    int type;
+    uint data0;
+    uint data1;
+};
+
+Sensor makeMovementSensor(uint particle_idx){
+    return Sensor(SENSOR_TYPE_PARTICLE_MOVEMENT,particle_idx,0);
+}
+
+Sensor makeRotationSensor(uint bone_root_particle_idx, uint bone_endpoint_particle_idx){
+    return Sensor(SENSOR_TYPE_PARTICLE_POSITION,bone_root_particle_idx,bone_endpoint_particle_idx);
+}
+
+#endif // SENSOR_COMP

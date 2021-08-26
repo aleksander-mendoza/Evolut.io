@@ -1,0 +1,73 @@
+#ifndef NEURAL_NET_LAYER_COMP
+#define NEURAL_NET_LAYER_COMP
+struct NeuralNetLayer{
+    uint[6] data;
+};
+
+uint neural_net_layer_input_offset(const NeuralNetLayer l){
+    return l.data[0];
+}
+uint neural_net_layer_input_length(const NeuralNetLayer l){
+    return l.data[1];
+}
+uint neural_net_layer_weights_offset(const NeuralNetLayer l){
+    return l.data[2];
+}
+uint neural_net_layer_output_offset(const NeuralNetLayer l){
+    return l.data[3];
+}
+uint neural_net_layer_output_length(const NeuralNetLayer l){
+    return l.data[4];
+}
+uint neural_net_layer_next_layer(const NeuralNetLayer l){
+    return l.data[5]/2;
+}
+bool neural_net_layer_overwrite(const NeuralNetLayer l){
+    return bool(l.data[5] & 1u);
+}
+bool neural_net_layer_has_next_layer(const NeuralNetLayer l){
+    return neural_net_layer_next_layer(l)<65536;
+}
+uint neural_net_layer_weights_length(const NeuralNetLayer l){
+    return neural_net_layer_input_length(l)*neural_net_layer_output_length(l);
+}
+
+uint neural_net_input_region0_offset(const NeuralNetLayer l){
+    return l.data[0];
+}
+uint neural_net_input_region1_offset(const NeuralNetLayer l){
+    return l.data[1];
+}
+uint neural_net_input_region2_offset(const NeuralNetLayer l){
+    return l.data[2];
+}
+uint neural_net_input_region0_length(const NeuralNetLayer l){
+    return l.data[3];
+}
+uint neural_net_input_region1_length(const NeuralNetLayer l){
+    return l.data[4];
+}
+uint neural_net_input_region2_length(const NeuralNetLayer l){
+    return l.data[5];
+}
+
+
+uint neural_net_output_muscle_internal_offset(const NeuralNetLayer l){
+    return l.data[0];
+}
+uint neural_net_output_muscle_external_offset(const NeuralNetLayer l){
+    return l.data[1];
+}
+uint neural_net_output_muscle_length(const NeuralNetLayer l){
+    return l.data[2];
+}
+uint neural_net_output_recurrent_internal_offset(const NeuralNetLayer l){
+    return l.data[3];
+}
+uint neural_net_output_recurrent_external_offset(const NeuralNetLayer l){
+    return l.data[4];
+}
+uint neural_net_output_recurrent_length(const NeuralNetLayer l){
+    return l.data[5];
+}
+#endif // NEURAL_NET_LAYER_COMP

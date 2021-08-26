@@ -34,6 +34,8 @@ pub struct PhysicsResources {
     solve_constraints: ShaderModule<Compute>,
     update_bones: ShaderModule<Compute>,
     particle_uniform: HostBuffer<PlayerEvent, Uniform>,
+    feed_forward_net: ShaderModule<Compute>,
+    agent_sensory_inputs: ShaderModule<Compute>,
 }
 
 
@@ -45,8 +47,10 @@ impl PhysicsResources {
         let collision_detection = ShaderModule::new(include_glsl!("assets/shaders/collision_detection.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let solve_constraints = ShaderModule::new(include_glsl!("assets/shaders/solve_constraints.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let update_bones = ShaderModule::new(include_glsl!("assets/shaders/update_bones.comp", kind: comp) as &[u32], cmd_pool.device())?;
+        let feed_forward_net = ShaderModule::new(include_glsl!("assets/shaders/feed_forward_net.comp", kind: comp, target: vulkan1_1) as &[u32], cmd_pool.device())?;
+        let agent_sensory_inputs = ShaderModule::new(include_glsl!("assets/shaders/agent_sensory_input_update.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let particle_uniform = HostBuffer::new(cmd_pool.device(), &[PlayerEvent::nothing()])?;
-        Ok(Self { collision_detection, solve_constraints, particle_uniform, update_bones })
+        Ok(Self { collision_detection, solve_constraints, particle_uniform, update_bones, agent_sensory_inputs, feed_forward_net })
     }
 }
 impl ComputeResources for PhysicsResources{
@@ -57,7 +61,9 @@ impl ComputeResources for PhysicsResources{
             collision_detection,
             solve_constraints,
             particle_uniform,
-            update_bones
+            update_bones,
+            agent_sensory_inputs,
+            feed_forward_net,
         } = self;
         let mut descriptors = ComputeDescriptorsBuilder::new();
         let uniform_binding = descriptors.uniform_buffer(particle_uniform.buffer());
@@ -70,11 +76,19 @@ impl ComputeResources for PhysicsResources{
         descriptors.storage_buffer(foundations.world());
         descriptors.storage_buffer(foundations.faces());
         descriptors.storage_buffer(foundations.block_properties());
+        descriptors.storage_buffer(foundations.sensors());
+        descriptors.storage_buffer(foundations.persistent_floats());
+        descriptors.storage_buffer(foundations.neural_net_layers());
+        descriptors.storage_buffer(foundations.muscles());
         let descriptors = descriptors.build(cmd_pool.device())?;
         let collision_detection = descriptors.build("main", collision_detection)?;
         let solve_constraints = descriptors.build("main", solve_constraints)?;
         let update_bones = descriptors.build("main", update_bones)?;
+        let agent_sensory_inputs = descriptors.build("main", agent_sensory_inputs)?;
+        let feed_forward_net = descriptors.build("main", feed_forward_net)?;
         Ok(Physics {
+            agent_sensory_inputs,
+            feed_forward_net,
             collision_detection,
             solve_constraints,
             update_bones,
@@ -91,6 +105,8 @@ pub struct Physics {
     collision_detection: ComputePipeline,
     solve_constraints: ComputePipeline,
     update_bones: ComputePipeline,
+    agent_sensory_inputs: ComputePipeline,
+    feed_forward_net: ComputePipeline,
     player_event_uniform: HostBuffer<PlayerEvent, Uniform>,
 }
 
@@ -110,6 +126,13 @@ impl Computable for Physics {
             ])
             .bind_compute_pipeline(&self.update_bones)
             .dispatch_indirect(foundations.indirect().update_bones(), 0)
+            .bind_compute_pipeline(&self.agent_sensory_inputs)
+            .dispatch_indirect(foundations.indirect().agent_sensory_input_update(), 0)
+            .buffer_barriers(vk::PipelineStageFlags::COMPUTE_SHADER, vk::PipelineStageFlags::COMPUTE_SHADER, &[
+                make_shader_buffer_barrier(foundations.persistent_floats()),
+            ])
+            .bind_compute_pipeline(&self.feed_forward_net)
+            .dispatch_indirect(foundations.indirect().feed_forward_net(), 0)
         ;
         Ok(())
     }

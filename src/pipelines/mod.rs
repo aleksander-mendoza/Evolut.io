@@ -16,3 +16,6 @@ pub mod renderable;
 pub mod computable;
 pub mod player_event;
 pub mod compute_thread;
+pub mod sensor;
+pub mod neural_net_layer;
+pub mod muscle;

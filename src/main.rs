@@ -66,7 +66,7 @@ fn run() -> Result<(),failure::Error>{
         .vulkan()
         .resizable()
         .build()?;
-    sdl.mouse().set_relative_mouse_mode(true);
+    // sdl.mouse().set_relative_mouse_mode(true);
     let vulkan = VulkanContext::new(window)?;
     let mut player = Player::new();
     let mut display = Display::new(vulkan,&player, GameResources::new)?;

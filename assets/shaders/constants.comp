@@ -20,11 +20,15 @@
 #define CHUNK_HEIGHT_IN_CELLS CHUNK_HEIGHT*GRID_GRANULARITY
 #define PARTICLE_COLLISION_DISTANCE_SQUARE (PARTICLE_DIAMETER)*(PARTICLE_DIAMETER)
 #define MAX_UINT 4294967295
+#define PARTICLE_COLLISION_STIFFNESS 0.2
+#define MAX_STIFFNESS 1.0
+#define MIN_STIFFNESS 0.0
 #define GAUSS_SEIDEL_PASSES 12
 #define GRAVITY 0.0 //0.001
 #define DAMPING_COEFFICIENT 0.99
 #define BLOCK_COLLISION_FRICTION 0.7
 #define BLOCK_COLLISION_MINIMUM_BOUNCE 0.01
+#define MUSCLE_REACTION_SPEED 0.01 // determines how quickly distance constraints (that simulate agent's muscles) are updated in response to signal coming from agent's neural network
 #define PHYSICS_SIMULATION_DELTA_TIME_PER_STEP 1.
 #define NO_OF_TRANSPARENT_BLOCKS 6 // The blocks are aligned in such a way that transparent blocks come first. Hence in
 // order to check whether a block is transparent or not, it's enough to just check if its ID is below this value

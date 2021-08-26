@@ -1,7 +1,8 @@
 #ifndef CONSTRAINT_COMP
 #define CONSTRAINT_COMP
-
+#include "constants.comp"
 struct Constraint{
+    float stiffness;
     int particle1; // if negative, then the actual particle ID is obtained by negating this value. Moreover,
         // negative numbers are used to specify that the constraint is an inequality:
         // dist(particles[-particle1].position, particles[particle2].position) <= constant_param
@@ -15,6 +16,7 @@ struct Constraint{
 
 Constraint collision_constraint(uint particle1, uint particle2){
     Constraint c;
+    c.stiffness = PARTICLE_COLLISION_STIFFNESS;
     c.particle1 = int(particle1);
     c.particle2 = int(particle2);
     c.constant_param = -PARTICLE_DIAMETER;

@@ -1,7 +1,71 @@
+#version 450
+#extension GL_KHR_shader_subgroup_basic : enable
 
-#ifndef FEED_FORWARD_NET_COMP
-#define FEED_FORWARD_NET_COMP
+#extension GL_EXT_debug_printf : enable
+#define IS_AVAILABLE_BUFFER_NEURAL_NET_LAYERS
+#define IS_AVAILABLE_BUFFER_PERSISTENT_FLOATS
+#define IS_AVAILABLE_BUFFER_CONSTRAINTS
+#define IS_AVAILABLE_BUFFER_MUSCLES
+
+#include "physics_descriptors.comp"
+#define GROUP_SIZE 32
+
+layout (local_size_x = GROUP_SIZE) in;
 
 
 
-#endif // FEED_FORWARD_NET_COMP
+shared float[512] hidden_layer_data; // If you have some large input, you probably should first perform some kind of dimensionality reduction.
+// For instance, if your agent needs to see visual input, don't just chug the entire thing here. First run it through
+// some convolutional autoencoder.
+
+void main(){
+    const uint lID = gl_LocalInvocationID.x;
+    const NeuralNetLayer input_layer = neural_net_layers[gl_WorkGroupID.x*3];
+
+
+    uint l0 = neural_net_input_region0_length(input_layer);
+    uint l01 = l0 + neural_net_input_region1_length(input_layer);
+    uint l012 = l01 + neural_net_input_region2_length(input_layer);
+
+    for(uint i=lID;i<l01;i+=GROUP_SIZE) {
+        uint offset = i < l0 ? neural_net_input_region0_offset(input_layer) + i : neural_net_input_region1_offset(input_layer) + i - l0;
+        hidden_layer_data[i] = persistent_floats[offset];
+    }
+    NeuralNetLayer hidden_layer = neural_net_layers[gl_WorkGroupID.x*3+1];
+    while(true){
+        const uint matrix_height = neural_net_layer_input_length(hidden_layer);
+        const uint matrix_width = neural_net_layer_output_length(hidden_layer);
+        for (uint column = lID;column<matrix_width;column+=GROUP_SIZE){
+            uint j = neural_net_layer_output_offset(hidden_layer)+column;
+            float dot_product = neural_net_layer_overwrite(hidden_layer) ? 0 : hidden_layer_data[j];
+            for (uint row = 0;row<matrix_height;row++){
+                dot_product +=
+                    persistent_floats[neural_net_layer_weights_offset(hidden_layer) + column + row * matrix_width] *
+                    hidden_layer_data[neural_net_layer_input_offset(hidden_layer)+row];
+            }
+            hidden_layer_data[j] = tanh(dot_product);
+        }
+
+        if (neural_net_layer_has_next_layer(hidden_layer)){
+            hidden_layer = neural_net_layers[neural_net_layer_next_layer(hidden_layer)];
+            subgroupBarrier();
+        } else {
+            const NeuralNetLayer output_layer = neural_net_layers[gl_WorkGroupID.x*3+2];
+            for(uint i=lID;i<neural_net_output_recurrent_length(output_layer);i+=GROUP_SIZE) {
+                persistent_floats[neural_net_output_recurrent_external_offset(output_layer) + i] = hidden_layer_data[neural_net_output_recurrent_internal_offset(output_layer) + i];
+            }
+
+            for(uint i=lID;i<neural_net_output_muscle_length(output_layer);i+=GROUP_SIZE) {
+                uint muscle_id = neural_net_output_muscle_external_offset(output_layer) + i;
+                const Muscle muscle = muscles[muscle_id];
+                float ann_output = hidden_layer_data[neural_net_output_muscle_internal_offset(output_layer) + i];
+                float prev_length = constraints[muscle.constraint_id].constant_param;
+                constraints[muscle.constraint_id].constant_param = clamp(prev_length +  ann_output * MUSCLE_REACTION_SPEED,muscle.min_length,muscle.max_length);
+            }
+
+            return;
+        }
+    }
+
+
+}
