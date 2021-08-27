@@ -128,7 +128,7 @@ struct FoundationsCapacity{
 }
 impl FoundationsCapacity{
     pub fn new()->Self{
-        let world_size = WorldSize::new(2,2);
+        let world_size = WorldSize::new(2,1);
         let particles = 512u64;
         let bones = 128u64;
         let faces = 16*1024u64*world_size.total_chunks() as u64;
@@ -196,14 +196,14 @@ impl FoundationsData{
         }
     }
     fn setup_world_blocks(&mut self){
-        for level in 0..16{
-            self.world_blocks.no_update_fill_level(level*8, 1, GRASS);
-        }
-        // self.world_blocks.no_update_fill_level(0, 1, BEDROCK);
-        // self.world_blocks.no_update_fill_level(1, 1, DIRT);
-        // self.world_blocks.no_update_fill_level(2, 1, GRASS);
-        // self.world_blocks.no_update_fill_level(10, 1, GLASS);
-        // self.world_blocks.no_update_outline(5, 2, 5, 5, 5, 5, PLANK);
+        // for level in 0..16{
+        //     self.world_blocks.no_update_fill_level(level*8, 1, GRASS);
+        // }
+        self.world_blocks.no_update_fill_level(0, 1, BEDROCK);
+        self.world_blocks.no_update_fill_level(1, 1, DIRT);
+        self.world_blocks.no_update_fill_level(2, 1, GRASS);
+        self.world_blocks.no_update_fill_level(10, 1, GLASS);
+        self.world_blocks.no_update_outline(5, 2, 5, 5, 5, 5, PLANK);
     }
     fn setup_world_faces(&mut self){
         let Self{ world_blocks, world_faces,.. } = self;
