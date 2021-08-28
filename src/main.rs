@@ -32,12 +32,7 @@ use crate::input::Input;
 
 
 use crate::render::vulkan_context::VulkanContext;
-
-
-
-
-
-
+use crate::pipelines::physics::PhysicsResources;
 
 
 mod render;
@@ -69,13 +64,15 @@ fn run() -> Result<(),failure::Error>{
     // sdl.mouse().set_relative_mouse_mode(true);
     let vulkan = VulkanContext::new(window)?;
     let mut player = Player::new();
-    let mut display = Display::new(vulkan,&player, GameResources::new)?;
+    let mut display = Display::new(vulkan,&player, GameResources::new, PhysicsResources::new)?;
     let event_pump = sdl.event_pump().map_err(err_msg)?;
     let mut input = Input::new(event_pump);
     let mut fps_counter = FpsCounter::new(timer, 60);
 
+    let mut run_simulation = true;
     player.resize(&display);
-    display.rerecord_all_cmd_buffers()?;
+    display.rerecord_all_graphics_cmd_buffers()?;
+    display.record_compute_cmd_buffer()?;
     'main: loop {
         fps_counter.update();
         input.poll();
@@ -88,12 +85,18 @@ fn run() -> Result<(),failure::Error>{
             sdl.mouse()
                 .set_relative_mouse_mode(!sdl.mouse().relative_mouse_mode());
         }
+        if input.pause(){
+            run_simulation = !run_simulation;
+        }
         player.update(&mut display, &input, &fps_counter);
         // player.send_events(sx);
+        if run_simulation {
+            display.compute(&mut player)?;
+        }
         if display.render(false,&mut player)? {
             display.device().device_wait_idle()?;
-            display.recreate()?;
-            display.rerecord_all_cmd_buffers()?;
+            display.recreate_graphics()?;
+            display.rerecord_all_graphics_cmd_buffers()?;
             player.resize(&display);
         }
     }

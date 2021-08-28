@@ -175,7 +175,7 @@ impl<D: Dim> StageTexture<D> {
 }
 
 impl StageTexture<Dim2D> {
-    pub fn new(file: &Path, cmd: &CommandPool, flip: bool) -> Result<Submitter<Self>, failure::Error> {
+    pub fn new(file: &Path, cmd_pool: &CommandPool, flip: bool) -> Result<Submitter<Self>, failure::Error> {
         let img = image::open(file).map_err(err_msg)?;
         let img = if flip { img.flipv() } else { img };
         let img = img.into_rgba8();
@@ -190,9 +190,9 @@ impl StageTexture<Dim2D> {
         //     x => panic!("Invalid color scheme {:?} for image {:?}", x, file)
         // };
         let data = img.as_bytes();
-        let staging_buffer = OwnedBuffer::<u8, Cpu>::new(cmd.device(), data)?;
-        let texture = TextureView::new(cmd.device(), format, Dim2D::new(img.width(), img.height()))?;
-        let mut slf = Submitter::new(Self { staging_buffer, texture },cmd)?;
+        let staging_buffer = OwnedBuffer::<u8, Cpu>::new(cmd_pool.device(), data)?;
+        let texture = TextureView::new(cmd_pool.device(), format, Dim2D::new(img.width(), img.height()))?;
+        let mut slf = Submitter::new(Self { staging_buffer, texture },cmd_pool)?;
         let (cmd,tex) = slf.inner_val();
         cmd.cmd()
             .begin(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)?

@@ -26,6 +26,7 @@ pub struct Input {
     has_mouse_right_down: bool,
     q: bool,
     e: bool,
+    pause: bool,
     r: bool,
     no0: bool,
     no1: bool,
@@ -67,6 +68,7 @@ impl Input {
             q: false,
             e: false,
             r: false,
+            pause: false,
             no0: false,
             no1: false,
             no2: false,
@@ -86,6 +88,7 @@ impl Input {
         self.has_mouse_left_click = false;
         self.has_mouse_right_click = false;
         self.q = false;
+        self.pause = false;
         self.number = -1;
         for event in self.event_pump.poll_iter() {
             match event {
@@ -149,6 +152,9 @@ impl Input {
                             }
                             sdl2::keyboard::Keycode::Q => {
                                 self.q = true;
+                            }
+                            sdl2::keyboard::Keycode::P => {
+                                self.pause = true;
                             }
                             sdl2::keyboard::Keycode::D => {
                                 self.right = true;
@@ -327,6 +333,9 @@ impl Input {
     }
     pub fn quit(&self) -> bool {
         self.quit
+    }
+    pub fn pause(&self) -> bool {
+        self.pause
     }
     pub fn get_direction_unit_vector(&self) -> glm::TVec3<f32> {
         let x_axis = -(self.left as i32) + (self.right as i32);

@@ -1,6 +1,6 @@
 use ash::vk;
 use crate::render::surface::Surface;
-use crate::render::device::Device;
+use crate::render::device::{Device, QUEUE_IDX_GRAPHICS};
 
 use crate::render::imageview::{ImageView, Color};
 use ash::prelude::VkResult;
@@ -203,7 +203,7 @@ impl SwapChain {
             .image_indices(std::slice::from_ref(&idx));
 
         unsafe {
-            self.loader().queue_present(self.device().raw_queue(), &present_info)
+            self.loader().queue_present(self.device().raw_queue(QUEUE_IDX_GRAPHICS), &present_info)
         }
     }
 

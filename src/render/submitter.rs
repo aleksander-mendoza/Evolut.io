@@ -113,7 +113,7 @@ impl<T> Submitter<T> {
     }
 }
 
-pub fn fill_submit<T: BufferType, B: Buffer<u32, T>>(sub: &mut Submitter<B>, val: u32) -> VkResult<()> {
+pub fn fill_submit<T: BufferType, B: Buffer<u32, T>>( sub: &mut Submitter<B>, val: u32) -> VkResult<()> {
     let (inner, buff) = sub.inner_val();
     inner.cmd().begin(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)?.fill(buff, val).end()?;
     inner.submit()

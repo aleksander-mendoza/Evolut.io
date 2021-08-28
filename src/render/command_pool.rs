@@ -24,7 +24,9 @@ use crate::render::buffer::{Buffer, make_buffer_barrier};
 pub struct CommandBuffer {
     raw: vk::CommandBuffer,
     device: Device,
+    queue_idx:usize,
 }
+
 impl CommandBuffer {
     pub fn raw(&self) -> vk::CommandBuffer{
         self.raw
@@ -412,7 +414,7 @@ impl CommandBuffer {
             .wait_dst_stage_mask(wait_stages.as_slice());
         unsafe {
             self.device.inner().queue_submit(
-                self.device.raw_queue(),
+                self.device.raw_queue(self.queue_idx),
                 std::slice::from_ref(&submit_infos),
                 fence_to_signal.map(Fence::raw).unwrap_or(vk::Fence::null()),
             )
@@ -429,6 +431,7 @@ impl CommandBuffer {
 struct CommandPoolInner {
     raw: vk::CommandPool,
     device: Device,
+    queue_idx:usize,
 }
 
 impl Drop for CommandPoolInner {
@@ -444,6 +447,7 @@ pub struct CommandPool {
 // impl !Send for CommandPool{} //Command pool cannot be shared between threads!
 
 impl CommandPool {
+    pub fn queue_idx(&self) -> usize{self.inner.queue_idx}
     pub fn device(&self) -> &Device {
         &self.inner.device
     }
@@ -456,7 +460,7 @@ impl CommandPool {
     pub fn reset(&self) -> VkResult<()> {
         unsafe{self.device().inner().reset_command_pool(self.raw(),CommandPoolResetFlags::empty())}
     }
-    pub fn new(device: &Device, allow_resets:bool) -> Result<Self, vk::Result> {
+    pub fn new(device: &Device, queue_idx:usize, allow_resets:bool) -> Result<Self, vk::Result> {
         let command_pool_create_info = vk::CommandPoolCreateInfo::builder()
             .queue_family_index(device.family_index());
         let command_pool_create_info = if allow_resets{
@@ -466,7 +470,7 @@ impl CommandPool {
         };
         unsafe {
             device.inner().create_command_pool(&command_pool_create_info, None)
-        }.map(|raw| Self { inner:Rc::new(CommandPoolInner{ raw, device: device.clone() })})
+        }.map(|raw| Self { inner:Rc::new(CommandPoolInner{ queue_idx,raw, device: device.clone() })})
     }
     pub fn clear(&mut self) -> VkResult<()> {
         unsafe { self.device().inner().reset_command_pool(self.raw(), vk::CommandPoolResetFlags::RELEASE_RESOURCES) }
@@ -483,7 +487,7 @@ impl CommandPool {
         unsafe {
             self.device().inner()
                 .allocate_command_buffers(&command_buffer_allocate_info)
-        }.map(|vec| vec.into_iter().map(|raw| CommandBuffer { raw, device: self.device().clone() }).collect())
+        }.map(|vec| vec.into_iter().map(|raw| CommandBuffer { queue_idx:self.queue_idx(), raw, device: self.device().clone() }).collect())
     }
     pub fn free(&self, cmd: CommandBuffer) {
         unsafe {

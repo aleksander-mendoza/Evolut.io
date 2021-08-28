@@ -1,5 +1,5 @@
 
-use crate::render::device::{Device};
+use crate::render::device::{Device, QUEUE_IDX_GRAPHICS, QUEUE_IDX_COMPUTE};
 
 
 
@@ -28,22 +28,27 @@ use crate::pipelines::player::Player;
 use crate::pipelines::mvp_uniforms::MvpUniforms;
 use crate::pipelines::foundations::{FoundationInitializer, Foundations};
 use crate::pipelines::renderable::{RenderResources, Renderable};
-use crate::pipelines::computable::{Computable};
+use crate::pipelines::computable::{Computable, ComputeResources};
 use std::sync::Arc;
+use crate::render::fence::Fence;
 
 
-pub struct Display<P: RenderResources>{
-    command_buffers: Vec<CommandBuffer>,
-    pipeline:P::Render,
+pub struct Display<P: RenderResources, C:ComputeResources>{
+    graphics_command_buffers: Vec<CommandBuffer>,
+    compute_command_buffer: CommandBuffer,
+    compute_fence:Fence,
+    graphics_pipeline:P::Render,
+    compute_pipeline:C::Compute,
     render_pass:SingleRenderPass,
     descriptors:Descriptors,
     descriptors_builder:DescriptorsBuilderLocked,
     foundations: Arc<Foundations>,
-    cmd_pool: CommandPool,
+    compute_cmd_pool: CommandPool,
+    graphics_cmd_pool: CommandPool,
     uniforms_binding:UniformBufferBinding<MvpUniforms,1>,
     vulkan: VulkanContext,
 }
-impl <P: RenderResources> Display<P> {
+impl <P: RenderResources, C:ComputeResources> Display<P,C> {
     const CLEAR_VALUES: [vk::ClearValue; 2] = [vk::ClearValue {
         color: vk::ClearColorValue {
             float32: [0.0, 0.0, 0.0, 1.0],
@@ -55,42 +60,57 @@ impl <P: RenderResources> Display<P> {
         },
     }];
 
-    pub fn pipeline(&self) -> &P::Render{
-        &self.pipeline
+    pub fn graphics_pipeline(&self) -> &P::Render{
+        &self.graphics_pipeline
     }
-    pub fn pipeline_mut(&mut self) -> &mut P::Render{
-        &mut self.pipeline
+    pub fn compute_pipeline(&self) -> &C::Compute{
+        &self.compute_pipeline
+    }
+    pub fn graphics_pipeline_mut(&mut self) -> &mut P::Render{
+        &mut self.graphics_pipeline
     }
     pub fn new(vulkan: VulkanContext, player:&Player,
-               render:impl FnOnce(&CommandPool, &FoundationInitializer)->Result<P,failure::Error>) -> Result<Self, failure::Error> {
+               render:impl FnOnce(&CommandPool, &FoundationInitializer)->Result<P,failure::Error>,
+               compute:impl FnOnce(&CommandPool, &FoundationInitializer)->Result<C,failure::Error>) -> Result<Self, failure::Error> {
         let render_pass = vulkan.create_single_render_pass()?;
-        let cmd_pool = CommandPool::new(vulkan.device(),true)?;
+        let graphics_cmd_pool = CommandPool::new(vulkan.device(),QUEUE_IDX_GRAPHICS, true)?;
+        let compute_cmd_pool = CommandPool::new(vulkan.device(),QUEUE_IDX_COMPUTE, true)?;
         let mut descriptors_builder = DescriptorsBuilder::new();
-        let foundations = FoundationInitializer::new(&cmd_pool)?;
+        let foundations = FoundationInitializer::new(&graphics_cmd_pool)?;
         let uniforms_binding = descriptors_builder.singleton_uniform_buffer(player.mvp_uniforms());
         let _ = descriptors_builder.storage_buffer(foundations.particle_constants().gpu());
-        let render_resources = render(&cmd_pool,&foundations)?;
+        let render_resources = render(&graphics_cmd_pool,&foundations)?;
+        let compute_resources = compute(&compute_cmd_pool,&foundations)?;
         render_resources.create_descriptors(&mut descriptors_builder, &foundations)?;
-        let descriptors_builder = descriptors_builder.make_layout(cmd_pool.device())?;
+        let descriptors_builder = descriptors_builder.make_layout(graphics_cmd_pool.device())?;
         let foundations = Arc::new(foundations.build()?);
-        let pipeline = render_resources.make_renderable(&cmd_pool, &render_pass,&descriptors_builder, &foundations)?;
+        let graphics_pipeline = render_resources.make_renderable(&graphics_cmd_pool, &render_pass,&descriptors_builder, &foundations)?;
+        let compute_pipeline = compute_resources.make_computable(&compute_cmd_pool,&foundations)?;
         let descriptors = descriptors_builder.build(render_pass.swapchain())?;
-        let command_buffers = cmd_pool.create_command_buffers(render_pass.framebuffers_len() as u32)?;
+        let graphics_command_buffers = graphics_cmd_pool.create_command_buffers(render_pass.framebuffers_len() as u32)?;
+        let compute_command_buffer = compute_cmd_pool.create_command_buffer()?;
         let display = Self {
+            compute_fence: Fence::new(compute_cmd_pool.device(),true)?,
             descriptors_builder,
             descriptors,
-            command_buffers,
-            pipeline,
+            graphics_command_buffers,
+            graphics_pipeline,
+            compute_command_buffer,
+            compute_pipeline,
             render_pass,
             foundations,
-            cmd_pool,
+            compute_cmd_pool,
+            graphics_cmd_pool,
             vulkan,
             uniforms_binding
         };
         Ok(display)
     }
-    pub fn cmd_pool(&self) -> &CommandPool {
-        &self.cmd_pool
+    pub fn graphics_cmd_pool(&self) -> &CommandPool {
+        &self.graphics_cmd_pool
+    }
+    pub fn compute_cmd_pool(&self) -> &CommandPool {
+        &self.compute_cmd_pool
     }
     pub fn device(&self) -> &Device {
         self.vulkan.device()
@@ -102,30 +122,38 @@ impl <P: RenderResources> Display<P> {
         let Self { vulkan, .. } = self;
         vulkan
     }
-    pub fn rerecord_all_cmd_buffers(&mut self)->Result<(),Error>{
+    pub fn rerecord_all_graphics_cmd_buffers(&mut self)->Result<(),Error>{
         Ok(for image_idx in self.swapchain().iter_images(){
-            self.record_cmd_buffer(image_idx)?
+            self.record_graphics_cmd_buffer(image_idx)?
         })
     }
-    pub fn record_cmd_buffer(&mut self, image_idx:SwapchainImageIdx)->Result<(),Error>{
-        let Self{ command_buffers, pipeline, render_pass,descriptors, foundations, .. } = self;
+    pub fn record_compute_cmd_buffer(&mut self)->Result<(),Error>{
+        let Self{ compute_command_buffer, compute_pipeline, foundations, .. } = self;
+        compute_command_buffer.reset()?
+            .begin(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE)?;
+        compute_pipeline.record_compute_cmd_buffer(compute_command_buffer, foundations)?;
+        compute_command_buffer.end()?;
+        Ok(())
+    }
+    pub fn record_graphics_cmd_buffer(&mut self, image_idx:SwapchainImageIdx)->Result<(),Error>{
+        let Self{ graphics_command_buffers: command_buffers, graphics_pipeline, render_pass,descriptors, foundations, .. } = self;
         let command_buffer = &mut command_buffers[image_idx.get_usize()];
         command_buffer.reset()?
             .begin(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE)?;
-        pipeline.record_compute_cmd_buffer(command_buffer, foundations)?;
+        graphics_pipeline.record_compute_cmd_buffer(command_buffer, foundations)?;
         command_buffer
             .render_pass(render_pass, render_pass.framebuffer(image_idx), render_pass.swapchain().render_area(), &Self::CLEAR_VALUES);
-        pipeline.record_cmd_buffer(command_buffer,image_idx,descriptors,render_pass, foundations)?;
+        graphics_pipeline.record_cmd_buffer(command_buffer,image_idx,descriptors,render_pass, foundations)?;
         command_buffer
             .end_render_pass()
             .end()?;
         Ok(())
     }
     pub fn command_buffer(&self, image_idx:SwapchainImageIdx)->&CommandBuffer{
-        &self.command_buffers[image_idx.get_usize()]
+        &self.graphics_command_buffers[image_idx.get_usize()]
     }
     pub fn command_buffer_mut(&mut self, image_idx:SwapchainImageIdx)->&mut CommandBuffer{
-        &mut self.command_buffers[image_idx.get_usize()]
+        &mut self.graphics_command_buffers[image_idx.get_usize()]
     }
     pub fn swapchain(&self) -> &SwapChain {
         self.render_pass.swapchain()
@@ -133,19 +161,28 @@ impl <P: RenderResources> Display<P> {
     pub fn extent(&self) -> vk::Extent2D {
         self.swapchain().extent()
     }
-    pub fn recreate(&mut self) -> Result<(), failure::Error> {
+    pub fn recreate_graphics(&mut self) -> Result<(), failure::Error> {
         self.render_pass=self.vulkan.create_single_render_pass()?;
-        self.pipeline.recreate(&self.render_pass)?;
+        self.graphics_pipeline.recreate(&self.render_pass)?;
         self.descriptors = self.descriptors_builder.build(self.render_pass.swapchain())?;
-        let missing_buffers = self.swapchain().len() - self.command_buffers.len();
+        let missing_buffers = self.swapchain().len() - self.graphics_command_buffers.len();
         if 0 < missing_buffers{
-            self.command_buffers.append(&mut self.cmd_pool().create_command_buffers(missing_buffers as u32)?)
+            self.graphics_command_buffers.append(&mut self.graphics_cmd_pool().create_command_buffers(missing_buffers as u32)?)
         }
         Ok(())
     }
 
+    pub fn compute(&mut self, player:&mut Player) -> Result<(), failure::Error> {
+        let Self{ compute_command_buffer,compute_pipeline,compute_fence,foundations: _, vulkan, .. } = self;
+        if compute_fence.is_signaled()? {
+            compute_fence.reset()?;
+            compute_pipeline.update_uniforms( player);
+            compute_command_buffer.submit(&[], &[], Some(compute_fence))?;
+        }
+        Ok(())
+    }
     pub fn render(&mut self, _rerecord_cmd:bool, player:&mut Player) -> Result<bool, failure::Error> {
-        let Self{ command_buffers, pipeline, render_pass,foundations: _, vulkan,descriptors, uniforms_binding, .. } = self;
+        let Self{ graphics_command_buffers: command_buffers, graphics_pipeline, render_pass,foundations: _, vulkan,descriptors, uniforms_binding, .. } = self;
         let fence = vulkan.frames_in_flight().current_fence();
         fence.wait(None)?;
         let image_available = vulkan.frames_in_flight().current_image_semaphore();
@@ -157,7 +194,7 @@ impl <P: RenderResources> Display<P> {
         //     pipeline.record_cmd_buffer(command_buffer,image_idx,descriptors, render_pass, foundations)?
         // }
         descriptors.uniform_as_slice_mut(image_idx, *uniforms_binding).copy_from_slice(std::slice::from_ref(player.mvp_uniforms()));
-        pipeline.update_uniforms(image_idx, player);
+        graphics_pipeline.update_uniforms(image_idx, player);
 
         command_buffer.submit(&[(image_available, vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)],
                               std::slice::from_ref(render_finished),

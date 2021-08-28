@@ -173,7 +173,7 @@ pub type VertexSubBuffer<V> = VertexBuffer<V,SubBuffer<V,Gpu>>;
 
 impl<V: Copy,B:Buffer<V, Gpu>> VertexBuffer<V,B> {
     pub fn new_vertex_buffer(cmd: &CommandPool, data: &[V]) -> Result<Submitter<Self>, vk::Result> {
-        Self::new(cmd, data)
+        Self::new( cmd, data)
     }
 }
 
@@ -191,7 +191,7 @@ pub type IndirectDispatchBuffer<B> = StageBuffer<vk::DispatchIndirectCommand, Cp
 pub type IndirectDispatchOwnedBuffer = IndirectDispatchBuffer<OwnedBuffer<vk::DispatchIndirectCommand, GpuIndirect>>;
 pub type IndirectDispatchSubBuffer = IndirectDispatchBuffer<SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>>;
 impl <B:Buffer<vk::DispatchIndirectCommand, GpuIndirect>> IndirectDispatchBuffer<B> {
-    pub fn new_indirect_dispatch_buffer(cmd: &CommandPool, data: &[vk::DispatchIndirectCommand]) -> Result<Submitter<Self>, vk::Result> {
+    pub fn new_indirect_dispatch_buffer( cmd: &CommandPool, data: &[vk::DispatchIndirectCommand]) -> Result<Submitter<Self>, vk::Result> {
         Self::new(cmd, data)
     }
 }

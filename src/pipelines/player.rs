@@ -7,6 +7,9 @@ use crate::pipelines::game::GameResources;
 use std::collections::VecDeque;
 use crate::pipelines::player_event::PlayerEvent;
 use crate::blocks::block_properties::AIR;
+use crate::pipelines::physics::PhysicsResources;
+use crate::pipelines::renderable::RenderResources;
+use crate::pipelines::computable::ComputeResources;
 
 pub struct Player {
     projection_matrix: glm::Mat4,
@@ -49,7 +52,7 @@ impl Player {
     }
 
 
-    pub fn update(&mut self, display:&mut Display<GameResources>, input: &Input, fps_counter: &FpsCounter) ->Result<(),failure::Error>{
+    pub fn update<P: RenderResources, C: ComputeResources>(&mut self, display:&mut Display<P,C>, input: &Input, fps_counter: &FpsCounter) ->Result<(),failure::Error>{
         let ash::vk::Extent2D { width, height } = display.extent();
         let (width, height) = (width as f32, height as f32);
         if input.has_mouse_move() {
@@ -90,7 +93,7 @@ impl Player {
     }
 
 
-    pub fn resize(&mut self, display:&Display<GameResources>) {
+    pub fn resize<P: RenderResources, C: ComputeResources>(&mut self, display:&Display<P,C>) {
         let ash::vk::Extent2D { width, height } = display.extent();
         let fov = 60f32 / 360f32 * std::f32::consts::PI * 2f32;
         self.projection_matrix = glm::perspective(

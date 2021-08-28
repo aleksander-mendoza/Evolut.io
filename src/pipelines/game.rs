@@ -30,7 +30,6 @@ use crate::pipelines::bones::{Bones, BonesBuilder, BoneResources};
 
 pub struct GameResources {
     res: JointResources<JointResources<ParticleResources, BoneResources>,BlockWorldResources>,
-    physics:PhysicsResources
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -48,8 +47,8 @@ impl GameResources {
         let bones = BoneResources::new(cmd_pool, foundations)?;
 
         let res = JointResources::new(JointResources::new(particles, bones), world );
-        let physics = PhysicsResources::new(cmd_pool,foundations)?;
-        Ok(Self { res , physics})
+
+        Ok(Self { res })
     }
 }
 
@@ -60,11 +59,9 @@ impl RenderResources for GameResources {
     }
 
     fn make_renderable(self, cmd_pool: &CommandPool, render_pass: &SingleRenderPass, descriptors: &DescriptorsBuilderLocked, foundations:&Foundations) -> Result<Self::Render, Error> {
-        let Self { res, physics } = self;
+        let Self { res } = self;
         let global = res.make_renderable(cmd_pool, render_pass, descriptors, foundations)?;
-        let physics = physics.make_computable(cmd_pool,foundations)?;
         Ok(Game {
-            physics,
             global,
         })
     }
@@ -73,7 +70,6 @@ impl RenderResources for GameResources {
 
 pub struct Game {
     global: Joint<Joint<Particles, Bones>, BlockWorld>,
-    physics: Physics,
 }
 
 impl Game {
@@ -97,14 +93,11 @@ impl Renderable for Game {
     }
 
     fn record_compute_cmd_buffer(&self, cmd: &mut CommandBuffer, foundations:&Foundations) -> Result<(), Error> {
-        self.physics.record_compute_cmd_buffer(cmd,foundations)?;
         self.global.record_compute_cmd_buffer(cmd,foundations)
-
     }
 
     fn update_uniforms(&mut self, image_idx: SwapchainImageIdx, player: &mut Player) {
         self.global.update_uniforms(image_idx, player);
-        self.physics.update_uniforms(player);
     }
 
     fn recreate(&mut self, render_pass: &SingleRenderPass) -> Result<(), Error> {

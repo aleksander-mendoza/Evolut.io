@@ -29,6 +29,7 @@ use crate::pipelines::muscle::Muscle;
 use crate::neat::neat::Neat;
 use crate::neat::num::Num;
 use crate::neat::cppn::CPPN;
+use crate::render::device::{QUEUE_IDX_GRAPHICS, QUEUE_IDX_TRANSFER};
 
 pub struct Indirect {
     collision_detection: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
@@ -196,7 +197,7 @@ impl <X:Num> ZombieNeat<X>{
             }
         }
 
-        let buff = StageBuffer::wrap(cmd_pool, weights.as_slice(), persistent_floats_buffer.sub_elem(zombie.weights_offset as u64, zombie.weights_len as u64))?;
+        let buff = StageBuffer::wrap( cmd_pool, weights.as_slice(), persistent_floats_buffer.sub_elem(zombie.weights_offset as u64, zombie.weights_len as u64))?;
         Ok(ZombieBrain{zombie,cppn,buff})
     }
     fn new(zombies:Vec<Zombie>,cmd_pool:&CommandPool, persistent_floats:&SubBuffer<X,Storage>)->Result<Self,vk::Result>{

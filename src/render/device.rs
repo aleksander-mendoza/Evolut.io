@@ -108,10 +108,19 @@ fn pick_queue_family(
         .expect("This should never happen if the physical device was picked in the first place") as u32
 }
 
+pub const QUEUE_COUNT:usize = 2;
+pub const QUEUE_IDX_GRAPHICS:usize = 0;
+pub const QUEUE_IDX_COMPUTE:usize = 1;
+pub const QUEUE_IDX_TRANSFER:usize = 0;
+
+pub struct Queue{
+    raw: vk::Queue
+}
+
 struct DeviceInner {
     physical_device: vk::PhysicalDevice,
     device: ash::Device,
-    queue: vk::Queue,
+    queue: [vk::Queue;2],
     instance: Instance,
     family_index: u32,
 }
@@ -140,9 +149,9 @@ impl Device {
     pub fn new(entry: &ash::Entry, instance: &Instance, physical_device: vk::PhysicalDevice, debug:bool) -> Result<Self, failure::Error> {
         let family_index = pick_queue_family(instance.raw(), physical_device);
 
-        let queue_create_info = vk::DeviceQueueCreateInfo::builder()
+        let mut queue_create_info = vk::DeviceQueueCreateInfo::builder()
             .queue_family_index(family_index)
-            .queue_priorities(&[1.0]);
+            .queue_priorities(&[1.0,1.0]);
 
         let features = vk::PhysicalDeviceFeatures::builder();
 
@@ -158,9 +167,10 @@ impl Device {
 
         let device = unsafe { instance.raw().create_device(physical_device, &device_create_info, None) }?;
 
-        let queue = unsafe { device.get_device_queue(family_index, 0) };
+        let queue1 = unsafe { device.get_device_queue(family_index, 0) };
+        let queue2 = unsafe { device.get_device_queue(family_index, 0) };
 
-        Ok(Self { inner: Arc::new(DeviceInner { device, instance: instance.clone(), queue, family_index, physical_device }) })
+        Ok(Self { inner: Arc::new(DeviceInner { device, instance: instance.clone(), queue:[queue1,queue2], family_index, physical_device }) })
     }
     pub fn family_index(&self) -> u32 {
         self.inner.family_index
@@ -171,8 +181,8 @@ impl Device {
     pub fn raw(&self) -> ash::vk::Device {
         self.inner.device.handle()
     }
-    pub fn raw_queue(&self) -> vk::Queue {
-        self.inner.queue
+    pub fn raw_queue(&self,idx:usize) -> vk::Queue {
+        self.inner.queue[idx]
     }
     pub fn inner(&self) -> &ash::Device {
         &self.inner.device
@@ -183,8 +193,8 @@ impl Device {
     pub fn device_wait_idle(&self) -> VkResult<()> {
         unsafe { self.inner().device_wait_idle() }
     }
-    pub fn queue_wait_idle(&self) -> VkResult<()> {
-        unsafe { self.inner().queue_wait_idle(self.inner.queue) }
+    pub fn queue_wait_idle(&self,idx:usize) -> VkResult<()> {
+        unsafe { self.inner().queue_wait_idle(self.inner.queue[idx]) }
     }
     pub fn get_physical_device_memory_properties(&self) -> PhysicalDeviceMemoryProperties {
         unsafe { self.instance().raw().get_physical_device_memory_properties(self.physical_device()) }
