@@ -21,9 +21,9 @@ void main(){
             pos2 = particles[sensor.data1].old_position;
         }
         vec3 sensor_input = pos2 - pos1;
-        persistent_floats[gID*3] = sensor_input.x;
-        persistent_floats[gID*3+1] = sensor_input.y;
-        persistent_floats[gID*3+2] = sensor_input.z;
+        persistent_floats[sensor.float_offset] = sensor_input.x;
+        persistent_floats[sensor.float_offset+1] = sensor_input.y;
+        persistent_floats[sensor.float_offset+2] = sensor_input.z;
     }
 }
 

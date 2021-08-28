@@ -5,7 +5,7 @@
 #define PLAYER_EVENT_NOTHING 0
 #define PLAYER_EVENT_THROW 1
 #define PLAYER_EVENT_SET_BLOCK 2
-layout (set = 0, binding = 0) uniform PlayerEvent{
+restrict layout (set = 0, binding = 0) uniform PlayerEvent{
     vec3 vec3_slot0;
     uint u32_slot0;
     vec3 vec3_slot1;
@@ -17,20 +17,20 @@ layout (set = 0, binding = 0) uniform PlayerEvent{
 
 #ifdef IS_AVAILABLE_BUFFER_CONSTANTS
 #include "particle_constants.comp"
-layout (std430, set = 0, binding = 1) buffer ParticleConstant{
+restrict layout (std430, set = 0, binding = 1) buffer ParticleConstant{
     ParticleConstants constants;
 };
 #endif
 
 #ifdef IS_AVAILABLE_BUFFER_PARTICLES
 #include "particle.comp"
-layout(std430, set = 0, binding = 2) buffer Particles{
+restrict layout(std430, set = 0, binding = 2) buffer Particles{
     Particle particles[]; // the particles at indices from 0 (inclusive) to solid_particles (exclusive) are solid. All the remaining particles are phantom.
 };
 #endif // IS_AVAILABLE_BUFFER_PARTICLES
 
 #ifdef IS_AVAILABLE_BUFFER_COLLISION_GRID
-layout(std430, set = 0, binding = 3) buffer CollisionGrid{
+restrict layout(std430, set = 0, binding = 3) buffer CollisionGrid{
     uint collision_grid[];
 };
 #endif // IS_AVAILABLE_BUFFER_COLLISION_GRID
@@ -39,21 +39,21 @@ layout(std430, set = 0, binding = 3) buffer CollisionGrid{
 #ifdef IS_AVAILABLE_BUFFER_COLLISION_GRID
 #error It is not allowed to use both IS_AVAILABLE_BUFFER_COLLISION_GRID and IS_AVAILABLE_BUFFER_AUXILIARY_FLOATS at the same time
 #endif
-layout(std430, set = 0, binding = 3) buffer AuxiliaryFloats{
+restrict layout(std430, set = 0, binding = 3) buffer AuxiliaryFloats{
     float auxiliary_floats[];
 };
 #endif // IS_AVAILABLE_BUFFER_AUXILIARY_FLOATS
 
 #ifdef IS_AVAILABLE_BUFFER_CONSTRAINTS
 #include "constraint.comp"
-layout(std430, set = 0, binding = 4) buffer Constraints{
+restrict layout(std430, set = 0, binding = 4) buffer Constraints{
     Constraint constraints[];
 };
 #endif
 
 #ifdef IS_AVAILABLE_BUFFER_INDIRECT
 #include "indirect.comp"
-layout(std430, set = 0, binding = 5) buffer Indirect{
+restrict layout(std430, set = 0, binding = 5) buffer Indirect{
     DispatchIndirectCommand[5] dispatch_indirect;
     DrawIndirectCommand[3] draw_indirect;
 };
@@ -61,21 +61,21 @@ layout(std430, set = 0, binding = 5) buffer Indirect{
 
 #ifdef IS_AVAILABLE_BUFFER_BONES
 #include "bone.comp"
-layout(std430, set = 0, binding = 6) buffer Bones{
+restrict layout(std430, set = 0, binding = 6) buffer Bones{
     Bone bones[];
 };
 #endif
 
 
 #ifdef IS_AVAILABLE_BUFFER_WORLD
-layout(std430, set = 0, binding = 7) buffer World{
+restrict layout(std430, set = 0, binding = 7) buffer World{
     uint world[];
 };
 #endif
 
 #ifdef IS_AVAILABLE_BUFFER_FACES
 #include "face.comp"
-layout(std430, set = 0, binding = 8) buffer Faces{
+restrict layout(std430, set = 0, binding = 8) buffer Faces{
     // The first few faces are in fact, not faces at all!
     // Instead the faces at possitons 0..total_chunks are used to store the number of faces in eahc chunk.
     // For example faces[0].x stores the number of faces in first chunk, faces[1].x is second chunk and so on.
@@ -95,7 +95,7 @@ layout(std430, set = 0, binding = 8) buffer Faces{
 
 #ifdef IS_AVAILABLE_BUFFER_BLOCK_PROPS
 #include "block.comp"
-layout(std430, set = 0, binding = 9) buffer BlockProps{
+restrict layout(std430, set = 0, binding = 9) buffer BlockProps{
     BlockProp block_props[];
 };
 #endif // IS_AVAILABLE_BUFFER_BLOCK_PROPS
@@ -103,20 +103,20 @@ layout(std430, set = 0, binding = 9) buffer BlockProps{
 
 #ifdef IS_AVAILABLE_BUFFER_SENSORS
 #include "sensor.comp"
-layout(std430, set = 0, binding = 10) buffer Sensors{
+restrict layout(std430, set = 0, binding = 10) buffer Sensors{
     Sensor sensors[];
 };
 #endif
 
 #ifdef IS_AVAILABLE_BUFFER_PERSISTENT_FLOATS
-layout(std430, set = 0, binding = 11) buffer PersistentFloats{
+restrict layout(std430, set = 0, binding = 11) buffer PersistentFloats{
     float persistent_floats[];
 };
 #endif
 
 #ifdef IS_AVAILABLE_BUFFER_NEURAL_NET_LAYERS
 #include "neural_net_layer.comp"
-layout(std430, set = 0, binding = 12) buffer NeuralNetLayers{
+restrict layout(std430, set = 0, binding = 12) buffer NeuralNetLayers{
     NeuralNetLayer neural_net_layers[];
 };
 #endif
@@ -124,8 +124,8 @@ layout(std430, set = 0, binding = 12) buffer NeuralNetLayers{
 
 #ifdef IS_AVAILABLE_BUFFER_MUSCLES
 #include "muscle.comp"
-layout(std430, set = 0, binding = 13) buffer Muscles{
-    Muscle muscles[];
+restrict layout(std430, set = 0, binding = 13) buffer Muscles{
+     Muscle muscles[];
 };
 #endif
 

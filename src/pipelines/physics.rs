@@ -112,8 +112,9 @@ pub struct Physics {
 
 impl Computable for Physics {
     fn record_compute_cmd_buffer(&self, cmd: &mut CommandBuffer,foundations:&Foundations) -> Result<(), Error> {
-        cmd.bind_compute_pipeline(&self.collision_detection)
+        cmd
             .bind_compute_descriptors(&self.collision_detection)
+            .bind_compute_pipeline(&self.collision_detection)
             .dispatch_indirect(foundations.indirect().collision_detection(), 0)
             .buffer_barriers(vk::PipelineStageFlags::COMPUTE_SHADER, vk::PipelineStageFlags::COMPUTE_SHADER, &[
                 make_shader_buffer_barrier(foundations.particles()),

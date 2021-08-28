@@ -1,15 +1,15 @@
 use super::num::Num;
 use super::util::{Initializer, RandRange};
 use super::activations;
-use super::activations::{ActFn};
 use rand::Rng;
-use std::fmt::{Display, Formatter, Error};
+use std::fmt::{Display, Formatter, Error, Debug};
 use std::num::NonZeroUsize;
 use std::slice::Iter;
+use crate::neat::activations::{ ALL_ACT_FN_NAME};
 
 
 enum EdgeOrNode<X> {
-    Node(usize, &'static ActFn),
+    Node(usize, fn(X)->X),
     Edge(usize, X, usize),
 }
 
@@ -53,10 +53,10 @@ impl<X: Num> FeedForwardNet<X> {
                     assert!(from >= self.input_size);
                     if from < inout_size {
                         let from = from - self.input_size;
-                        output_buffer[from] = X::act_fn(activation)(output_buffer[from]);
+                        output_buffer[from] = activation(output_buffer[from]);
                     } else {
                         let from = from - inout_size;
-                        intermediate_buffer[from] = X::act_fn(activation)(intermediate_buffer[from]);
+                        intermediate_buffer[from] = activation(intermediate_buffer[from]);
                     }
                 }
             }
@@ -73,7 +73,7 @@ impl<X: Num> Display for FeedForwardNet<X> {
             match instruction {
                 &EdgeOrNode::Node(idx, act_fn) => {
                     assert!(idx >= self.input_size);
-                    writeln!(f, "register{} = {}(register{});", idx, act_fn.opencl_name(), idx)
+                    writeln!(f, "register{} = {}(register{});", idx, X::act_fn_name(act_fn) , idx)
                 }
                 &EdgeOrNode::Edge(from, weight, to) => {
                     assert!(to >= self.input_size); //cannot write to input node
@@ -88,21 +88,27 @@ impl<X: Num> Display for FeedForwardNet<X> {
 
 
 #[derive(Clone)]
-struct Node {
+struct Node<X:Num> {
     /**Initial nodes do not have any activation*/
-    activation: Option<&'static ActFn>,
+    activation: Option<fn(X)->X>,
+}
+
+impl <X:Num> Debug for Node<X>{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.activation.map(X::act_fn_name).unwrap_or("None"))
+    }
 }
 
 #[derive(Clone)]
 pub struct CPPN<X: Num> {
-    nodes: Vec<Node>,
+    nodes: Vec<Node<X>>,
     edges: Vec<Edge<X>>,
     input_size: usize,
     output_size: usize,
 
 }
 
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 pub struct Edge<X: Num> {
     innovation_no: usize,
     enabled: bool,
@@ -125,8 +131,8 @@ impl<X: Num> CPPN<X> {
     fn build_edge_lookup_table(&self) -> Vec<Vec<(usize, usize)>> {
         let mut edge_lookup = Vec::initialize(self.nodes.len(), |_| Vec::new());
         for (edge_idx, edge) in self.edges.iter().enumerate() {
-            let mut entry = &mut edge_lookup[edge.from];
-            // assert!(!entry.contains(&edge.to));
+            let entry:&mut Vec<(usize,usize)> = &mut edge_lookup[edge.from];
+            debug_assert_eq!(entry.iter().find(|&&(dst,_)|dst==edge.to),None,"edge={:?}, other={:?}",edge,entry);
             entry.push((edge.to, edge_idx));
         }
         edge_lookup
@@ -152,7 +158,7 @@ impl<X: Num> CPPN<X> {
     /**returns new instance along with new innovation number*/
     pub fn new(input_size: usize, output_size: usize, mut innovation_no: usize) -> (Self, usize) {
         let mut nodes = vec![Node { activation: None }; input_size];
-        nodes.append(&mut vec![Node { activation: Some(activations::IDENTITY) }; output_size]);
+        nodes.append(&mut vec![Node { activation: Some(X::ACT_FN_IDENTITY) }; output_size]);
         let mut edges = Vec::with_capacity(output_size.max(input_size));
         if input_size > output_size {
             for (dst_node, src_node) in (0..input_size).enumerate() {
@@ -214,6 +220,9 @@ impl<X: Num> CPPN<X> {
         debug_assert!(self.is_acyclic(), "{}", self);
         let mut stack = Vec::<usize>::new();
         let lookup = self.build_edge_lookup_table();
+        if lookup.get(from).unwrap().iter().find(|&&(dst,_)|dst==to).is_some(){
+            return false;
+        }
         stack.push(to);
         while let Some(src_node) = stack.pop() {
             for &(dst_node, _) in lookup.get(src_node).unwrap() {
@@ -282,7 +291,7 @@ impl<X: Num> CPPN<X> {
     new connections are added (representing the two halves of old edge) and
     the original edge becomes disabled. Two new innovation numbers are added.
     Returns new innovation number.*/
-    pub fn add_node(&mut self, edge_index: usize, activation: &'static ActFn, mut innovation_no: usize) -> usize {
+    pub fn add_node(&mut self, edge_index: usize, activation: fn(X)->X, mut innovation_no: usize) -> usize {
         debug_assert!(self.edges.iter().all(|e| e.innovation_no <= innovation_no));
         self.assert_invariants("before add node");
         let was_acyclic = self.is_acyclic();
@@ -317,13 +326,13 @@ impl<X: Num> CPPN<X> {
         debug_assert!(self.edges.iter().all(|e| e.innovation_no <= innovation_no));
         innovation_no
     }
-    pub fn get_activation(&mut self, node_idx: usize) -> Option<&'static ActFn> {
+    pub fn get_activation(&mut self, node_idx: usize) -> Option<fn(X)->X> {
         self.nodes[node_idx].activation
     }
     /**Sets new activation function for a node. If the node is an input node, then it has no
     activation and hence it cannot be changed. Returns true if change was successful,
     false if it was input node that couldn't be mutated.*/
-    pub fn set_activation(&mut self, node_idx: usize, f: &'static ActFn) -> bool {
+    pub fn set_activation(&mut self, node_idx: usize, f:fn(X)->X) -> bool {
         match &mut self.nodes[node_idx].activation {
             None => { false }
             Some(old) => {
@@ -448,7 +457,7 @@ impl<X: Num> CPPN<X> {
         for &node_idx in topological_order.iter().rev() {
             let node = &self.nodes[node_idx];
             if let Some(f) = node.activation {
-                if !f.is_identity() { // a small optimisation
+                if f != X::ACT_FN_IDENTITY { // a small optimisation
                     instructions.push(EdgeOrNode::Node(node_idx, f));
                 }
             }
@@ -473,9 +482,10 @@ impl<X: Num> Display for CPPN<X> {
         for (idx, node) in self.nodes.iter().enumerate() {
             if let Some(a_f) = node.activation {
                 if idx < self.input_size + self.output_size {
-                    writeln!(f, "Output({}) node {} is {}", idx - self.input_size, idx, a_f.name());
+                    writeln!(f, "Output({}) node {} is {}", idx - self.input_size, idx, X::act_fn_name(a_f));
                 } else {
-                    writeln!(f, "Node {} is {}", idx, a_f.name());
+
+                    writeln!(f, "Node {} is {}", idx, X::act_fn_name(a_f));
                 }
             } else {
                 debug_assert!(idx < self.input_size);

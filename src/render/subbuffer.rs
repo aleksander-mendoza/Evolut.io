@@ -35,6 +35,10 @@ impl <V: Copy, T: BufferType> SubBuffer<V,T>{
         let s = self.element_size() as u64;
         self.sub(idx*s..(idx+1)*s)
     }
+    pub fn sub_elem(&self, offset:vk::DeviceSize,len:vk::DeviceSize) -> Self{
+        let o = offset*std::mem::size_of::<V>() as u64;
+        self.sub(o..o+len*std::mem::size_of::<V>() as u64)
+    }
     pub fn sub(&self, range:impl RangeBounds<vk::DeviceSize>) -> Self{
         let from = match range.start_bound(){
             Bound::Included(&i) => i,

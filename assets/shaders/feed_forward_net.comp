@@ -62,7 +62,6 @@ void main(){
                 float prev_length = constraints[muscle.constraint_id].constant_param;
                 constraints[muscle.constraint_id].constant_param = clamp(prev_length +  ann_output * MUSCLE_REACTION_SPEED,muscle.min_length,muscle.max_length);
             }
-
             return;
         }
     }

@@ -3,35 +3,34 @@ use rand::rngs::StdRng;
 use super::num::Num;
 use super::activations;
 use super::cppn::CPPN;
-use super::activations::{ActFn, ALL_ACT_FN};
 use super::util::RandRange;
 use rand::distributions::{Standard, Distribution};
 use std::iter::FromIterator;
 
 
-pub struct Neat {
+pub struct Neat<X: Num> {
     global_innovation_no: usize,
-    activations: Vec<&'static ActFn>,
+    activations: Vec<fn(X)->X>,
     input_size: usize,
     output_size: usize,
 }
 
-impl Neat {
-    pub fn get_activation_functions(&self) -> &Vec<&'static ActFn> {
+impl <X: Num> Neat<X> {
+    pub fn get_activation_functions(&self) -> &Vec<fn(X)->X> {
         &self.activations
     }
 
-    pub fn get_random_activation_function(&self) -> &'static ActFn {
+    pub fn get_random_activation_function(&self) -> fn(X)->X {
         self.activations[self.activations.len().random()]
     }
 
-    pub fn new_cppn<X: Num>(&mut self) -> CPPN<X> {
+    pub fn new_cppn(&mut self) -> CPPN<X> {
         let (cppn, inno) = CPPN::new(self.input_size, self.output_size, self.get_global_innovation_no());
         self.set_global_innovation_no(inno);
         cppn
     }
 
-    pub fn new_cppns<X: Num>(&mut self, num: usize) -> Vec<CPPN<X>> {
+    pub fn new_cppns(&mut self, num: usize) -> Vec<CPPN<X>> {
         let mut vec = Vec::with_capacity(num);
         if num==0{return vec;}
         let inno = self.get_global_innovation_no();
@@ -55,9 +54,9 @@ impl Neat {
         self.output_size
     }
     pub fn new_default(input_size: usize, output_size: usize) -> Self {
-        Self::new(Vec::from_iter(ALL_ACT_FN.iter()), input_size, output_size)
+        Self::new(Vec::from_iter(X::ALL_ACT_FN.iter().cloned()), input_size, output_size)
     }
-    pub fn new(activations: Vec<&'static ActFn>, input_size: usize, output_size: usize) -> Self {
+    pub fn new(activations: Vec<fn(X)->X>, input_size: usize, output_size: usize) -> Self {
         Self { global_innovation_no: 0, activations, input_size, output_size }
     }
 
@@ -74,34 +73,34 @@ impl Neat {
         self.activations.len()
     }
 
-    pub fn get_activation_function(&self, i: usize) -> &'static ActFn {
+    pub fn get_activation_function(&self, i: usize) -> fn(X)->X {
         self.activations[i]
     }
 
-    pub fn get_input_slice_mut<'a, X>(&self, input_buffer: &'a mut [X]) -> &'a mut [X] {
+    pub fn get_input_slice_mut<'a>(&self, input_buffer: &'a mut [X]) -> &'a mut [X] {
         &mut input_buffer[..self.input_size]
     }
 
-    pub fn get_input_slice<'a, X>(&self, input_buffer: &'a [X]) -> &'a [X] {
+    pub fn get_input_slice<'a>(&self, input_buffer: &'a [X]) -> &'a [X] {
         &input_buffer[..self.input_size]
     }
 
-    pub fn get_output_slice_mut<'a, X>(&self, input_buffer: &'a mut [X]) -> &'a mut [X] {
+    pub fn get_output_slice_mut<'a>(&self, input_buffer: &'a mut [X]) -> &'a mut [X] {
         &mut input_buffer[self.input_size..self.input_size + self.output_size]
     }
 
-    pub fn get_output_slice<'a, X>(&self, input_buffer: &'a [X]) -> &'a [X] {
+    pub fn get_output_slice<'a>(&self, input_buffer: &'a [X]) -> &'a [X] {
         &input_buffer[self.input_size..self.input_size + self.output_size]
     }
     /**returns true if successful*/
-    pub fn add_connection_if_possible<X: Num>(&mut self, cppn: &mut CPPN<X>, from: usize, to: usize) -> bool {
+    pub fn add_connection_if_possible(&mut self, cppn: &mut CPPN<X>, from: usize, to: usize) -> bool {
         let inno = self.get_global_innovation_no();
         let new_inno = cppn.add_connection_if_possible(from, to, X::random(), inno);
         self.set_global_innovation_no(new_inno);
         new_inno != inno
     }
     /**Returns index of the newly created node*/
-    pub fn add_node<X: Num>(&mut self, cppn: &mut CPPN<X>, edge_index: usize) {
+    pub fn add_node(&mut self, cppn: &mut CPPN<X>, edge_index: usize) {
         let inno = self.get_global_innovation_no();
         let af = self.get_random_activation_function();
         let new_inno = cppn.add_node(edge_index, af, inno);
@@ -112,40 +111,24 @@ impl Neat {
     /**Randomly adds a new connection, but may fail if such change would result in recurrent
     neural net instead of feed-forward one (so acyclicity must be preserved). Returns true if successfully
     added a new edge*/
-    pub fn add_random_connection<X: Num>(&mut self, cppn: &mut CPPN<X>) -> bool {
+    pub fn add_random_connection(&mut self, cppn: &mut CPPN<X>) -> bool {
         debug_assert!(cppn.edges().all(|e| e.innovation_no() <= self.get_global_innovation_no()));
         let b = self.add_connection_if_possible(cppn, cppn.get_random_node(), cppn.get_random_node());
         debug_assert!(cppn.edges().all(|e| e.innovation_no() <= self.get_global_innovation_no()));
         b
     }
 
-    pub fn add_random_node<X: Num>(&mut self, cppn: &mut CPPN<X>) {
+    pub fn add_random_node(&mut self, cppn: &mut CPPN<X>) {
         debug_assert!(cppn.edges().all(|e| e.innovation_no() <= self.get_global_innovation_no()));
         self.add_node(cppn, cppn.get_random_edge());
         debug_assert!(cppn.edges().all(|e| e.innovation_no() <= self.get_global_innovation_no()));
     }
 
-    pub fn make_output_buffer<'b, 'x, X: Num + 'x, I: Iterator<Item=&'x CPPN<X>>>(&'b self, population: I) -> Option<Vec<X>> {
+    pub fn make_output_buffer<'x,  I: Iterator<Item=&'x CPPN<X>>>(&'x self, population: I) -> Option<Vec<X>> {
         population.map(CPPN::node_count).max().map(|m| vec![X::zero(); m])
     }
 
-    pub fn mutate_population<'b, 'x, X: Num + 'x, I: Iterator<Item=&'x mut CPPN<X>>>(&'b mut self, population: I,
-                                                                                     node_insertion_prob: f32,
-                                                                                     edge_insertion_prob: f32,
-                                                                                     activation_fn_mutation_prob: f32,
-                                                                                     weight_mutation_prob: f32,
-                                                                                     enable_edge_prob: f32,
-                                                                                     disable_edge_prob: f32) {
-        for cppn in population {
-            self.mutate(cppn,node_insertion_prob,
-                        edge_insertion_prob,
-                        activation_fn_mutation_prob,
-                        weight_mutation_prob,
-                        enable_edge_prob,
-                        disable_edge_prob)
-        }
-    }
-    pub fn mutate<X: Num>(&mut self, cppn: &mut CPPN<X>,
+    pub fn mutate(&mut self, cppn: &mut CPPN<X>,
                           node_insertion_prob: f32,
                           edge_insertion_prob: f32,
                           activation_fn_mutation_prob: f32,
@@ -166,7 +149,7 @@ impl Neat {
         cppn.assert_invariants("after add random connection");
         for edge_index in 0..cppn.edge_count() {
             if f32::random() < weight_mutation_prob {
-                cppn.set_weight(edge_index, X::random())
+                cppn.set_weight(edge_index, cppn.get_weight(edge_index).random_walk())
             }
             if cppn.is_enabled(edge_index){
                 if f32::random() < disable_edge_prob {
@@ -203,7 +186,7 @@ mod tests {
     #[test]
     fn cppn_1() {
         let mut neat = Neat::new_default(3, 4);
-        let cppn = neat.new_cppn::<f32>();
+        let cppn = neat.new_cppn();
         let net = cppn.build_feed_forward_net();
         let mut out = [0f32, 0.0, 0.0, 0.0];
         net.run(&[4f32, 5.0, 5.0], &mut out);
@@ -212,7 +195,7 @@ mod tests {
     #[test]
     fn cppn_2() {
         let mut neat = Neat::new_default(2, 1);
-        let cppn = neat.new_cppn::<f32>();
+        let cppn = neat.new_cppn();
         let net = cppn.build_feed_forward_net();
         let mut out = [0f32];
         net.run(&[1f32, 2.0], &mut out);
@@ -221,7 +204,7 @@ mod tests {
     #[test]
     fn cppn_3() {
         let mut neat = Neat::new_default(2, 1);
-        let mut cppns = neat.new_cppns::<f64>(16);
+        let mut cppns = neat.new_cppns(16);
         neat.mutate_population(cppns.iter_mut(), 0.1, 0.1, 0.1, 0.1, 0.1, 0.1);
         let crossed_over = cppns[0].crossover(&cppns[1]);
     }
@@ -229,7 +212,7 @@ mod tests {
     #[test]
     fn cppn_4() -> Result<(), MatError> {
         let mut neat = Neat::new_default(3, 4);
-        let cppn = neat.new_cppn::<f32>();
+        let cppn = neat.new_cppn();
         let net = cppn.build_feed_forward_net();
         let mut out = [0f32, 0.0, 0.0, 0.0];
         let input = [4f32, 5.0, 5.0];
@@ -247,7 +230,7 @@ mod tests {
     #[test]
     fn cppn_5() -> Result<(), MatError> {
         let mut neat = Neat::new_default(3, 4);
-        let cppn = neat.new_cppn::<f32>();
+        let cppn = neat.new_cppn();
         let net = cppn.build_feed_forward_net();
         let mut out = [0f32, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
         let input = [0f32, 1.0, 2.0, 3.0, 4.0, 5.0];
@@ -268,7 +251,7 @@ mod tests {
     #[test]
     fn cppn_6() -> Result<(), MatError> {
         let mut neat = Neat::new_default(2, 1);
-        let cppn = neat.new_cppn::<f32>();
+        let cppn = neat.new_cppn();
         let net = cppn.build_feed_forward_net();
         let mut out = [0f32, 0., 0., 0.];
         let dimensions = [2usize, 2];
@@ -291,7 +274,7 @@ mod tests {
     #[test]
     fn cppn_7() -> Result<(), MatError> {
         let mut neat = Neat::new_default(3, 2);
-        let cppn = neat.new_cppn::<f32>();
+        let cppn = neat.new_cppn();
         let net = cppn.build_feed_forward_net();
         let mut out = [0f32, 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.];
         let dimensions = [2usize, 2, 2];
@@ -318,7 +301,7 @@ mod tests {
     #[test]
     fn cppn_8()-> Result<(), MatError> {
         let mut neat = Neat::new_default(3, 3);
-        let mut cppns = neat.new_cppns::<f32>(16);
+        let mut cppns = neat.new_cppns(16);
         for _ in 0..10 {
             for cppn in cppns.iter(){
                 let net = cppn.build_feed_forward_net();
@@ -336,7 +319,7 @@ mod tests {
     #[test]
     fn cppn_9() -> Result<(), MatError>{
         let mut neat = Neat::new_default(4, 1);
-        let mut cppn = neat.new_cppn::<f32>();
+        let mut cppn = neat.new_cppn();
         for _ in 0..16 {
             neat.mutate(&mut cppn, 0.1, 0.2, 0.1, 0.1, 0.1, 0.01);
         }
