@@ -10,7 +10,10 @@
 #include "world.comp"
 
 
-uint add_block_neighboring_faces(const ParticleConstants c, const BlockProp p, uvec3 block_pos){
+uint remove_block_faces(const ParticleConstants c, const BlockProp p, uvec3 block_pos){
+    ///////////////////////////////
+    // FIRST WE COLLECT ALL THE NEIGHBOURING THAT USED TO BE COVERED AND WILL NOW BE UNCOVERED
+    ///////////////////////////////
     uint chunk_x = block_pos.x / CHUNK_WIDTH;
     uint chunk_z = block_pos.z / CHUNK_DEPTH;
     uint chunk_idx = chunk_pos_into_chunk_idx(c,chunk_x,chunk_z);
@@ -60,7 +63,8 @@ uint add_block_neighboring_faces(const ParticleConstants c, const BlockProp p, u
         permutation[5] = 4; // block_pos+uvec3(1,0,0)
     }
     uvec3[7] faces_to_insert;
-    uint[2] faces_to_insert_len = uint[](/*opaque index*/0,/*transparent index*/number_of_opaque_blocks);
+    uint[2] faces_to_insert_len = uint[](/*opaque index*/1,/*transparent index*/number_of_opaque_blocks+1);
+//    debugPrintfEXT("%d#%d",faces[0].x,faces[1].x);
     for(int j=0;j<6;j++){
         int i = permutation[j];
         uint neighbour = neighbour_block_ids[i];
@@ -76,45 +80,20 @@ uint add_block_neighboring_faces(const ParticleConstants c, const BlockProp p, u
             uint is_transparent = uint(neighbour < NO_OF_TRANSPARENT_BLOCKS);
             uint chunk_idx = chunk_pos_into_chunk_idx(c,chunk_x,chunk_z) + is_transparent*c.total_chunks;
             faces_to_insert[faces_to_insert_len[is_transparent]++] = uvec3(face_to_insert,chunk_idx);
+//            debugPrintfEXT("%d:%v4d",faces_to_insert_len[is_transparent]-1,
+//                face_coords_into_block_pos_relative_to_chunk_and_orientation(face_to_insert.x)
+//            );
         }
     }
-    faces_to_insert[faces_to_insert_len[1]].z = 0xFFFFFFFFu; //Every cube has 6 faces. We use array of length 7, to ensure that array overflow never occurs.
+    faces_to_insert[0].z = 0xFFFFFFFFu; //Every cube has 6 faces. We use array of length 7, to ensure that array overflow never occurs.
     // The 0xFFFFFFFFu value has analogical purpose to the 0 in null terminated strings in C.
 
-    int number_of_removed_faces = 0;
     uint face_offset = c.total_chunks*2;
-    uint i=0;
-    int length = 0;
-    for(;i<2*c.total_chunks;i++){
-        length += int(faces[i].x);
-        face_offset += length;
-        int faces_to_insert_idx = 0;
-        while (i==faces_to_insert[faces_to_insert_idx].z) {
-            uvec2 new_face = faces_to_insert[faces_to_insert_idx].xy;
-            uvec2 replaced_face = faces[face_offset];
-            faces_to_insert[faces_to_insert_idx].xy = replaced_face;
-            faces[face_offset] = new_face;
-            faces_to_insert[faces_to_insert_idx].z++;
-            faces_to_insert_idx++;
-            face_offset++;
-
-        }
-        faces[i].x = length + faces_to_insert_idx;
-        length = -faces_to_insert_idx;
-    }
-    return face_offset-c.total_chunks*2;
-}
-
-
-uint remove_block_faces(const ParticleConstants c, uvec3 block_pos, bool was_transparent){
-
-    uint chunk_x = block_pos.x / CHUNK_WIDTH;
-    uint chunk_z = block_pos.z / CHUNK_DEPTH;
-    block_pos.x -= chunk_x * CHUNK_WIDTH;
-    block_pos.z -= chunk_z * CHUNK_DEPTH;
-    uint chunk_idx = chunk_pos_into_chunk_idx(c,chunk_x,chunk_z);
-    uint face_offset = c.total_chunks*2;
-    uint i=0;
+    ///////////////////////////////
+    // THIS SECTION REMOVES FACES OF THE BLOCK THAT HAS BEEN REMOVED
+    ///////////////////////////////
+    int i=0;
+    bool was_transparent = p.opacity < 1.0;
     for(;i<chunk_idx+(was_transparent?c.total_chunks:0);i++){
         face_offset += faces[i].x;
     }
@@ -125,6 +104,7 @@ uint remove_block_faces(const ParticleConstants c, uvec3 block_pos, bool was_tra
         while(face_coords_have_the_same_pos(faces[face_idx].x,searched_face_coords) && face_idx < face_offset+length-number_of_removed_faces){
             number_of_removed_faces += 1;
             faces[face_idx] = faces[face_offset+length-number_of_removed_faces];
+
         }
     }
     faces[i].x = length-number_of_removed_faces;
@@ -137,8 +117,33 @@ uint remove_block_faces(const ParticleConstants c, uvec3 block_pos, bool was_tra
         }
         face_offset += length;
     }
-    return face_offset-number_of_removed_faces-c.total_chunks*2;
+    face_offset-=number_of_removed_faces;// now this offset point to the end of face buffer
+    ///////////////////////////////
+    // THIS SECTION ADDS FACES OF NEIGHBOURS THAT WERE PREVIOUSLY HIDDEN AND ARE NOW BEING UNCOVERERD
+    ///////////////////////////////
+    uint faces_to_insert_idx = faces_to_insert_len[1]-1;
+    uint final_face_count = face_offset + faces_to_insert_idx - c.total_chunks*2;
+    int total_number_of_inserted_faces = 0;
+    i=2*c.total_chunks-1;
+    for(;i>=0;i--){
+        int length = int(faces[i].x);
+        uint inserted_faces = 0;
+        while (i==faces_to_insert[faces_to_insert_idx].z) {
+            uvec2 new_face = faces_to_insert[faces_to_insert_idx].xy;
+            faces_to_insert_idx--;
+            faces[face_offset+faces_to_insert_idx] = new_face;
+            inserted_faces++;
+        }
+        for(uint j=0;j<faces_to_insert_idx;j++){
+            faces[face_offset+j] = faces[face_offset-length+j];
+        }
+        faces[i].x = length + inserted_faces;
+        face_offset-=length;
+//        length = -faces_to_insert_idx;
+    }
+    return final_face_count;
 }
+
 
 
 uint add_block_faces(const ParticleConstants c, uvec3 block_pos, uint block_id){

@@ -71,7 +71,7 @@ vec3 compute_new_position(const ParticleConstants c, uint id){
     // if(candidate_position.x<0){candidate_position.x=-candidate_position.x;}
     // if(candidate_position.x>16*constants.chunks_x){candidate_position.x=16*constants.chunks_x-(candidate_position.x-16*constants.chunks_x);}
     //and so on for each x,y,z coordinate.
-    new_position = new_position - 2*min(new_position, vec3(0, 0, 0)) + 2*min(vec3(16, 256, 16)-new_position, vec3(0, 0, 0));
+    new_position = new_position - 2*min(new_position, vec3(0, 0, 0)) + 2*min(vec3(c.chunks_x*16, 256, c.chunks_z*16)-new_position, vec3(0, 0, 0));
 
     particles[id].old_position = current_position;
     particles[id].new_position = new_position;
@@ -102,8 +102,7 @@ void main()
                 uint prev_block = world[hit_idx];
                 world[hit_idx] = player_event.u32_slot0;
                 if(player_event.u32_slot0==0){
-                    remove_block_faces(c,hit_pos,prev_block<NO_OF_TRANSPARENT_BLOCKS);
-                    const uint number_of_faces = add_block_neighboring_faces(c,block_props[prev_block],hit_pos);
+                    const uint number_of_faces = remove_block_faces(c,block_props[prev_block],hit_pos);
                     draw_indirect[DRAW_INDIRECT_BLOCK].instance_count = number_of_faces;
                 }else{
                     const uint number_of_faces = add_block_faces(c, hit_pos, player_event.u32_slot0);

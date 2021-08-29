@@ -134,7 +134,7 @@ struct FoundationsCapacity {
 
 impl FoundationsCapacity {
     pub fn new() -> Self {
-        let world_size = WorldSize::new(1, 1);
+        let world_size = WorldSize::new(2,1);
         let particles = 256u64;
         let bones = 256u64;
         let faces = 16 * 1024u64 * world_size.total_chunks() as u64;
@@ -375,7 +375,7 @@ impl FoundationInitializer {
         data.setup_world_blocks();
         data.setup_world_faces();
         data.particle_data.extend((0..64).map(|_| Particle::random()));
-        data.bone_data.push(Bone::new(glm::vec3(2.,5.,2.),0.1,glm::vec3(0.5,1.0,0.5),0.7));
+        data.bone_data.push(Bone::new(glm::vec3(2.,5.,2.),0.8,glm::vec3(0.5,1.0,0.5),0.2));
         data.neural_net_layer_data.append(&mut vec![
             NeuralNetLayer::new_input_recurrent(0,0,0,0),
             NeuralNetLayer::new_hidden(0,0,0,0,0,None,Overwrite),
