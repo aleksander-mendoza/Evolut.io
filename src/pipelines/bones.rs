@@ -50,7 +50,7 @@ impl RenderResources for BoneResources {
             .fragment_shader("main", frag)
             .vertex_shader("main", vert)
             .depth_test(true)
-            .cull_face(vk::CullModeFlags::FRONT)
+            .cull_face(vk::CullModeFlags::BACK)
             .front_face_clockwise(false)
             .color_blend_attachment_states_disabled();
         let instance_binding = pipeline.instance_input_from(0,foundations.bones());

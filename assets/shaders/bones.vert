@@ -5,27 +5,24 @@
 #define IS_AVAILABLE_BUFFER_PARTICLES
 #include "render_vertex_descriptors.comp"
 
-layout(location = 0) in uint[4] particle_ids;
-layout(location = 4) in vec3 center;
-layout(location = 5) in uint texture_variant;
-layout(location = 6) in uint part_variant;
-layout(location = 7) in vec3 normal;
-layout(location = 8) in float thickness;
-layout(location = 0) out vec2 fragTex;
+layout(location = 0) in vec3 center;
+layout(location = 1) in float color1;
+layout(location = 2) in vec3 size;
+layout(location = 3) in float color2;
+layout(location = 0) out vec4 texColor;
 
 
 void main() {
-    const float width = 1;
-    const vec2 A = vec2(0,width);// left bottom front
-    const vec2 B = vec2(1,width);// right bottom front
-    const vec2 C = vec2(1,-width);// right bottom back
-    const vec2 D = vec2(0,-width);// left bottom back
-    const vec2 E = vec2(3,width);// left top front
-    const vec2 F = vec2(2,width);// right top front
-    const vec2 G = vec2(2,-width);// right top back
-    const vec2 H = vec2(3,-width);// left top back
+    const vec3 A = vec3(-1,-1,-1);// left bottom front
+    const vec3 B = vec3(1,-1,-1);// right bottom front
+    const vec3 C = vec3(1,-1,1);// right bottom back
+    const vec3 D = vec3(-1,-1,1);// left bottom back
+    const vec3 E = vec3(-1,1,-1);// left top front
+    const vec3 F = vec3(1,1,-1);// right top front
+    const vec3 G = vec3(1,1,1);// right top back
+    const vec3 H = vec3(-1,1,1);// left top back
 
-    const vec2[6*6] particle_id_per_vertex = vec2[6*6](
+    const vec3[6*6] direction_per_vertex = vec3[6*6](
         // XPlus ortientation = block's right face
         G, B, F, B, G, C,
         // XMinus ortientation = block's left face
@@ -60,120 +57,16 @@ void main() {
         // ZMinus ortientation = block's front face
         M, L, K, M, K, N
     );
-    //Now we list a bunch of predefined sizes, that will be used as hands, legs, heads etc.
-    //All sizes are specified in a specific unit of minecraft pixels (every block is 16x16 pixels)
-    const float pixel = 1./64.; //size of a single texture pixel measured in UV coordinates
-    const vec2[6*6*2] tex_offset_and_size = vec2[6*6*2](
-        /////// Zombie leg lower
-        // XPlus
-        vec2(pixel*8.,pixel*0.),vec2(pixel*4.,pixel*6.),
-        // XMinus
-        vec2(pixel*0.,pixel*0.),vec2(pixel*4.,pixel*6.),
-        // YPlus
-        vec2(pixel*4.,pixel*12.),vec2(pixel*4.,pixel*4.),
-        // YMinus
-        vec2(pixel*8.,pixel*12.),vec2(pixel*4.,pixel*4.),
-        // ZPlus
-        vec2(pixel*12.,pixel*0.),vec2(pixel*4.,pixel*6.),
-        // ZMinus
-        vec2(pixel*4.,pixel*0.),vec2(pixel*4.,pixel*6.),
-        /////// Zombie leg upper
-        // XPlus
-        vec2(pixel*8.,pixel*6.),vec2(pixel*4.,pixel*6.),
-        // XMinus
-        vec2(pixel*0.,pixel*6.),vec2(pixel*4.,pixel*6.),
-        // YPlus
-        vec2(pixel*4.,pixel*12.),vec2(pixel*4.,pixel*4.),
-        // YMinus
-        vec2(pixel*8.,pixel*12.),vec2(pixel*4.,pixel*4.),
-        // ZPlus
-        vec2(pixel*12.,pixel*6.),vec2(pixel*4.,pixel*6.),
-        // ZMinus
-        vec2(pixel*4.,pixel*6.),vec2(pixel*4.,pixel*6.),
-        /////// Zombie arm lower
-        // XPlus
-        vec2(pixel*(8.+16.),pixel*0.),vec2(pixel*4.,pixel*6.),
-        // XMinus
-        vec2(pixel*(0.+16.),pixel*0.),vec2(pixel*4.,pixel*6.),
-        // YPlus
-        vec2(pixel*(4.+16.),pixel*12.),vec2(pixel*4.,pixel*4.),
-        // YMinus
-        vec2(pixel*(8.+16.),pixel*12.),vec2(pixel*4.,pixel*4.),
-        // ZPlus
-        vec2(pixel*(12.+16.),pixel*0.),vec2(pixel*4.,pixel*6.),
-        // ZMinus
-        vec2(pixel*(4.+16.),pixel*0.),vec2(pixel*4.,pixel*6.),
-        /////// Zombie arm upper
-        // XPlus
-        vec2(pixel*(8.+16.),pixel*6.),vec2(pixel*4.,pixel*6.),
-        // XMinus
-        vec2(pixel*(0.+16.),pixel*6.),vec2(pixel*4.,pixel*6.),
-        // YPlus
-        vec2(pixel*(4.+16.),pixel*12.),vec2(pixel*4.,pixel*4.),
-        // YMinus
-        vec2(pixel*(8.+16.),pixel*12.),vec2(pixel*4.,pixel*4.),
-        // ZPlus
-        vec2(pixel*(12.+16.),pixel*6.),vec2(pixel*4.,pixel*6.),
-        // ZMinus
-        vec2(pixel*(4.+16.),pixel*6.),vec2(pixel*4.,pixel*6.),
-        /////// Zombie torso
-        // XPlus
-        vec2(pixel*12.,pixel*16.),vec2(pixel*4.,pixel*12.),
-        // XMinus
-        vec2(pixel*0.,pixel*16.),vec2(pixel*4.,pixel*12.),
-        // YPlus
-        vec2(pixel*4.,pixel*28.),vec2(pixel*8.,pixel*4.),
-        // YMinus
-        vec2(pixel*12.,pixel*28.),vec2(pixel*8.,pixel*4.),
-        // ZPlus
-        vec2(pixel*16.,pixel*16.),vec2(pixel*8.,pixel*12.),
-        // ZMinus
-        vec2(pixel*4.,pixel*16.),vec2(pixel*8.,pixel*12.),
-        /////// Zombie head
-        // XPlus
-        vec2(pixel*16.,pixel*32.),vec2(pixel*8.,pixel*8.),
-        // XMinus
-        vec2(pixel*0.,pixel*32.),vec2(pixel*8.,pixel*8.),
-        // YPlus
-        vec2(pixel*8.,pixel*40.),vec2(pixel*8.,pixel*8.),
-        // YMinus
-        vec2(pixel*16.,pixel*40.),vec2(pixel*8.,pixel*8.),
-        // ZPlus
-        vec2(pixel*0.,pixel*40.),vec2(pixel*8.,pixel*8.),
-        // ZMinus
-        vec2(pixel*8.,pixel*32.),vec2(pixel*8.,pixel*8.)
-    );
-    const uint[10] body_part_to_bone_idx = uint[10](
-        uint(0), // Zombie left leg lower
-        uint(1), // Zombie left leg upper
-        uint(0), // Zombie right leg lower
-        uint(1), // Zombie right leg upper
-        uint(2), // Zombie left hand lower
-        uint(3), // Zombie left hand upper
-        uint(2), // Zombie right hand lower
-        uint(3), // Zombie right hand upper
-        uint(4), // Zombie torso
-        uint(5) // Zombie head
-    );
-    const float[6] tex_stride = float[6](
-        pixel*32., // Zombie leg
-        pixel*32., // Zombie leg
-        pixel*32., // Zombie arm
-        pixel*32., // Zombie arm
-        pixel*24., // Zombie torso
-        pixel*24. // Zombie head
-    );
-    const uint num_faces = uint(6);
-    const vec2 particle_id_and_normal_direction = particle_id_per_vertex[gl_VertexIndex];
-    const vec3 relative = particles[particle_ids[uint(particle_id_and_normal_direction.x)]].new_position - center;
-    gl_Position = MVP * vec4(center + relative*1.2 + particle_id_and_normal_direction.y*thickness*normal, 1.0);
+
+    gl_Position = MVP * vec4(center + direction_per_vertex[gl_VertexIndex]*size, 1.0);
     gl_Position.y = -gl_Position.y;
-    uint bone_idx = body_part_to_bone_idx[part_variant];
-    float bone_stride = tex_stride[bone_idx];
-    uint face_idx = uint(gl_VertexIndex) / num_faces;
-    uint tex_idx = bone_idx*num_faces*uint(2) + face_idx*uint(2);
-    vec2 tex_offset = tex_offset_and_size[tex_idx];
-    vec2 tex_size = tex_offset_and_size[tex_idx+uint(1)];
-    fragTex = texture_uv[gl_VertexIndex] * tex_size + tex_offset;
-    fragTex.x += bone_stride*texture_variant;
+//    uint bone_idx = body_part_to_bone_idx[part_variant];
+//    float bone_stride = tex_stride[bone_idx];
+//    uint face_idx = uint(gl_VertexIndex) / num_faces;
+//    uint tex_idx = bone_idx*num_faces*uint(2) + face_idx*uint(2);
+//    vec2 tex_offset = tex_offset_and_size[tex_idx];
+//    vec2 tex_size = tex_offset_and_size[tex_idx+uint(1)];
+//    fragTex = texture_uv[gl_VertexIndex] * tex_size + tex_offset;
+//    fragTex.x += bone_stride*texture_variant;
+    texColor = vec4(color1, color2, 0, 0);
 }

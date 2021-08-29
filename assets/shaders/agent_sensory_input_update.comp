@@ -9,21 +9,21 @@ layout (local_size_x = 32) in;
 #include "physics_descriptors.comp"
 
 void main(){
-    uint gID = gl_GlobalInvocationID.x;
-    if(gID < constants.sensors){
-        const Sensor sensor = sensors[gID];
-        const Particle p0 = particles[sensor.data0];
-        const vec3 pos1 = p0.old_position;
-        vec3 pos2;
-        if (sensor.type == SENSOR_TYPE_PARTICLE_MOVEMENT){
-            pos2 = p0.new_position;
-        } else {
-            pos2 = particles[sensor.data1].old_position;
-        }
-        vec3 sensor_input = pos2 - pos1;
-        persistent_floats[sensor.float_offset] = sensor_input.x;
-        persistent_floats[sensor.float_offset+1] = sensor_input.y;
-        persistent_floats[sensor.float_offset+2] = sensor_input.z;
-    }
+//    uint gID = gl_GlobalInvocationID.x;
+//    if(gID < constants.sensors){
+//        const Sensor sensor = sensors[gID];
+//        const Particle p0 = particles[sensor.data0];
+//        const vec3 pos1 = p0.old_position;
+//        vec3 pos2;
+//        if (sensor.type == SENSOR_TYPE_PARTICLE_MOVEMENT){
+//            pos2 = p0.new_position;
+//        } else {
+//            pos2 = particles[sensor.data1].old_position;
+//        }
+//        vec3 sensor_input = pos2 - pos1;
+//        persistent_floats[sensor.float_offset] = sensor_input.x;
+//        persistent_floats[sensor.float_offset+1] = sensor_input.y;
+//        persistent_floats[sensor.float_offset+2] = sensor_input.z;
+//    }
 }
 

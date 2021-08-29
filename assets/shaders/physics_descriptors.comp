@@ -29,27 +29,21 @@ restrict layout(std430, set = 0, binding = 2) buffer Particles{
 };
 #endif // IS_AVAILABLE_BUFFER_PARTICLES
 
-#ifdef IS_AVAILABLE_BUFFER_COLLISION_GRID
-restrict layout(std430, set = 0, binding = 3) buffer CollisionGrid{
-    uint collision_grid[];
-};
-#endif // IS_AVAILABLE_BUFFER_COLLISION_GRID
 
-#ifdef IS_AVAILABLE_BUFFER_AUXILIARY_FLOATS
-#ifdef IS_AVAILABLE_BUFFER_COLLISION_GRID
-#error It is not allowed to use both IS_AVAILABLE_BUFFER_COLLISION_GRID and IS_AVAILABLE_BUFFER_AUXILIARY_FLOATS at the same time
-#endif
-restrict layout(std430, set = 0, binding = 3) buffer AuxiliaryFloats{
-    float auxiliary_floats[];
-};
-#endif // IS_AVAILABLE_BUFFER_AUXILIARY_FLOATS
-
-#ifdef IS_AVAILABLE_BUFFER_CONSTRAINTS
-#include "constraint.comp"
-restrict layout(std430, set = 0, binding = 4) buffer Constraints{
-    Constraint constraints[];
+#ifdef IS_AVAILABLE_BUFFER_NEURAL_NET_LAYERS
+#include "neural_net_layer.comp"
+restrict layout(std430, set = 0, binding = 3) buffer NeuralNetLayers{
+    NeuralNetLayer neural_net_layers[];
 };
 #endif
+
+
+#ifdef IS_AVAILABLE_BUFFER_PERSISTENT_FLOATS
+restrict layout(std430, set = 0, binding = 4) buffer PersistentFloats{
+    float persistent_floats[];
+};
+#endif
+
 
 #ifdef IS_AVAILABLE_BUFFER_INDIRECT
 #include "indirect.comp"
@@ -100,24 +94,33 @@ restrict layout(std430, set = 0, binding = 9) buffer BlockProps{
 };
 #endif // IS_AVAILABLE_BUFFER_BLOCK_PROPS
 
+/**
+#ifdef IS_AVAILABLE_BUFFER_COLLISION_GRID
+restrict layout(std430, set = 0, binding = 3) buffer CollisionGrid{
+    uint collision_grid[];
+};
+#endif // IS_AVAILABLE_BUFFER_COLLISION_GRID
+
+#ifdef IS_AVAILABLE_BUFFER_AUXILIARY_FLOATS
+#ifdef IS_AVAILABLE_BUFFER_COLLISION_GRID
+#error It is not allowed to use both IS_AVAILABLE_BUFFER_COLLISION_GRID and IS_AVAILABLE_BUFFER_AUXILIARY_FLOATS at the same time
+#endif
+restrict layout(std430, set = 0, binding = 3) buffer AuxiliaryFloats{
+    float auxiliary_floats[];
+};
+#endif // IS_AVAILABLE_BUFFER_AUXILIARY_FLOATS
+
+#ifdef IS_AVAILABLE_BUFFER_CONSTRAINTS
+#include "constraint.comp"
+restrict layout(std430, set = 0, binding = 4) buffer Constraints{
+    Constraint constraints[];
+};
+#endif
 
 #ifdef IS_AVAILABLE_BUFFER_SENSORS
 #include "sensor.comp"
 restrict layout(std430, set = 0, binding = 10) buffer Sensors{
     Sensor sensors[];
-};
-#endif
-
-#ifdef IS_AVAILABLE_BUFFER_PERSISTENT_FLOATS
-restrict layout(std430, set = 0, binding = 11) buffer PersistentFloats{
-    float persistent_floats[];
-};
-#endif
-
-#ifdef IS_AVAILABLE_BUFFER_NEURAL_NET_LAYERS
-#include "neural_net_layer.comp"
-restrict layout(std430, set = 0, binding = 12) buffer NeuralNetLayers{
-    NeuralNetLayer neural_net_layers[];
 };
 #endif
 
@@ -128,6 +131,6 @@ restrict layout(std430, set = 0, binding = 13) buffer Muscles{
      Muscle muscles[];
 };
 #endif
-
+*/
 
 #endif //PHYSICS_DESCRIPTORS_COMP

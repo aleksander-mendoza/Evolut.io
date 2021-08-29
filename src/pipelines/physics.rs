@@ -31,7 +31,6 @@ use crate::pipelines::player_event::{PlayerEvent, EventType};
 
 pub struct PhysicsResources {
     collision_detection: ShaderModule<Compute>,
-    solve_constraints: ShaderModule<Compute>,
     update_bones: ShaderModule<Compute>,
     particle_uniform: HostBuffer<PlayerEvent, Uniform>,
     feed_forward_net: ShaderModule<Compute>,
@@ -45,12 +44,11 @@ impl PhysicsResources {
     pub fn new(cmd_pool: &CommandPool, _foundations:&FoundationInitializer) -> Result<Self, failure::Error> {
         // let generate_faces = ShaderModule::new(include_glsl!("assets/shaders/generate_faces.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let collision_detection = ShaderModule::new(include_glsl!("assets/shaders/collision_detection.comp", kind: comp) as &[u32], cmd_pool.device())?;
-        let solve_constraints = ShaderModule::new(include_glsl!("assets/shaders/solve_constraints.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let update_bones = ShaderModule::new(include_glsl!("assets/shaders/update_bones.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let feed_forward_net = ShaderModule::new(include_glsl!("assets/shaders/feed_forward_net.comp", kind: comp, target: vulkan1_1) as &[u32], cmd_pool.device())?;
         let agent_sensory_inputs = ShaderModule::new(include_glsl!("assets/shaders/agent_sensory_input_update.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let particle_uniform = HostBuffer::new(cmd_pool.device(), &[PlayerEvent::nothing()])?;
-        Ok(Self { collision_detection, solve_constraints, particle_uniform, update_bones, agent_sensory_inputs, feed_forward_net })
+        Ok(Self { collision_detection, particle_uniform, update_bones, agent_sensory_inputs, feed_forward_net })
     }
 }
 impl ComputeResources for PhysicsResources{
@@ -59,7 +57,6 @@ impl ComputeResources for PhysicsResources{
     fn make_computable(self, cmd_pool: &CommandPool, foundations:&Foundations) -> Result<Physics, Error> {
         let Self {
             collision_detection,
-            solve_constraints,
             particle_uniform,
             update_bones,
             agent_sensory_inputs,
@@ -69,20 +66,19 @@ impl ComputeResources for PhysicsResources{
         let uniform_binding = descriptors.uniform_buffer(particle_uniform.buffer());
         descriptors.storage_buffer(foundations.constants());
         descriptors.storage_buffer(foundations.particles());
-        descriptors.storage_buffer(foundations.collision_grid());
-        descriptors.storage_buffer(foundations.constraints());
+        descriptors.storage_buffer(foundations.neural_net_layers());
+        descriptors.storage_buffer(foundations.persistent_floats());
         descriptors.storage_buffer(foundations.indirect().super_buffer());
         descriptors.storage_buffer(foundations.bones());
         descriptors.storage_buffer(foundations.world());
         descriptors.storage_buffer(foundations.faces());
         descriptors.storage_buffer(foundations.block_properties());
-        descriptors.storage_buffer(foundations.sensors());
-        descriptors.storage_buffer(foundations.persistent_floats());
-        descriptors.storage_buffer(foundations.neural_net_layers());
-        descriptors.storage_buffer(foundations.muscles());
+        // descriptors.storage_buffer(foundations.sensors());
+        // descriptors.storage_buffer(foundations.collision_grid());
+        // descriptors.storage_buffer(foundations.constraints());
+        // descriptors.storage_buffer(foundations.muscles());
         let descriptors = descriptors.build(cmd_pool.device())?;
         let collision_detection = descriptors.build("main", collision_detection)?;
-        let solve_constraints = descriptors.build("main", solve_constraints)?;
         let update_bones = descriptors.build("main", update_bones)?;
         let agent_sensory_inputs = descriptors.build("main", agent_sensory_inputs)?;
         let feed_forward_net = descriptors.build("main", feed_forward_net)?;
@@ -90,7 +86,6 @@ impl ComputeResources for PhysicsResources{
             agent_sensory_inputs,
             feed_forward_net,
             collision_detection,
-            solve_constraints,
             update_bones,
             uniform_binding,
             player_event_uniform: particle_uniform,
@@ -103,7 +98,6 @@ pub struct Physics {
     //The order matters because of drop!
     uniform_binding: UniformBufferBinding<PlayerEvent>,
     collision_detection: ComputePipeline,
-    solve_constraints: ComputePipeline,
     update_bones: ComputePipeline,
     agent_sensory_inputs: ComputePipeline,
     feed_forward_net: ComputePipeline,
@@ -116,24 +110,24 @@ impl Computable for Physics {
             .bind_compute_descriptors(&self.collision_detection)
             .bind_compute_pipeline(&self.collision_detection)
             .dispatch_indirect(foundations.indirect().collision_detection(), 0)
-            .buffer_barriers(vk::PipelineStageFlags::COMPUTE_SHADER, vk::PipelineStageFlags::COMPUTE_SHADER, &[
-                make_shader_buffer_barrier(foundations.particles()),
-                make_shader_buffer_barrier(foundations.constraints())
-            ])
-            .bind_compute_pipeline(&self.solve_constraints)
-            .dispatch_indirect(foundations.indirect().solve_constraints(), 0)
-            .buffer_barriers(vk::PipelineStageFlags::COMPUTE_SHADER, vk::PipelineStageFlags::COMPUTE_SHADER, &[
-                make_shader_buffer_barrier(foundations.particles()),
-            ])
+            // .buffer_barriers(vk::PipelineStageFlags::COMPUTE_SHADER, vk::PipelineStageFlags::COMPUTE_SHADER, &[
+            //     make_shader_buffer_barrier(foundations.particles()),
+            //     make_shader_buffer_barrier(foundations.constraints())
+            // ])
+            // .bind_compute_pipeline(&self.solve_constraints)
+            // .dispatch_indirect(foundations.indirect().solve_constraints(), 0)
+            // .buffer_barriers(vk::PipelineStageFlags::COMPUTE_SHADER, vk::PipelineStageFlags::COMPUTE_SHADER, &[
+            //     make_shader_buffer_barrier(foundations.particles()),
+            // ])
             .bind_compute_pipeline(&self.update_bones)
             .dispatch_indirect(foundations.indirect().update_bones(), 0)
-            .bind_compute_pipeline(&self.agent_sensory_inputs)
-            .dispatch_indirect(foundations.indirect().agent_sensory_input_update(), 0)
-            .buffer_barriers(vk::PipelineStageFlags::COMPUTE_SHADER, vk::PipelineStageFlags::COMPUTE_SHADER, &[
-                make_shader_buffer_barrier(foundations.persistent_floats()),
-            ])
-            .bind_compute_pipeline(&self.feed_forward_net)
-            .dispatch_indirect(foundations.indirect().feed_forward_net(), 0)
+            // .bind_compute_pipeline(&self.agent_sensory_inputs)
+            // .dispatch_indirect(foundations.indirect().agent_sensory_input_update(), 0)
+            // .buffer_barriers(vk::PipelineStageFlags::COMPUTE_SHADER, vk::PipelineStageFlags::COMPUTE_SHADER, &[
+            //     make_shader_buffer_barrier(foundations.persistent_floats()),
+            // ])
+            // .bind_compute_pipeline(&self.feed_forward_net)
+            // .dispatch_indirect(foundations.indirect().feed_forward_net(), 0)
         ;
         Ok(())
     }

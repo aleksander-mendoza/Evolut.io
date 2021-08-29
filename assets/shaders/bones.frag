@@ -3,9 +3,9 @@
 #include "render_fragment_descriptors.comp"
 
 layout(location = 0) out vec4 outColor;
-layout(location = 0) in vec2 fragTex;
+layout(location = 0) in vec4 texColor;
 
 
 void main() {
-    outColor = texture(mobsSampler, fragTex);
+    outColor = texColor;
 }

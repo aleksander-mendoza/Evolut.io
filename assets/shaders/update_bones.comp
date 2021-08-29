@@ -11,12 +11,12 @@ layout (local_size_x = 32) in;
 void main() {
     uint gID = gl_GlobalInvocationID.x;
     if(gID < constants.bones){
-        const uint[4] particle_ids = bones[gID].particle_ids;
-        const vec3 p1 = particles[particle_ids[0]].new_position;
-        const vec3 p2 = particles[particle_ids[1]].new_position;
-        const vec3 p3 = particles[particle_ids[2]].new_position;
-        const vec3 p4 = particles[particle_ids[3]].new_position;
-        bones[gID].center = (p1+p2+p3+p4)/4.;
-        bones[gID].normal = normalize(cross(p2-p1,p3-p1));
+//        const uint[4] particle_ids = bones[gID].particle_ids;
+//        const vec3 p1 = particles[particle_ids[0]].new_position;
+//        const vec3 p2 = particles[particle_ids[1]].new_position;
+//        const vec3 p3 = particles[particle_ids[2]].new_position;
+//        const vec3 p4 = particles[particle_ids[3]].new_position;
+//        bones[gID].center = (p1+p2+p3+p4)/4.;
+//        bones[gID].normal = normalize(cross(p2-p1,p3-p1));
     }
 }

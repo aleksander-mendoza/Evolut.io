@@ -18,5 +18,5 @@ void main()
     gl_Position.y = -gl_Position.y;
     float point_distance = length(MV * point4)-eye_distance;
     gl_PointSize = point_size/point_distance;
-    frag_color = gl_VertexIndex >= constants.solid_particles ? vec2(color, 0) : vec2(0, color);
+    frag_color = vec2(0, color);
 }

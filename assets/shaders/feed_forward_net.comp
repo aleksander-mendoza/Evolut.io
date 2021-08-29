@@ -55,13 +55,13 @@ void main(){
                 persistent_floats[neural_net_output_recurrent_external_offset(output_layer) + i] = hidden_layer_data[neural_net_output_recurrent_internal_offset(output_layer) + i];
             }
 
-            for(uint i=lID;i<neural_net_output_muscle_length(output_layer);i+=GROUP_SIZE) {
-                uint muscle_id = neural_net_output_muscle_external_offset(output_layer) + i;
-                const Muscle muscle = muscles[muscle_id];
-                float ann_output = hidden_layer_data[neural_net_output_muscle_internal_offset(output_layer) + i];
-                float prev_length = constraints[muscle.constraint_id].constant_param;
-                constraints[muscle.constraint_id].constant_param = clamp(prev_length +  ann_output * MUSCLE_REACTION_SPEED,muscle.min_length,muscle.max_length);
-            }
+//            for(uint i=lID;i<neural_net_output_muscle_length(output_layer);i+=GROUP_SIZE) {
+//                uint muscle_id = neural_net_output_muscle_external_offset(output_layer) + i;
+//                const Muscle muscle = muscles[muscle_id];
+//                float ann_output = hidden_layer_data[neural_net_output_muscle_internal_offset(output_layer) + i];
+//                float prev_length = constraints[muscle.constraint_id].constant_param;
+//                constraints[muscle.constraint_id].constant_param = clamp(prev_length +  ann_output * MUSCLE_REACTION_SPEED,muscle.min_length,muscle.max_length);
+//            }
             return;
         }
     }
