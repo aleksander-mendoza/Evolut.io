@@ -40,7 +40,7 @@ impl Player {
             projection_matrix: glm::identity::<f32, 4>(),
             mvp_uniforms: MvpUniforms::new(),
             rotation: glm::quat_identity(),
-            location: glm::vec3(2f32, 5f32, 2f32),
+            location: glm::vec3(2f32, 128f32, 2f32),
             block_in_hand: Block::new(2u32),
             model_matrix: glm::identity::<f32, 4>(),
             movement_speed: 0.005f32,

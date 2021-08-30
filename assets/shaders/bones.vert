@@ -1,26 +1,28 @@
 #version 450
-#extension GL_EXT_debug_printf : enable
+//#extension GL_EXT_debug_printf : enable
 
 #define IS_AVAILABLE_BUFFER_MVP
 #define IS_AVAILABLE_BUFFER_PARTICLES
 #include "render_vertex_descriptors.comp"
 
 layout(location = 0) in vec3 center;
-layout(location = 1) in float color1;
-layout(location = 2) in vec3 size;
-layout(location = 3) in float color2;
+layout(location = 1) in float width;
+layout(location = 2) in vec3 color;
+layout(location = 3) in float depth;
+layout(location = 4) in vec3 direction;
+layout(location = 5) in float height;
 layout(location = 0) out vec4 texColor;
 
 
 void main() {
-    const vec3 A = vec3(-1,-1,-1);// left bottom front
-    const vec3 B = vec3(1,-1,-1);// right bottom front
-    const vec3 C = vec3(1,-1,1);// right bottom back
-    const vec3 D = vec3(-1,-1,1);// left bottom back
-    const vec3 E = vec3(-1,1,-1);// left top front
-    const vec3 F = vec3(1,1,-1);// right top front
-    const vec3 G = vec3(1,1,1);// right top back
-    const vec3 H = vec3(-1,1,1);// left top back
+    const vec3 A = vec3(-1,  0, -1);// left bottom front
+    const vec3 B = vec3( 1,  0, -1);// right bottom front
+    const vec3 C = vec3( 1,  0,  1);// right bottom back
+    const vec3 D = vec3(-1,  0,  1);// left bottom back
+    const vec3 E = vec3(-1,  1, -1);// left top front
+    const vec3 F = vec3( 1,  1, -1);// right top front
+    const vec3 G = vec3( 1,  1,  1);// right top back
+    const vec3 H = vec3(-1,  1,  1);// left top back
 
     const vec3[6*6] direction_per_vertex = vec3[6*6](
         // XPlus ortientation = block's right face
@@ -58,7 +60,12 @@ void main() {
         M, L, K, M, K, N
     );
 
-    gl_Position = MVP * vec4(center + direction_per_vertex[gl_VertexIndex]*size, 1.0);
+    vec2 rotated_and_scaled_z_axis = direction.xz * depth;
+    vec2 rotated_and_scaled_x_axis = vec2(direction.z,-direction.x) * width;
+    vec3 normalized_vertex_pos = direction_per_vertex[gl_VertexIndex];
+    vec2 rotated_and_scaled_vertex_pos_xz = rotated_and_scaled_x_axis * normalized_vertex_pos.x + rotated_and_scaled_z_axis * normalized_vertex_pos.z;
+    vec3 rotated_and_scaled_vertex_pos = vec3(rotated_and_scaled_vertex_pos_xz.x,normalized_vertex_pos.y*height,rotated_and_scaled_vertex_pos_xz.y);
+    gl_Position = MVP * vec4(center + rotated_and_scaled_vertex_pos, 1.0);
     gl_Position.y = -gl_Position.y;
 //    uint bone_idx = body_part_to_bone_idx[part_variant];
 //    float bone_stride = tex_stride[bone_idx];
@@ -68,5 +75,5 @@ void main() {
 //    vec2 tex_size = tex_offset_and_size[tex_idx+uint(1)];
 //    fragTex = texture_uv[gl_VertexIndex] * tex_size + tex_offset;
 //    fragTex.x += bone_stride*texture_variant;
-    texColor = vec4(color1, color2, 0, 0);
+    texColor = vec4(color, 0);
 }

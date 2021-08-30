@@ -32,8 +32,8 @@ impl WorldSize {
         Self{width,depth}
     }
 
-    pub fn absolute_block_to_chunk_block_position(x:usize,y:usize,z:usize) -> (u8,u8,u8) {
-        ((x % CHUNK_WIDTH) as u8, y as u8, (z % CHUNK_DEPTH) as u8)
+    pub fn absolute_block_to_chunk_block_position(x:usize,y:usize,z:usize) -> [u8;3] {
+        [(x % CHUNK_WIDTH) as u8, y as u8, (z % CHUNK_DEPTH) as u8]
     }
     pub fn chunk_idx_into_chunk_pos(&self, chunk_idx: usize) -> (usize, usize) {
         (chunk_idx % self.width, chunk_idx / self.width)

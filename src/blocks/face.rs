@@ -91,9 +91,9 @@ impl Face {
         u8_u8_u8_u8::from((x, y, z, orientation as u8)).as_u32().clone()
     }
     pub fn from_coords_and_ort(chunk_x:u8, chunk_y:u8,x: u8, y: u8, z: u8, orientation: FaceOrientation, texture_id: u16) -> Self {
-        assert!((x as usize) < CHUNK_WIDTH);
-        assert!((y as usize) < CHUNK_HEIGHT);
-        assert!((z as usize) < CHUNK_DEPTH);
+        assert!((x as usize) < CHUNK_WIDTH, "{} < {}", x ,CHUNK_WIDTH);
+        assert!((y as usize) < CHUNK_HEIGHT, "{} < {}", y ,CHUNK_HEIGHT);
+        assert!((z as usize) < CHUNK_DEPTH, "{} < {}", z ,CHUNK_DEPTH);
         assert_eq!(
             std::mem::size_of::<FaceOrientation>(),
             std::mem::size_of::<u8>()

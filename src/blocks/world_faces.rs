@@ -36,21 +36,16 @@ impl WorldFaces {
                             let mut neighbour_pos = block_pos.clone();
                             neighbour_pos[dim] += 1;
                             let neighbour = world.get_block(neighbour_pos.x, neighbour_pos.y, neighbour_pos.z);
-                            if block.opacity() != neighbour.opacity() { // If two neighboring blocks differ in opacities, then
-                                // we must put a block face on the more opaque block, facing towards the less opaque block.
-                                // If either block_prop.opacity==1 or neighbour_prop.opacity==1 then it's obvious that the face will be opaque.
-                                // If both blocks are transparent (have opacity less than 1.0), then the face itself must be transparent.
-                                // Chunks offsets for opaque faces are stored at faces[0..total_chunks]
-                                // Chunks offsets for transparent faces are stored at faces[total_chunks..2*total_chunks]
-                                let orientation = FaceOrientation::from_dim(dim, block.opacity() > neighbour.opacity());
-                                let is_opaque = block.opacity() == 1.0 || neighbour.opacity() == 1.0;
-                                let b = if block.opacity() > neighbour.opacity() { block}else{neighbour};
-                                let pos = if block.opacity() > neighbour.opacity() {block_pos}else{neighbour_pos };
-                                let mut pos_relative_to_chunk = block_pos_relative_to_chunk;
-                                if block.opacity() < neighbour.opacity() {
-                                    pos_relative_to_chunk[dim] += 1;
-                                }
-                                f(orientation, is_opaque,b, pos, pos_relative_to_chunk)
+                            if block.opacity() > neighbour.opacity() {
+                                f(FaceOrientation::from_dim(dim,true), block.is_opaque(),block, block_pos, block_pos_relative_to_chunk)
+                            }
+                        }
+                        if 0 < block_pos[dim] {
+                            let mut neighbour_pos = block_pos.clone();
+                            neighbour_pos[dim] -= 1;
+                            let neighbour = world.get_block(neighbour_pos.x, neighbour_pos.y, neighbour_pos.z);
+                            if block.opacity() > neighbour.opacity() {
+                                f(FaceOrientation::from_dim(dim, false), block.is_opaque(),block, block_pos, block_pos_relative_to_chunk)
                             }
                         }
                     }

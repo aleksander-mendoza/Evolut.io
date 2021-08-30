@@ -13,7 +13,7 @@ use crate::render::submitter::{Submitter, fill_submit};
 
 use crate::render::buffer_type::{Cpu, Storage, GpuIndirect};
 
-use crate::blocks::world_size::CHUNK_VOLUME_IN_CELLS;
+use crate::blocks::world_size::{CHUNK_VOLUME_IN_CELLS, CHUNK_WIDTH, CHUNK_DEPTH};
 use crate::render::subbuffer::SubBuffer;
 use crate::pipelines::constraint::Constraint;
 use crate::render::buffer::Buffer;
@@ -21,7 +21,7 @@ use crate::pipelines::particle_constants::ParticleConstants;
 use crate::blocks::{WorldSize, Block, Face, WorldBlocks, WorldFaces};
 use crate::render::sampler::Sampler;
 use crate::pipelines::bone::Bone;
-use crate::blocks::block_properties::{BLOCKS, BlockProp, BEDROCK, DIRT, GRASS, GLASS, PLANK, AIR};
+use crate::blocks::block_properties::{BLOCKS, BlockProp, BEDROCK, DIRT, GRASS, GLASS, PLANK, AIR, STONE, WATER};
 use crate::pipelines::sensor::Sensor;
 use crate::pipelines::neural_net_layer::NeuralNetLayer;
 use crate::pipelines::neural_net_layer::Aggregate::Overwrite;
@@ -134,7 +134,7 @@ struct FoundationsCapacity {
 
 impl FoundationsCapacity {
     pub fn new() -> Self {
-        let world_size = WorldSize::new(2,1);
+        let world_size = WorldSize::new(2,2);
         let particles = 256u64;
         let bones = 256u64;
         let faces = 16 * 1024u64 * world_size.total_chunks() as u64;
@@ -277,14 +277,39 @@ impl FoundationsData {
         }
     }
     fn setup_world_blocks(&mut self) {
-        // for level in 0..16{
-        //     self.world_blocks.no_update_fill_level(level*5, 1, GRASS);
-        // }
-        self.world_blocks.no_update_fill_level(0, 1, BEDROCK);
-        // self.world_blocks.no_update_fill_level(1, 1, DIRT);
-        // self.world_blocks.no_update_fill_level(2, 1, GRASS);
-        // self.world_blocks.no_update_fill_level(10, 1, GLASS);
-        // self.world_blocks.no_update_outline(5, 2, 5, 5, 5, 5, PLANK);
+        const SEA_LEVEL:usize = 128;
+        let size_with_margins = WorldSize::new(self.world_blocks.size().width()+2,self.world_blocks.size().depth()+2);
+        let chunk_heights:Vec<f32> = (0..size_with_margins.total_chunks()).map(|_|100. + f32::random()*60.).collect();
+        for x in 0..self.world_blocks.size().world_width(){
+            for z in 0..self.world_blocks.size().world_depth(){
+                let pos_with_margins_x = x + CHUNK_WIDTH;
+                let pos_with_margins_z = z + CHUNK_DEPTH;
+                let radius_x =CHUNK_WIDTH/2-1;
+                let radius_z = CHUNK_DEPTH/2-1;
+                let fraction_x = ((pos_with_margins_x as f32 + 0.5 - CHUNK_WIDTH as f32/2f32) / (CHUNK_WIDTH as f32)).fract();
+                let fraction_z = ((pos_with_margins_z as f32 + 0.5 - CHUNK_DEPTH as f32/2f32) / (CHUNK_DEPTH as f32)).fract();
+                let neighbour_height_right_top = chunk_heights[size_with_margins.block_pos_into_chunk_idx(pos_with_margins_x+radius_x,pos_with_margins_z+radius_z)];
+                let neighbour_height_right_bottom = chunk_heights[size_with_margins.block_pos_into_chunk_idx(pos_with_margins_x+radius_x,pos_with_margins_z-radius_z)];
+                let neighbour_height_left_top = chunk_heights[size_with_margins.block_pos_into_chunk_idx(pos_with_margins_x-radius_x,pos_with_margins_z+radius_z)];
+                let neighbour_height_left_bottom = chunk_heights[size_with_margins.block_pos_into_chunk_idx(pos_with_margins_x-radius_x,pos_with_margins_z-radius_z)];
+                let height_left = fraction_z.smoothstep_between(neighbour_height_left_bottom, neighbour_height_left_top);
+                let height_right = fraction_z.smoothstep_between(neighbour_height_right_bottom, neighbour_height_right_top);
+                let height = fraction_x.smoothstep_between(height_left, height_right) as usize;
+                self.world_blocks.fill_column_to(x,1,z,height  - 4, STONE);
+                self.world_blocks.fill_column_to(x,height - 4,z,height, DIRT);
+                if height < SEA_LEVEL{
+                    self.world_blocks.fill_column_to(x,height ,z,SEA_LEVEL+1 ,WATER);
+                }else{
+                    self.world_blocks.set_block(x,height ,z, GRASS);
+                }
+
+            }
+        }
+
+
+        self.world_blocks.fill_level(0, 1, BEDROCK);
+
+
     }
     fn setup_world_faces(&mut self) {
         let Self { world_blocks, world_faces, .. } = self;
@@ -293,7 +318,7 @@ impl FoundationsData {
 
     fn compute_constants(&self, cap: &FoundationsCapacity) -> ParticleConstants {
         let FoundationsCapacity { world_size, .. } = cap;
-        let Self { sensor_data, constraints_data, particle_data: phantom_particle_data, bone_data: bone_data, .. } = self;
+        let Self { sensor_data, constraints_data, particle_data: phantom_particle_data, bone_data, .. } = self;
         ParticleConstants {
             predefined_constraints: constraints_data.len() as i32,
             collision_constraints: 0,
@@ -375,7 +400,7 @@ impl FoundationInitializer {
         data.setup_world_blocks();
         data.setup_world_faces();
         data.particle_data.extend((0..64).map(|_| Particle::random()));
-        data.bone_data.push(Bone::new(glm::vec3(2.,5.,2.),0.8,glm::vec3(0.5,1.0,0.5),0.2));
+        data.bone_data.push(Bone::new(glm::vec3(5.,128.,5.),glm::vec3(0.5,1.0,0.5),glm::vec3(0.1,1.0,0.1),glm::vec3(0.1,0.1,0.9), 1.0));
         data.neural_net_layer_data.append(&mut vec![
             NeuralNetLayer::new_input_recurrent(0,0,0,0),
             NeuralNetLayer::new_hidden(0,0,0,0,0,None,Overwrite),

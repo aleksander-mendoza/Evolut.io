@@ -46,29 +46,37 @@ impl BlockPropExtra{
     }
 }
 pub const AIR:Block = Block::new(0);
-pub const GLASS:Block = Block::new(1);
-pub const ICE:Block = Block::new(2);
-pub const SPAWNER:Block = Block::new(3);
-pub const WATER:Block = Block::new(4);
-pub const LEAVES:Block = Block::new(5);
-pub const STONE:Block = Block::new(6);
-pub const DIRT:Block = Block::new(7);
-pub const GRASS:Block = Block::new(8);
-pub const PLANK:Block = Block::new(9);
-pub const CRAFTING:Block = Block::new(10);
-pub const SLAB:Block = Block::new(11);
-pub const BRICK:Block = Block::new(12);
-pub const TNT:Block = Block::new(13);
-pub const COBBLESTONE:Block = Block::new(14);
-pub const BEDROCK:Block = Block::new(15);
-pub const GRAVEL:Block = Block::new(14);
-
+pub const WATER:Block = Block::new(AIR.id()+1);
+pub const LAVA:Block = Block::new(WATER.id()+1);
+pub const GLASS:Block = Block::new(LAVA.id()+1);
+pub const ICE:Block = Block::new(GLASS.id()+1);
+pub const SPAWNER:Block = Block::new(ICE.id()+1);
+pub const LEAVES:Block = Block::new(SPAWNER.id()+1);
+pub const STONE:Block = Block::new(LEAVES.id()+1);
+pub const DIRT:Block = Block::new(STONE.id()+1);
+pub const GRASS:Block = Block::new(DIRT.id()+1);
+pub const PLANK:Block = Block::new(GRASS.id()+1);
+pub const CRAFTING:Block = Block::new(PLANK.id()+1);
+pub const SLAB:Block = Block::new(CRAFTING.id()+1);
+pub const BRICK:Block = Block::new(SLAB.id()+1);
+pub const TNT:Block = Block::new(BRICK.id()+1);
+pub const COBBLESTONE:Block = Block::new(TNT.id()+1);
+pub const BEDROCK:Block = Block::new(COBBLESTONE.id()+1);
+pub const GRAVEL:Block = Block::new(BEDROCK.id()+1);
+pub const NO_OF_TRAVERSABLE_BLOCKS:u32 = 3;
+pub const NO_OF_TRANSPARENT_BLOCKS:u32 = 7;
 pub const BLOCKS:[BlockPropExtra;34] = [
     BlockPropExtra::regular_transparent("air", /*Some dummy value*/256, 0.),
+    BlockPropExtra::regular_transparent("water", 31, 0.5),
+    BlockPropExtra::regular_transparent("lava", 36, 0.5),
+    // blocks above are traversable. Blocks below are solid (Notice
+    // that if a block is traversable, player's camera might get inside it.
+    // When that happens the block's faces will be culled. This means that every
+    // traversable block must be transparent to prevent a situation where
+    // the player could see through walls)
     BlockPropExtra::regular_transparent("glass", 28, 0.1),
     BlockPropExtra::regular_transparent("ice", 55, 0.7),
     BlockPropExtra::regular_transparent("spawner", 53, 0.9),
-    BlockPropExtra::regular_transparent("water", 31, 0.5),
     BlockPropExtra::top_sides_bottom_transparent("leaves", 51,52, 51, 0.8),
     // blocks above are transparent. Blocks below are not
     BlockPropExtra::regular("stone", 1),
@@ -97,7 +105,6 @@ pub const BLOCKS:[BlockPropExtra;34] = [
     BlockPropExtra::regular("sponge", 27),
     BlockPropExtra::regular("diamond ore", 29),
     BlockPropExtra::regular("redstone ore", 30),
-    BlockPropExtra::regular("lava", 36),
     BlockPropExtra::regular("snow", 54),
 
 

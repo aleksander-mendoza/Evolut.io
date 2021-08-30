@@ -3,9 +3,13 @@
 
 struct Bone{
     vec3 center;
-    float color1;
-    vec3 size;
-    float color2;
+    float width;
+    vec3 color;
+    float depth;
+    vec3 direction;
+    float height;
+    vec3 velocity;
+    float mass;
 };
 
 #endif // BONE_COMP

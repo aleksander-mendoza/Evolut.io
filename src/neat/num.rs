@@ -4,7 +4,7 @@ use crate::neat::activations::*;
 use crate::neat::util::RandRange;
 use core::fmt::Debug;
 
-pub trait Num: Debug + num_traits::Num + Copy + Display + std::ops::AddAssign{
+pub trait Num: Debug + num_traits::Num + Copy + Display + std::ops::AddAssign + std::ops::Sub + std::ops::Div + std::cmp::PartialOrd{
     const ACT_FN_IDENTITY:fn(Self)->Self;
     const ACT_FN_SIGMOID:fn(Self)->Self;
     const ACT_FN_RELU:fn(Self)->Self;
@@ -33,6 +33,22 @@ pub trait Num: Debug + num_traits::Num + Copy + Display + std::ops::AddAssign{
         Self::ALL_ACT_FN.iter().position(|&f|f==a_f).map(|i|ALL_ACT_FN_NAME[i]).unwrap_or("???")
     }
     fn random_activation_fn() -> fn(Self)->Self;
+    fn lerp(self, other:Self, fraction:Self)->Self{
+        self + (other - self)*fraction
+    }
+    fn min(self, other:Self) -> Self{
+        if self < other {self} else {other}
+    }
+    fn max(self, other:Self) -> Self{
+        if self > other {self} else {other}
+    }
+    fn clamp(self, min:Self,max:Self) -> Self{
+        self.max(min).min(max)
+    }
+    fn smoothstep(self) -> Self;
+    fn smoothstep_between(self, edge0:Self, edge1:Self) -> Self {
+        edge0 + self.smoothstep()*(edge1-edge0)
+    }
 }
 impl Num for f64 {
     const ACT_FN_IDENTITY:fn(f64)->f64 =            identity;
@@ -88,6 +104,9 @@ impl Num for f64 {
     }
     fn random_activation_fn() -> fn(Self)->Self{
         Self::ALL_ACT_FN[Self::ALL_ACT_FN.len().random()]
+    }
+    fn smoothstep(self) -> Self {
+        self * self * (3. - 2. * self)
     }
 }
 
@@ -146,7 +165,9 @@ impl Num for f32 {
     fn random_activation_fn() -> fn(Self)->Self{
         Self::ALL_ACT_FN[Self::ALL_ACT_FN.len().random()]
     }
-
+    fn smoothstep(self) -> Self {
+        self * self * (3. - 2. * self)
+    }
 }
 
 

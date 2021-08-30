@@ -51,7 +51,7 @@ pub struct Display<P: RenderResources, C:ComputeResources>{
 impl <P: RenderResources, C:ComputeResources> Display<P,C> {
     const CLEAR_VALUES: [vk::ClearValue; 2] = [vk::ClearValue {
         color: vk::ClearColorValue {
-            float32: [0.0, 0.0, 0.0, 1.0],
+            float32: [145./256., 239./256., 2553./256., 1.0],
         },
     }, vk::ClearValue {
         depth_stencil: vk::ClearDepthStencilValue {

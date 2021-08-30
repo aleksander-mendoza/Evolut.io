@@ -1,5 +1,5 @@
 use std::fmt::{Display, Formatter};
-use crate::blocks::block_properties::{BLOCKS};
+use crate::blocks::block_properties::{BLOCKS, NO_OF_TRANSPARENT_BLOCKS};
 use crate::blocks::face_orientation::FaceOrientation;
 use crate::render::data::{VertexSource, VertexAttrib};
 use ash::vk::VertexInputAttributeDescription;
@@ -39,15 +39,16 @@ impl Block {
     pub fn weight(&self) -> u32 {
         (self.id - 10).max(0)
     }
-    pub fn id(&self) -> u32 {
+    pub const fn id(&self) -> u32 {
         self.id
     }
     pub fn is_solid(&self) -> bool {
-        self.id > 0
+        self.id > NO_OF_TRANSPARENT_BLOCKS
     }
     pub const fn opacity(&self) -> f32 {
         BLOCKS[self.id as usize].opacity()
     }
+
     pub fn is_air(&self) -> bool {
         self.id == 0
     }
@@ -61,5 +62,8 @@ impl Block {
     pub fn show_my_faces(&self) -> bool { !self.is_air() }
     pub fn is_transparent(&self) -> bool{
         self.opacity() < 1.
+    }
+    pub fn is_opaque(&self) -> bool{
+        self.opacity() == 1.
     }
 }
