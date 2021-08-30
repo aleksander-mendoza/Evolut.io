@@ -13,7 +13,7 @@ use crate::render::submitter::{Submitter, fill_submit};
 
 use crate::render::buffer_type::{Cpu, Storage, GpuIndirect};
 
-use crate::blocks::world_size::{CHUNK_VOLUME_IN_CELLS, CHUNK_WIDTH, CHUNK_DEPTH};
+use crate::blocks::world_size::{CHUNK_VOLUME_IN_CELLS, CHUNK_WIDTH, CHUNK_DEPTH, BROAD_PHASE_CHUNK_VOLUME_IN_CELLS, BROAD_PHASE_CELL_CAPACITY};
 use crate::render::subbuffer::SubBuffer;
 use crate::pipelines::constraint::Constraint;
 use crate::render::buffer::Buffer;
@@ -32,7 +32,9 @@ use crate::neat::cppn::CPPN;
 use crate::render::device::{QUEUE_IDX_GRAPHICS, QUEUE_IDX_TRANSFER};
 
 pub struct Indirect {
-    collision_detection: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
+    update_particles: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
+    broad_phase_collision_detection: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
+    broad_phase_collision_detection_cleanup: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
     solve_constraints: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
     update_bones: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
     agent_sensory_input_update: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
@@ -45,17 +47,21 @@ pub struct Indirect {
 
 impl Indirect {
     fn new(super_indirect_buffer: SubBuffer<u8, GpuIndirect>, indirect_dispatch: &Submitter<IndirectDispatchSubBuffer>, indirect_draw: &Submitter<IndirectSubBuffer>) -> Self {
-        let collision_detection = indirect_dispatch.gpu().element(0);
-        let solve_constraints = indirect_dispatch.gpu().element(1);
-        let update_bones = indirect_dispatch.gpu().element(2);
-        let agent_sensory_input_update = indirect_dispatch.gpu().element(3);
-        let feed_forward_net = indirect_dispatch.gpu().element(4);
+        let update_particles = indirect_dispatch.gpu().element(0);
+        let broad_phase_collision_detection = indirect_dispatch.gpu().element(1);
+        let broad_phase_collision_detection_cleanup = indirect_dispatch.gpu().element(2);
+        let solve_constraints = indirect_dispatch.gpu().element(3);
+        let update_bones = indirect_dispatch.gpu().element(4);
+        let agent_sensory_input_update = indirect_dispatch.gpu().element(5);
+        let feed_forward_net = indirect_dispatch.gpu().element(6);
         let draw_bones = indirect_draw.gpu().element(0);
         let draw_blocks = indirect_draw.gpu().element(1);
         let draw_particles = indirect_draw.gpu().element(2);
         Self {
             super_indirect_buffer,
-            collision_detection,
+            update_particles,
+            broad_phase_collision_detection,
+            broad_phase_collision_detection_cleanup,
             solve_constraints,
             update_bones,
             agent_sensory_input_update,
@@ -77,8 +83,14 @@ impl Indirect {
     pub fn draw_particles(&self) -> &SubBuffer<vk::DrawIndirectCommand, GpuIndirect> {
         &self.draw_particles
     }
-    pub fn collision_detection(&self) -> &SubBuffer<vk::DispatchIndirectCommand, GpuIndirect> {
-        &self.collision_detection
+    pub fn update_particles(&self) -> &SubBuffer<vk::DispatchIndirectCommand, GpuIndirect> {
+        &self.update_particles
+    }
+    pub fn broad_phase_collision_detection(&self) -> &SubBuffer<vk::DispatchIndirectCommand, GpuIndirect> {
+        &self.broad_phase_collision_detection
+    }
+    pub fn broad_phase_collision_detection_cleanup(&self) -> &SubBuffer<vk::DispatchIndirectCommand, GpuIndirect> {
+        &self.broad_phase_collision_detection_cleanup
     }
     pub fn feed_forward_net(&self) -> &SubBuffer<vk::DispatchIndirectCommand, GpuIndirect> {
         &self.feed_forward_net
@@ -101,14 +113,14 @@ pub struct FoundationInitializer {
     face_count_per_chunk_buffer: SubBuffer<Face, Storage>,
     opaque_and_transparent_face_buffer: SubBuffer<Face, Storage>,
     particles: Submitter<StageSubBuffer<Particle, Cpu, Storage>>,
-    // collision_grid: Submitter<SubBuffer<u32, Storage>>,
+    collision_grid: SubBuffer<u32, Storage>,
     bones: Submitter<StageSubBuffer<Bone, Cpu, Storage>>,
     // sensors: Submitter<StageSubBuffer<Sensor, Cpu, Storage>>,
     // muscles: Submitter<StageSubBuffer<Muscle, Cpu, Storage>>,
     persistent_floats: SubBuffer<f32, Storage>,
     // zombie_brains: ZombieNeat<f32>,
     neural_net_layers: Submitter<StageSubBuffer<NeuralNetLayer, Cpu, Storage>>,
-    // constraints: Submitter<StageSubBuffer<Constraint, Cpu, Storage>>,
+    constraints: SubBuffer<Constraint, Storage>,
     block_properties: Submitter<StageSubBuffer<BlockProp, Cpu, Storage>>,
     particle_constants: Submitter<StageSubBuffer<ParticleConstants, Cpu, Storage>>,
     indirect_dispatch: Submitter<IndirectDispatchSubBuffer>,
@@ -126,6 +138,7 @@ struct FoundationsCapacity {
     max_constraints: u64,
     // solid_particles: u64,
     // phantom_particles: u64,
+    grid_size: u64,
     sensors: u64,
     persistent_floats: u64,
     neural_net_layers: u64,
@@ -136,10 +149,11 @@ impl FoundationsCapacity {
     pub fn new() -> Self {
         let world_size = WorldSize::new(2,2);
         let particles = 256u64;
-        let bones = 256u64;
+        let bones = 1024u64;
         let faces = 16 * 1024u64 * world_size.total_chunks() as u64;
         let max_constraints = 2048u64;
         let sensors = 1024u64;
+        let grid_size = (world_size.total_chunks() * BROAD_PHASE_CHUNK_VOLUME_IN_CELLS * BROAD_PHASE_CELL_CAPACITY) as u64;
         let persistent_floats = 64*1024u64; // used as backing memory for vectors, matrices and
         // tensors that make up various neural networks. Especially, the outputs of recursive neural networks
         // often need to be persistent, because those outputs are later fed as inputs to the same neural net.
@@ -147,6 +161,7 @@ impl FoundationsCapacity {
         let muscles = 1024u64;
         // debug_assert!(solid_particles + phantom_particles <= particles,"{} + {} <= {}",solid_particles, phantom_particles, particles);
         Self {
+            grid_size,
             world_size,
             particles,
             bones,
@@ -260,6 +275,44 @@ struct FoundationsData {
     persistent_floats_len: u32,
 }
 
+struct HeightMap{
+    heights:Vec<usize>,
+    world_size:WorldSize,
+}
+
+impl HeightMap{
+    pub fn new(world_size:WorldSize)->Self{
+        let mut heights = Vec::with_capacity(world_size.world_area());
+        unsafe{
+            heights.set_len(world_size.world_area());
+        }
+        let size_with_margins = WorldSize::new(world_size.width()+2,world_size.depth()+2);
+        let chunk_heights:Vec<f32> = (0..size_with_margins.total_chunks()).map(|_|100. + f32::random()*60.).collect();
+        for x in 0..world_size.world_width(){
+            for z in 0..world_size.world_depth(){
+                let pos_with_margins_x = x + CHUNK_WIDTH;
+                let pos_with_margins_z = z + CHUNK_DEPTH;
+                let radius_x =CHUNK_WIDTH/2-1;
+                let radius_z = CHUNK_DEPTH/2-1;
+                let fraction_x = ((pos_with_margins_x as f32 + 0.5 - CHUNK_WIDTH as f32/2f32) / (CHUNK_WIDTH as f32)).fract();
+                let fraction_z = ((pos_with_margins_z as f32 + 0.5 - CHUNK_DEPTH as f32/2f32) / (CHUNK_DEPTH as f32)).fract();
+                let neighbour_height_right_top = chunk_heights[size_with_margins.block_pos_into_chunk_idx(pos_with_margins_x+radius_x,pos_with_margins_z+radius_z)];
+                let neighbour_height_right_bottom = chunk_heights[size_with_margins.block_pos_into_chunk_idx(pos_with_margins_x+radius_x,pos_with_margins_z-radius_z)];
+                let neighbour_height_left_top = chunk_heights[size_with_margins.block_pos_into_chunk_idx(pos_with_margins_x-radius_x,pos_with_margins_z+radius_z)];
+                let neighbour_height_left_bottom = chunk_heights[size_with_margins.block_pos_into_chunk_idx(pos_with_margins_x-radius_x,pos_with_margins_z-radius_z)];
+                let height_left = fraction_z.smoothstep_between(neighbour_height_left_bottom, neighbour_height_left_top);
+                let height_right = fraction_z.smoothstep_between(neighbour_height_right_bottom, neighbour_height_right_top);
+                let height = fraction_x.smoothstep_between(height_left, height_right) as usize;
+                heights[world_size.block_pos_xz_into_world_idx(x,z)] = height;
+            }
+        }
+        Self{heights,world_size}
+    }
+    pub fn height(&self, x:usize,z:usize)->usize{
+        self.heights[self.world_size.block_pos_xz_into_world_idx(x,z)]
+    }
+}
+
 impl FoundationsData {
     pub fn new(cap: &FoundationsCapacity) -> Self {
         Self {
@@ -276,25 +329,14 @@ impl FoundationsData {
             persistent_floats_len: 0,
         }
     }
-    fn setup_world_blocks(&mut self) {
+
+
+    fn setup_world_blocks(&mut self, heights:&HeightMap) {
         const SEA_LEVEL:usize = 128;
         let size_with_margins = WorldSize::new(self.world_blocks.size().width()+2,self.world_blocks.size().depth()+2);
-        let chunk_heights:Vec<f32> = (0..size_with_margins.total_chunks()).map(|_|100. + f32::random()*60.).collect();
         for x in 0..self.world_blocks.size().world_width(){
             for z in 0..self.world_blocks.size().world_depth(){
-                let pos_with_margins_x = x + CHUNK_WIDTH;
-                let pos_with_margins_z = z + CHUNK_DEPTH;
-                let radius_x =CHUNK_WIDTH/2-1;
-                let radius_z = CHUNK_DEPTH/2-1;
-                let fraction_x = ((pos_with_margins_x as f32 + 0.5 - CHUNK_WIDTH as f32/2f32) / (CHUNK_WIDTH as f32)).fract();
-                let fraction_z = ((pos_with_margins_z as f32 + 0.5 - CHUNK_DEPTH as f32/2f32) / (CHUNK_DEPTH as f32)).fract();
-                let neighbour_height_right_top = chunk_heights[size_with_margins.block_pos_into_chunk_idx(pos_with_margins_x+radius_x,pos_with_margins_z+radius_z)];
-                let neighbour_height_right_bottom = chunk_heights[size_with_margins.block_pos_into_chunk_idx(pos_with_margins_x+radius_x,pos_with_margins_z-radius_z)];
-                let neighbour_height_left_top = chunk_heights[size_with_margins.block_pos_into_chunk_idx(pos_with_margins_x-radius_x,pos_with_margins_z+radius_z)];
-                let neighbour_height_left_bottom = chunk_heights[size_with_margins.block_pos_into_chunk_idx(pos_with_margins_x-radius_x,pos_with_margins_z-radius_z)];
-                let height_left = fraction_z.smoothstep_between(neighbour_height_left_bottom, neighbour_height_left_top);
-                let height_right = fraction_z.smoothstep_between(neighbour_height_right_bottom, neighbour_height_right_top);
-                let height = fraction_x.smoothstep_between(height_left, height_right) as usize;
+                let height = heights.height(x,z);
                 self.world_blocks.fill_column_to(x,1,z,height  - 4, STONE);
                 self.world_blocks.fill_column_to(x,height - 4,z,height, DIRT);
                 if height < SEA_LEVEL{
@@ -305,11 +347,7 @@ impl FoundationsData {
 
             }
         }
-
-
         self.world_blocks.fill_level(0, 1, BEDROCK);
-
-
     }
     fn setup_world_faces(&mut self) {
         let Self { world_blocks, world_faces, .. } = self;
@@ -365,12 +403,12 @@ impl FoundationInitializer {
     pub fn particles(&self) -> &StageSubBuffer<Particle, Cpu, Storage> {
         &self.particles
     }
-    // pub fn constraints(&self) -> &StageSubBuffer<Constraint, Cpu, Storage> {
-    //     &self.constraints
-    // }
-    // pub fn collision_grid(&self) -> &SubBuffer<u32, Storage> {
-    //     &self.collision_grid
-    // }
+    pub fn constraints(&self) -> &SubBuffer<Constraint, Storage> {
+        &self.constraints
+    }
+    pub fn collision_grid(&self) -> &SubBuffer<u32, Storage> {
+        &self.collision_grid
+    }
     pub fn bones(&self) -> &StageSubBuffer<Bone, Cpu, Storage> {
         &self.bones
     }
@@ -397,10 +435,16 @@ impl FoundationInitializer {
     pub fn new(cmd_pool: &CommandPool) -> Result<Self, failure::Error> {
         let cap = FoundationsCapacity::new();
         let mut data = FoundationsData::new(&cap);
-        data.setup_world_blocks();
+        let heights = HeightMap::new(cap.world_size);
+        data.setup_world_blocks(&heights);
         data.setup_world_faces();
         data.particle_data.extend((0..64).map(|_| Particle::random()));
-        data.bone_data.push(Bone::new(glm::vec3(5.,128.,5.),glm::vec3(0.5,1.0,0.5),glm::vec3(0.1,1.0,0.1),glm::vec3(0.1,0.1,0.9), 1.0));
+        for _ in 0..8{
+            let x = rand::random::<usize>() % cap.world_size.world_width();
+            let z = rand::random::<usize>() % cap.world_size.world_depth();
+            data.bone_data.push(Bone::new(glm::vec3(x as f32,heights.height(x,z) as f32 + 5.,z as f32),glm::vec3(0.5,1.0,0.5),f32::random_vec3(),f32::random_vec3(), 1.0));
+        }
+
         data.neural_net_layer_data.append(&mut vec![
             NeuralNetLayer::new_input_recurrent(0,0,0,0),
             NeuralNetLayer::new_hidden(0,0,0,0,0,None,Overwrite),
@@ -419,10 +463,10 @@ impl FoundationInitializer {
         assert!(cap.persistent_floats >= data.persistent_floats_len as u64,"{} < {}",cap.persistent_floats, data.persistent_floats_len);
         let particles_in_bytes = std::mem::size_of::<Particle>() as u64 * cap.particles;
         let faces_in_bytes = std::mem::size_of::<Face>() as u64 * cap.faces;
-        // let grid_in_bytes = std::mem::size_of::<u32>() as u64 * cap.grid_size;
+        let grid_in_bytes = std::mem::size_of::<u32>() as u64 * cap.grid_size;
         let block_properties_in_bytes = std::mem::size_of_val(data.block_properties_data.as_slice()) as u64;
         let world_in_bytes = (std::mem::size_of::<Block>() * cap.world_size.world_volume()) as u64;
-        // let constraints_in_bytes = std::mem::size_of::<Constraint>() as u64 * cap.max_constraints;
+        let constraints_in_bytes = std::mem::size_of::<Constraint>() as u64 * cap.max_constraints;
         let bones_in_bytes = std::mem::size_of::<Bone>() as u64 * cap.bones;
         let constants_in_bytes = std::mem::size_of_val(&constants) as u64;
         // let sensors_in_bytes = std::mem::size_of::<Sensor>() as u64 * cap.sensors;
@@ -433,10 +477,10 @@ impl FoundationInitializer {
         let super_buffer: SubBuffer<u8, Storage> = SubBuffer::with_capacity(cmd_pool.device(),
                                                                             particles_in_bytes +
                                                                                 faces_in_bytes +
-                                                                                // grid_in_bytes +
+                                                                                grid_in_bytes +
                                                                                 block_properties_in_bytes +
                                                                                 world_in_bytes +
-                                                                                // constraints_in_bytes +
+                                                                                constraints_in_bytes +
                                                                                 bones_in_bytes +
                                                                                 constants_in_bytes +
                                                                                 // sensors_in_bytes +
@@ -451,18 +495,18 @@ impl FoundationInitializer {
         let face_buffer = super_buffer.sub(offset..offset + faces_in_bytes).reinterpret_into::<Face>();
         let offset = offset + faces_in_bytes;
         assert_eq!(offset % 16, 0);
-        // let grid_buffer = super_buffer.sub(offset..offset + grid_in_bytes).reinterpret_into::<u32>();
-        // let offset = offset + grid_in_bytes;
-        // assert_eq!(offset % 16, 0);
+        let grid_buffer = super_buffer.sub(offset..offset + grid_in_bytes).reinterpret_into::<u32>();
+        let offset = offset + grid_in_bytes;
+        assert_eq!(offset % 16, 0);
         let block_properties_buffer = super_buffer.sub(offset..offset + block_properties_in_bytes).reinterpret_into::<BlockProp>();
         let offset = offset + block_properties_in_bytes;
         assert_eq!(offset % 16, 0);
         let world_buffer = super_buffer.sub(offset..offset + world_in_bytes).reinterpret_into::<Block>();
         let offset = offset + world_in_bytes;
         assert_eq!(offset % 16, 0);
-        // let constraint_buffer = super_buffer.sub(offset..offset + constraints_in_bytes).reinterpret_into::<Constraint>();
-        // let offset = offset + constraints_in_bytes;
-        // assert_eq!(offset % 16, 0);
+        let constraint_buffer = super_buffer.sub(offset..offset + constraints_in_bytes).reinterpret_into::<Constraint>();
+        let offset = offset + constraints_in_bytes;
+        assert_eq!(offset % 16, 0);
         let bones_buffer = super_buffer.sub(offset..offset + bones_in_bytes).reinterpret_into::<Bone>();
         let offset = offset + bones_in_bytes;
         assert_eq!(offset % 16, 0);
@@ -490,7 +534,7 @@ impl FoundationInitializer {
         let opaque_and_transparent_face_buffer = face_buffer.sub(std::mem::size_of::<Face>() as u64 * cap.world_size.total_chunks() as u64 * 2..);
         let faces = StageBuffer::wrap(cmd_pool, data.world_faces.as_slice(), face_buffer)?;
 
-        // let mut collision_grid = Submitter::new(grid_buffer, cmd_pool)?;
+        // let mut collision_grid = Submitter::new(collision_grid, cmd_pool)?;
         // fill_submit(&mut collision_grid, u32::MAX)?;
 
         let block_properties = StageBuffer::wrap(cmd_pool, &data.block_properties_data, block_properties_buffer)?;
@@ -529,7 +573,9 @@ impl FoundationInitializer {
             }
         }
         let indirect_dispatch_data = vec![
-            dispatch_indirect(data.particle_data.len()),// collision_detection.comp
+            dispatch_indirect(data.particle_data.len()),// update_particles.comp
+            dispatch_indirect(data.bone_data.len()),// broad_phase_collision_detection.comp
+            dispatch_indirect(data.bone_data.len()),// broad_phase_collision_detection_cleanup.comp
             dispatch_indirect(0), // solve_constraints.comp
             dispatch_indirect(data.bone_data.len()), // update_bones.comp
             dispatch_indirect(data.sensor_data.len()), // agent_sensory_input_update.comp
@@ -570,12 +616,12 @@ impl FoundationInitializer {
             world_size: cap.world_size.clone(),
             sampler,
             particles,
-            // constraints,
+            constraints:constraint_buffer,
             // sensors,
             // zombie_brains,
             persistent_floats,
             neural_net_layers,
-            // collision_grid,
+            collision_grid:grid_buffer,
             particle_constants,
             indirect_dispatch,
             indirect_draw,
@@ -599,8 +645,8 @@ impl FoundationInitializer {
             // sensors,
             persistent_floats,
             particles,
-            // collision_grid,
-            // constraints,
+            collision_grid,
+            constraints,
             particle_constants,
             indirect,
             neural_net_layers,
@@ -631,10 +677,10 @@ impl FoundationInitializer {
             world,
             world_size,
             bones,
-            // collision_grid,
+            collision_grid,
             neural_net_layers,
             particle_constants,
-            // constraints,
+            constraints,
             particles,
             indirect,
             sampler,
@@ -651,14 +697,14 @@ pub struct Foundations {
     opaque_and_transparent_face_buffer: SubBuffer<Face, Storage>,
     world: SubBuffer<Block, Storage>,
     particles: SubBuffer<Particle, Storage>,
-    // constraints: SubBuffer<Constraint, Storage>,
+    constraints: SubBuffer<Constraint, Storage>,
     bones: SubBuffer<Bone, Storage>,
     neural_net_layers: SubBuffer<NeuralNetLayer, Storage>,
     // sensors: SubBuffer<Sensor, Storage>,
     // muscles: SubBuffer<Muscle, Storage>,
     persistent_floats: SubBuffer<f32, Storage>,
     particle_constants: SubBuffer<ParticleConstants, Storage>,
-    // collision_grid: SubBuffer<u32, Storage>,
+    collision_grid: SubBuffer<u32, Storage>,
     indirect: Indirect,
     sampler: Sampler,
     // zombie_brains:ZombieNeat<f32>,
@@ -711,7 +757,7 @@ impl Foundations {
     //     &self.constraints
     // }
 
-    // pub fn collision_grid(&self) -> &SubBuffer<u32, Storage> {
-    //     &self.collision_grid
-    // }
+    pub fn collision_grid(&self) -> &SubBuffer<u32, Storage> {
+        &self.collision_grid
+    }
 }

@@ -21,6 +21,14 @@ pub const CHUNK_DEPTH_IN_CELLS:usize = CHUNK_DEPTH*GRID_GRANULARITY;
 pub const CHUNK_HEIGHT_IN_CELLS:usize = CHUNK_HEIGHT*GRID_GRANULARITY;
 pub const PARTICLE_COLLISION_DISTANCE_SQUARE:f32 = PARTICLE_DIAMETER*PARTICLE_DIAMETER;
 pub const CHUNK_VOLUME_IN_CELLS:usize = CHUNK_WIDTH_IN_CELLS * CHUNK_HEIGHT_IN_CELLS * CHUNK_DEPTH_IN_CELLS;
+
+pub const BROAD_PHASE_CELL_SIZE:usize = 2 ;// how many blocks make up the side of one cell. Each cell may then hold multiple bones
+pub const BROAD_PHASE_CHUNK_WIDTH_IN_CELLS:usize = (CHUNK_WIDTH/BROAD_PHASE_CELL_SIZE);
+pub const BROAD_PHASE_CHUNK_DEPTH_IN_CELLS:usize = (CHUNK_DEPTH/BROAD_PHASE_CELL_SIZE);
+pub const BROAD_PHASE_CHUNK_HEIGHT_IN_CELLS:usize = (CHUNK_HEIGHT/BROAD_PHASE_CELL_SIZE);
+pub const BROAD_PHASE_CHUNK_VOLUME_IN_CELLS:usize = (BROAD_PHASE_CHUNK_WIDTH_IN_CELLS*BROAD_PHASE_CHUNK_DEPTH_IN_CELLS*BROAD_PHASE_CHUNK_HEIGHT_IN_CELLS);
+pub const BROAD_PHASE_CELL_CAPACITY:usize = 8; // maximum number of bones that can be placed in one cell
+
 #[derive(Eq,PartialEq,Clone,Copy)]
 pub struct WorldSize {
     width: usize,
@@ -54,6 +62,9 @@ impl WorldSize {
         assert!(z < self.world_depth());
         assert!(y < self.height());
         z * self.world_width() + x + y * self.world_area()
+    }
+    pub fn block_pos_xz_into_world_idx(&self, x: usize, z: usize) -> usize {
+        self.block_pos_into_world_idx(x,0, z)
     }
     // pub fn world_idx_into_block_pos(&self, idx: usize) -> (usize, usize, usize) {
     //     ((idx % self.world_area()) / self.world_width(), idx % self.world_width(), idx / self.world_area())

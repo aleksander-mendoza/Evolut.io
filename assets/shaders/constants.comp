@@ -24,7 +24,7 @@
 #define MAX_STIFFNESS 1.0
 #define MIN_STIFFNESS 0.0
 #define GAUSS_SEIDEL_PASSES 12
-#define GRAVITY 0.001
+#define GRAVITY 0.002
 #define DAMPING_COEFFICIENT 0.99
 #define BLOCK_COLLISION_FRICTION 0.7
 #define BLOCK_COLLISION_MINIMUM_BOUNCE 0.01
@@ -33,6 +33,12 @@
 #define NO_OF_TRAVERSABLE_BLOCKS 3 // every traversable block (mobs can pass through it without colliding) is transparent but the opposite may not necessarily hold
 #define NO_OF_TRANSPARENT_BLOCKS 7 // The blocks are aligned in such a way that transparent blocks come first. Hence in
 // order to check whether a block is transparent or not, it's enough to just check if its ID is below this value
-
+#define BROAD_PHASE_CELL_SIZE 2 // how many blocks make up the side of one cell. Each cell may then hold multiple bones
+#define BROAD_PHASE_CHUNK_WIDTH_IN_CELLS (CHUNK_WIDTH/BROAD_PHASE_CELL_SIZE)
+#define BROAD_PHASE_CHUNK_DEPTH_IN_CELLS (CHUNK_DEPTH/BROAD_PHASE_CELL_SIZE)
+#define BROAD_PHASE_CHUNK_HEIGHT_IN_CELLS (CHUNK_HEIGHT/BROAD_PHASE_CELL_SIZE)
+#define BROAD_PHASE_CHUNK_VOLUME_IN_CELLS (BROAD_PHASE_CHUNK_WIDTH_IN_CELLS*BROAD_PHASE_CHUNK_DEPTH_IN_CELLS*BROAD_PHASE_CHUNK_HEIGHT_IN_CELLS)
+#define BROAD_PHASE_CELL_CAPACITY 8 // maximum number of bones that can be placed in one cell
+#define MAX_BONES 1024
 
 #endif // CONSTANTS_COMP

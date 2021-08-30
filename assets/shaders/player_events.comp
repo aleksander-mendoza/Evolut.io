@@ -1,0 +1,53 @@
+#version 450
+#define IS_AVAILABLE_BUFFER_CONSTANTS
+#define IS_AVAILABLE_BUFFER_WORLD
+#define IS_AVAILABLE_BUFFER_PARTICLES
+#define IS_AVAILABLE_BUFFER_PLAYER_EVENT
+#define IS_AVAILABLE_BUFFER_COLLISION_GRID
+#define IS_AVAILABLE_BUFFER_INDIRECT
+#define IS_AVAILABLE_BUFFER_FACES
+#define IS_AVAILABLE_BUFFER_BLOCK_PROPS
+layout (local_size_x = 32) in;
+
+#include "physics_descriptors.comp"
+#include "constants.comp"
+#include "world.comp"
+#include "ray_cast.comp"
+#include "update_faces.comp"
+
+void main()
+{
+
+    uint gID = gl_GlobalInvocationID.x;
+    const ParticleConstants c = constants;
+    if(gID==0){
+        constants.collision_constraints = c.predefined_constraints; //First we reset the number of computed collision constraints
+        if(player_event.event_type == PLAYER_EVENT_THROW){
+            // vec3_slot0 holds current player position
+            // vec3_slot1 holds throwing velocity
+            particles[0].old_position = player_event.vec3_slot0;
+            particles[0].new_position = player_event.vec3_slot0 + player_event.vec3_slot1;
+        } else if(player_event.event_type == PLAYER_EVENT_SET_BLOCK){
+
+            // vec3_slot0 holds current player position
+            // vec3_slot1 holds ray cast direction
+            // u32_slot0 holds ray cast direction
+            const RayCastResult ray = ray_cast(c, player_event.vec3_slot0, player_event.vec3_slot1);
+            if(ray.found){
+                const uvec3 hit_pos = uvec3(player_event.u32_slot0>0?ray.prev_v:ray.v);
+                const uint hit_idx = block_pos_into_world_idx(c, hit_pos);
+                uint prev_block = world[hit_idx];
+                world[hit_idx] = player_event.u32_slot0;
+                if(player_event.u32_slot0==0){
+                    const uint number_of_faces = remove_block_faces(c,block_props[prev_block],hit_pos);
+                    draw_indirect[DRAW_INDIRECT_BLOCK].instance_count = number_of_faces;
+                }else{
+                    const uint number_of_faces = add_block_faces(c, hit_pos, player_event.u32_slot0);
+                    draw_indirect[DRAW_INDIRECT_BLOCK].instance_count = number_of_faces;
+                }
+
+            }
+        }
+    }
+}
+

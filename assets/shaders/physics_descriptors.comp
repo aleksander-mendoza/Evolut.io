@@ -48,8 +48,8 @@ restrict layout(std430, set = 0, binding = 4) buffer PersistentFloats{
 #ifdef IS_AVAILABLE_BUFFER_INDIRECT
 #include "indirect.comp"
 restrict layout(std430, set = 0, binding = 5) buffer Indirect{
-    DispatchIndirectCommand[5] dispatch_indirect;
-    DrawIndirectCommand[3] draw_indirect;
+    DispatchIndirectCommand[DISPATCH_INDIRECT_LEN] dispatch_indirect;
+    DrawIndirectCommand[DRAW_INDIRECT_LEN] draw_indirect;
 };
 #endif //IS_AVAILABLE_BUFFER_INDIRECT
 
@@ -94,13 +94,13 @@ restrict layout(std430, set = 0, binding = 9) buffer BlockProps{
 };
 #endif // IS_AVAILABLE_BUFFER_BLOCK_PROPS
 
-/**
+
 #ifdef IS_AVAILABLE_BUFFER_COLLISION_GRID
-restrict layout(std430, set = 0, binding = 3) buffer CollisionGrid{
+restrict layout(std430, set = 0, binding = 10) buffer CollisionGrid{
     uint collision_grid[];
 };
 #endif // IS_AVAILABLE_BUFFER_COLLISION_GRID
-
+/**
 #ifdef IS_AVAILABLE_BUFFER_AUXILIARY_FLOATS
 #ifdef IS_AVAILABLE_BUFFER_COLLISION_GRID
 #error It is not allowed to use both IS_AVAILABLE_BUFFER_COLLISION_GRID and IS_AVAILABLE_BUFFER_AUXILIARY_FLOATS at the same time

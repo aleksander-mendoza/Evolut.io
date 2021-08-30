@@ -2,11 +2,14 @@
 #define IS_AVAILABLE_BUFFER_CONSTANTS
 #define IS_AVAILABLE_BUFFER_BONES
 #define IS_AVAILABLE_BUFFER_WORLD
-#include "constants.comp"
-#include "world.comp"
+#define IS_AVAILABLE_BUFFER_COLLISION_GRID
 layout (local_size_x = 32) in;
 
 #include "physics_descriptors.comp"
+#include "constants.comp"
+#include "world.comp"
+#include "grid.comp"
+
 
 bool contains_solid_block_in(const ParticleConstants c,uvec3 from, uvec3 to){
     for(uint y=from.y;y<to.y;y++){
@@ -23,17 +26,17 @@ bool contains_solid_block_in(const ParticleConstants c,uvec3 from, uvec3 to){
 
 void main() {
     uint gID = gl_GlobalInvocationID.x;
-    if(gID < constants.bones){
+    const ParticleConstants c = constants;
+    if (gID < c.bones){
         Bone bone = bones[gID];
-        bone.velocity.y -= GRAVITY;
-        vec3 velocity_after_collision_detection = bone.velocity;
-
-        vec3 hitbox_from = bone.center-vec3(bone.width,0,bone.depth);
-        vec3 hitbox_to = bone.center+vec3(bone.width,bone.height,bone.depth);
+        bone.velocity.y -= GRAVITY * PHYSICS_SIMULATION_DELTA_TIME_PER_STEP;
+        float hitbox_size = bone_hitbox_side_half_length(bone);
+        vec3 hitbox_from = bone.center-vec3(hitbox_size,0,hitbox_size);
+        vec3 hitbox_to = bone.center+vec3(hitbox_size,bone.height,hitbox_size);
         vec3 hitbox_to_ceil = ceil(hitbox_to);
+        uvec3 world_borders = uvec3(c.world_width,CHUNK_HEIGHT,c.world_depth);
         uvec3 start = uvec3(hitbox_from);
         uvec3 end = uvec3(hitbox_to_ceil);
-        uvec3 world_borders = uvec3(constants.world_width,CHUNK_HEIGHT,constants.world_depth);
         bvec3 is_start_limited_by_world_borders = equal(start,uvec3(0,0,0));
         bvec3 is_end_limited_by_world_borders = lessThan(world_borders,end);
 
@@ -45,7 +48,7 @@ void main() {
             if(will_hitbox_move_to_next_block){
                 bool bounded_by_world_border = neg ? start[dim] == 0 : end[dim] >= world_borders[dim];
                 if (bounded_by_world_border){
-                    velocity_after_collision_detection[dim] = 0;
+                    bone.velocity[dim] = 0;
                 } else {
                     uvec3 from = start;
                     uvec3 to = end;
@@ -56,14 +59,13 @@ void main() {
                         from[dim] = end[dim];
                         to[dim]++;
                     }
-                    if(contains_solid_block_in(constants,from,to)){
-                        velocity_after_collision_detection[dim] = 0;
+                    if(contains_solid_block_in(c,from,to)){
+                        bone.velocity[dim] = 0;
                     }
                 }
             }
-
         }
-        bones[gID].center = bone.center += velocity_after_collision_detection;
-        bones[gID].velocity = velocity_after_collision_detection;
+        bones[gID].center = bone.center + bone.velocity;
+        bones[gID].velocity = bone.velocity;
     }
 }

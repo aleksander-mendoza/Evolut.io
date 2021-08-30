@@ -1,0 +1,15 @@
+#ifndef BONE_COMP
+#define BONE_COMP
+
+struct Entity{
+    uint block_lidars_offset; // offset into persistent_floats buffer
+    uint block_lidars_count;
+    uint smell_lidars_offset; // offset into persistent_floats buffer
+    uint smell_lidars_count;
+    uint bone_idx;
+    float hunger;
+    float stamina;
+    float strength;
+};
+
+#endif // BONE_COMP

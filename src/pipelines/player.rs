@@ -43,7 +43,7 @@ impl Player {
             location: glm::vec3(2f32, 128f32, 2f32),
             block_in_hand: Block::new(2u32),
             model_matrix: glm::identity::<f32, 4>(),
-            movement_speed: 0.005f32,
+            movement_speed: 0.009f32,
             player_reach: 4f32,
             rotation_speed: 1f32,
             events: VecDeque::with_capacity(4),

@@ -2,14 +2,13 @@
 #define BONE_COMP
 
 struct Bone{
-    vec3 center;
-    float width;
-    vec3 color;
-    float depth;
+    vec3 old_center;
+    float half_side_length;
     vec3 direction;
     float height;
-    vec3 velocity;
+    vec3 new_center;
     float mass;
+    vec4 texture_coords;//xy components hold text UV coordinates. zw components hold width and height
 };
 
 #endif // BONE_COMP

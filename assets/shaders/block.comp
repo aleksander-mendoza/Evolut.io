@@ -1,7 +1,6 @@
 #ifndef BLOCK_COMP
 #define BLOCK_COMP
 
-#define Block uint
 #define BLOCK_ID_AIR 0
 #define BLOCK_ID_GLASS 1
 #define BLOCK_ID_ICE 2
@@ -24,6 +23,11 @@ struct BlockProp{
     uint[6] texture_ids;
     float opacity; // the higher, the more opaque
     float mass;
+};
+
+struct Block{
+    vec3 smell;
+    uint id;
 };
 
 #endif // BLOCK_COMP
