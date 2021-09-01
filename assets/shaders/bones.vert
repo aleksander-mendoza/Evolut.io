@@ -6,11 +6,10 @@
 #include "render_vertex_descriptors.comp"
 
 layout(location = 0) in vec3 center;
-layout(location = 1) in float width;
-layout(location = 2) in vec3 color;
-layout(location = 3) in float depth;
+layout(location = 1) in float half_side_length;
+layout(location = 2) in vec4 texture_coords;
+layout(location = 3) in float height;
 layout(location = 4) in vec3 direction;
-layout(location = 5) in float height;
 layout(location = 0) out vec4 texColor;
 
 
@@ -60,8 +59,8 @@ void main() {
         M, L, K, M, K, N
     );
 
-    vec2 rotated_and_scaled_z_axis = direction.xz * depth;
-    vec2 rotated_and_scaled_x_axis = vec2(direction.z,-direction.x) * width;
+    vec2 rotated_and_scaled_z_axis = direction.xz * half_side_length;
+    vec2 rotated_and_scaled_x_axis = vec2(direction.z,-direction.x) * half_side_length;
     vec3 normalized_vertex_pos = direction_per_vertex[gl_VertexIndex];
     vec2 rotated_and_scaled_vertex_pos_xz = rotated_and_scaled_x_axis * normalized_vertex_pos.x + rotated_and_scaled_z_axis * normalized_vertex_pos.z;
     vec3 rotated_and_scaled_vertex_pos = vec3(rotated_and_scaled_vertex_pos_xz.x,normalized_vertex_pos.y*height,rotated_and_scaled_vertex_pos_xz.y);
@@ -75,5 +74,5 @@ void main() {
 //    vec2 tex_size = tex_offset_and_size[tex_idx+uint(1)];
 //    fragTex = texture_uv[gl_VertexIndex] * tex_size + tex_offset;
 //    fragTex.x += bone_stride*texture_variant;
-    texColor = vec4(color, 0);
+    texColor = vec4(texture_coords.xyz, 0);
 }

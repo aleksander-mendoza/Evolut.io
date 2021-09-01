@@ -33,10 +33,7 @@ use crate::render::device::{QUEUE_IDX_GRAPHICS, QUEUE_IDX_TRANSFER};
 
 pub struct Indirect {
     update_particles: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
-    broad_phase_collision_detection: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
-    broad_phase_collision_detection_cleanup: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
-    solve_constraints: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
-    update_bones: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
+    per_bone: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
     agent_sensory_input_update: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
     feed_forward_net: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
     draw_bones: SubBuffer<vk::DrawIndirectCommand, GpuIndirect>,
@@ -48,22 +45,16 @@ pub struct Indirect {
 impl Indirect {
     fn new(super_indirect_buffer: SubBuffer<u8, GpuIndirect>, indirect_dispatch: &Submitter<IndirectDispatchSubBuffer>, indirect_draw: &Submitter<IndirectSubBuffer>) -> Self {
         let update_particles = indirect_dispatch.gpu().element(0);
-        let broad_phase_collision_detection = indirect_dispatch.gpu().element(1);
-        let broad_phase_collision_detection_cleanup = indirect_dispatch.gpu().element(2);
-        let solve_constraints = indirect_dispatch.gpu().element(3);
-        let update_bones = indirect_dispatch.gpu().element(4);
-        let agent_sensory_input_update = indirect_dispatch.gpu().element(5);
-        let feed_forward_net = indirect_dispatch.gpu().element(6);
+        let per_bone = indirect_dispatch.gpu().element(1);
+        let agent_sensory_input_update = indirect_dispatch.gpu().element(2);
+        let feed_forward_net = indirect_dispatch.gpu().element(3);
         let draw_bones = indirect_draw.gpu().element(0);
         let draw_blocks = indirect_draw.gpu().element(1);
         let draw_particles = indirect_draw.gpu().element(2);
         Self {
             super_indirect_buffer,
             update_particles,
-            broad_phase_collision_detection,
-            broad_phase_collision_detection_cleanup,
-            solve_constraints,
-            update_bones,
+            per_bone,
             agent_sensory_input_update,
             feed_forward_net,
             draw_bones,
@@ -87,10 +78,13 @@ impl Indirect {
         &self.update_particles
     }
     pub fn broad_phase_collision_detection(&self) -> &SubBuffer<vk::DispatchIndirectCommand, GpuIndirect> {
-        &self.broad_phase_collision_detection
+        &self.per_bone
+    }
+    pub fn narrow_phase_collision_detection(&self) -> &SubBuffer<vk::DispatchIndirectCommand, GpuIndirect> {
+        &self.per_bone
     }
     pub fn broad_phase_collision_detection_cleanup(&self) -> &SubBuffer<vk::DispatchIndirectCommand, GpuIndirect> {
-        &self.broad_phase_collision_detection_cleanup
+        &self.per_bone
     }
     pub fn feed_forward_net(&self) -> &SubBuffer<vk::DispatchIndirectCommand, GpuIndirect> {
         &self.feed_forward_net
@@ -98,11 +92,8 @@ impl Indirect {
     pub fn agent_sensory_input_update(&self) -> &SubBuffer<vk::DispatchIndirectCommand, GpuIndirect> {
         &self.agent_sensory_input_update
     }
-    pub fn solve_constraints(&self) -> &SubBuffer<vk::DispatchIndirectCommand, GpuIndirect> {
-        &self.solve_constraints
-    }
     pub fn update_bones(&self) -> &SubBuffer<vk::DispatchIndirectCommand, GpuIndirect> {
-        &self.update_bones
+        &self.per_bone
     }
 }
 
@@ -120,7 +111,7 @@ pub struct FoundationInitializer {
     persistent_floats: SubBuffer<f32, Storage>,
     // zombie_brains: ZombieNeat<f32>,
     neural_net_layers: Submitter<StageSubBuffer<NeuralNetLayer, Cpu, Storage>>,
-    constraints: SubBuffer<Constraint, Storage>,
+    // constraints: SubBuffer<Constraint, Storage>,
     block_properties: Submitter<StageSubBuffer<BlockProp, Cpu, Storage>>,
     particle_constants: Submitter<StageSubBuffer<ParticleConstants, Cpu, Storage>>,
     indirect_dispatch: Submitter<IndirectDispatchSubBuffer>,
@@ -135,7 +126,7 @@ struct FoundationsCapacity {
     particles: u64,
     bones: u64,
     faces: u64,
-    max_constraints: u64,
+    // max_constraints: u64,
     // solid_particles: u64,
     // phantom_particles: u64,
     grid_size: u64,
@@ -151,7 +142,7 @@ impl FoundationsCapacity {
         let particles = 256u64;
         let bones = 1024u64;
         let faces = 16 * 1024u64 * world_size.total_chunks() as u64;
-        let max_constraints = 2048u64;
+        // let max_constraints = bones;
         let sensors = 1024u64;
         let grid_size = (world_size.total_chunks() * BROAD_PHASE_CHUNK_VOLUME_IN_CELLS * BROAD_PHASE_CELL_CAPACITY) as u64;
         let persistent_floats = 64*1024u64; // used as backing memory for vectors, matrices and
@@ -166,7 +157,7 @@ impl FoundationsCapacity {
             particles,
             bones,
             faces,
-            max_constraints,
+            // max_constraints,
             sensors,
             persistent_floats,
             neural_net_layers,
@@ -403,9 +394,9 @@ impl FoundationInitializer {
     pub fn particles(&self) -> &StageSubBuffer<Particle, Cpu, Storage> {
         &self.particles
     }
-    pub fn constraints(&self) -> &SubBuffer<Constraint, Storage> {
-        &self.constraints
-    }
+    // pub fn constraints(&self) -> &SubBuffer<Constraint, Storage> {
+    //     &self.constraints
+    // }
     pub fn collision_grid(&self) -> &SubBuffer<u32, Storage> {
         &self.collision_grid
     }
@@ -442,7 +433,7 @@ impl FoundationInitializer {
         for _ in 0..8{
             let x = rand::random::<usize>() % cap.world_size.world_width();
             let z = rand::random::<usize>() % cap.world_size.world_depth();
-            data.bone_data.push(Bone::new(glm::vec3(x as f32,heights.height(x,z) as f32 + 5.,z as f32),glm::vec3(0.5,1.0,0.5),f32::random_vec3(),f32::random_vec3(), 1.0));
+            data.bone_data.push(Bone::new(glm::vec3(x as f32,heights.height(x,z) as f32 + 5.,z as f32),0.5,glm::vec3(1.,0.,0.),1., 1.0));
         }
 
         data.neural_net_layer_data.append(&mut vec![
@@ -466,7 +457,7 @@ impl FoundationInitializer {
         let grid_in_bytes = std::mem::size_of::<u32>() as u64 * cap.grid_size;
         let block_properties_in_bytes = std::mem::size_of_val(data.block_properties_data.as_slice()) as u64;
         let world_in_bytes = (std::mem::size_of::<Block>() * cap.world_size.world_volume()) as u64;
-        let constraints_in_bytes = std::mem::size_of::<Constraint>() as u64 * cap.max_constraints;
+        // let constraints_in_bytes = std::mem::size_of::<Constraint>() as u64 * cap.max_constraints;
         let bones_in_bytes = std::mem::size_of::<Bone>() as u64 * cap.bones;
         let constants_in_bytes = std::mem::size_of_val(&constants) as u64;
         // let sensors_in_bytes = std::mem::size_of::<Sensor>() as u64 * cap.sensors;
@@ -480,7 +471,7 @@ impl FoundationInitializer {
                                                                                 grid_in_bytes +
                                                                                 block_properties_in_bytes +
                                                                                 world_in_bytes +
-                                                                                constraints_in_bytes +
+                                                                                // constraints_in_bytes +
                                                                                 bones_in_bytes +
                                                                                 constants_in_bytes +
                                                                                 // sensors_in_bytes +
@@ -504,9 +495,9 @@ impl FoundationInitializer {
         let world_buffer = super_buffer.sub(offset..offset + world_in_bytes).reinterpret_into::<Block>();
         let offset = offset + world_in_bytes;
         assert_eq!(offset % 16, 0);
-        let constraint_buffer = super_buffer.sub(offset..offset + constraints_in_bytes).reinterpret_into::<Constraint>();
-        let offset = offset + constraints_in_bytes;
-        assert_eq!(offset % 16, 0);
+        // let constraint_buffer = super_buffer.sub(offset..offset + constraints_in_bytes).reinterpret_into::<Constraint>();
+        // let offset = offset + constraints_in_bytes;
+        // assert_eq!(offset % 16, 0);
         let bones_buffer = super_buffer.sub(offset..offset + bones_in_bytes).reinterpret_into::<Bone>();
         let offset = offset + bones_in_bytes;
         assert_eq!(offset % 16, 0);
@@ -574,10 +565,7 @@ impl FoundationInitializer {
         }
         let indirect_dispatch_data = vec![
             dispatch_indirect(data.particle_data.len()),// update_particles.comp
-            dispatch_indirect(data.bone_data.len()),// broad_phase_collision_detection.comp
-            dispatch_indirect(data.bone_data.len()),// broad_phase_collision_detection_cleanup.comp
-            dispatch_indirect(0), // solve_constraints.comp
-            dispatch_indirect(data.bone_data.len()), // update_bones.comp
+            dispatch_indirect(data.bone_data.len()),// broad_phase_collision_detection.comp broad_phase_collision_detection_cleanup.comp narrow_phase_collision_detection.comp update_bones.comp
             dispatch_indirect(data.sensor_data.len()), // agent_sensory_input_update.comp
             vk::DispatchIndirectCommand {  // feed_forward_net.comp
                 x: (data.neural_net_layer_data.len() / 3) as u32,
@@ -616,7 +604,7 @@ impl FoundationInitializer {
             world_size: cap.world_size.clone(),
             sampler,
             particles,
-            constraints:constraint_buffer,
+            // constraints:constraint_buffer,
             // sensors,
             // zombie_brains,
             persistent_floats,
@@ -646,7 +634,7 @@ impl FoundationInitializer {
             persistent_floats,
             particles,
             collision_grid,
-            constraints,
+            // constraints,
             particle_constants,
             indirect,
             neural_net_layers,
@@ -680,7 +668,7 @@ impl FoundationInitializer {
             collision_grid,
             neural_net_layers,
             particle_constants,
-            constraints,
+            // constraints,
             particles,
             indirect,
             sampler,
@@ -697,7 +685,7 @@ pub struct Foundations {
     opaque_and_transparent_face_buffer: SubBuffer<Face, Storage>,
     world: SubBuffer<Block, Storage>,
     particles: SubBuffer<Particle, Storage>,
-    constraints: SubBuffer<Constraint, Storage>,
+    // constraints: SubBuffer<Constraint, Storage>,
     bones: SubBuffer<Bone, Storage>,
     neural_net_layers: SubBuffer<NeuralNetLayer, Storage>,
     // sensors: SubBuffer<Sensor, Storage>,

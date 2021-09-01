@@ -1,13 +1,14 @@
 #version 450
+#extension GL_EXT_shader_atomic_float : enable
+//#extension GL_EXT_debug_printf : enable
 #define IS_AVAILABLE_BUFFER_CONSTANTS
 #define IS_AVAILABLE_BUFFER_BONES
-#define IS_AVAILABLE_BUFFER_CONSTRAINTS
 #define IS_AVAILABLE_BUFFER_COLLISION_GRID
+
 layout (local_size_x = 32) in;
 
 #include "physics_descriptors.comp"
 #include "constants.comp"
-#include "world.comp"
 #include "grid.comp"
 
 void main() {
@@ -15,21 +16,21 @@ void main() {
     const ParticleConstants c = constants;
     if (gID < c.bones){
         const Bone bone = bones[gID];
-        float hitbox_size = bone_hitbox_side_half_length(bone);
-        vec3 hitbox_from = bone.center-vec3(hitbox_size,0,hitbox_size);
-        vec3 hitbox_to = bone.center+vec3(hitbox_size,bone.height,hitbox_size);
+        vec3 hitbox_from = bone.center-vec3(bone.half_side_length,0,bone.half_side_length);
+        vec3 hitbox_to = bone.center+vec3(bone.half_side_length,bone.height,bone.half_side_length);
         vec3 hitbox_to_ceil = ceil(hitbox_to);
         uvec3 world_borders = uvec3(c.world_width,CHUNK_HEIGHT,c.world_depth);
 
-        uint potential_collisions_len;
+        uint potential_collisions_len = 0;
         uint[14*(BROAD_PHASE_CELL_CAPACITY)] potential_collisions;//14=13 neighbour cells + 1 middle cell
 
         uvec3 cell_pos = broad_phase_position_to_cell_pos(bone.center);
         uint cell_idx = broad_phase_cell_pos_to_cell_idx(c, cell_pos);
         uint cell_len = broad_phase_cell_len(cell_idx);
-        for(int i=0;i != gID && i<cell_len;i++){// if everything is written correctly, gID must be located somewhere in this cell and the i<cell_len should never be false.
+        for(int i=0;i<cell_len;i++){// if everything is written correctly, gID must be located somewhere in this cell and the i<cell_len should never be false.
             // However, let's leave this extra check just in case, to make sure that infinite loop won't suddenly arise due to some bug earlier in the code.
             uint neighbouring_bone_idx = broad_phase_cell_elem(cell_idx,i);
+            if(neighbouring_bone_idx==gID)break;
             potential_collisions[potential_collisions_len++] = neighbouring_bone_idx;
         }
 
@@ -68,17 +69,32 @@ void main() {
                 }
             }
         }
-
+        vec3 bone_impulse = vec3(0,0,0);
         for(int i=0;i<potential_collisions_len;i++){
             uint neighbouring_bone_idx = potential_collisions[i];
             const Bone neighbour_bone = bones[neighbouring_bone_idx];
-            float neighbour_hitbox_size = bone_hitbox_side_half_length(neighbour_bone);
-            vec3 neighbour_hitbox_from = neighbour_bone.center-vec3(neighbour_hitbox_size,0,neighbour_hitbox_size);
-            vec3 neighbour_hitbox_to = neighbour_bone.center+vec3(neighbour_hitbox_size,neighbour_bone.height,neighbour_hitbox_size);
-            if(all(lessThan(neighbour_hitbox_from, hitbox_to)) && all(lessThan(hitbox_from, neighbour_hitbox_to))){
-                uint newly_assigned_constraint_idx = atomicAdd(constants.collision_constraints,1);
-                constraints[newly_assigned_constraint_idx] = ;
+            vec3 neighbour_hitbox_from = neighbour_bone.center-vec3(neighbour_bone.half_side_length,0,neighbour_bone.half_side_length);
+            vec3 neighbour_hitbox_to = neighbour_bone.center+vec3(neighbour_bone.half_side_length,neighbour_bone.height,neighbour_bone.half_side_length);
+            if (all(lessThan(neighbour_hitbox_from, hitbox_to)) && all(lessThan(hitbox_from, neighbour_hitbox_to))) {
+                vec3 penetration_distance_from = hitbox_from - neighbour_hitbox_to;
+                vec3 penetration_distance_to = hitbox_to - neighbour_hitbox_from;
+                /*penetration_distance = vector pointing from this bone towards neighbouring bone. This vector is of length equal to the diagonal of the
+                overlapping cuboid region.*/
+                vec3 penetration_distance = mix(penetration_distance_to, penetration_distance_from, lessThan(-penetration_distance_from, penetration_distance_to));
+                vec3 overlapping_area_on_each_face = abs(vec3(
+                    penetration_distance.y*penetration_distance.z,
+                    penetration_distance.z*penetration_distance.x,
+                    penetration_distance.x*penetration_distance.y
+                ));
+                vec3 impulse = overlapping_area_on_each_face * sign(penetration_distance) * (BONE_COLLISION_FORCE_PER_AREA_UNIT) * 0.5;
+                bone_impulse -= impulse;
+                atomicAdd(bones[neighbouring_bone_idx].impulse.x, impulse.x);
+                atomicAdd(bones[neighbouring_bone_idx].impulse.y, impulse.y);
+                atomicAdd(bones[neighbouring_bone_idx].impulse.z, impulse.z);
             }
         }
+        atomicAdd(bones[gID].impulse.x, bone_impulse.x);
+        atomicAdd(bones[gID].impulse.y, bone_impulse.y);
+        atomicAdd(bones[gID].impulse.z, bone_impulse.z);
     }
 }

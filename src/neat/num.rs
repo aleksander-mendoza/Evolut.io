@@ -29,6 +29,7 @@ pub trait Num: Debug + num_traits::Num + Copy + Display + std::ops::AddAssign + 
     const ALL_ACT_FN: [fn(Self)->Self; 21];
     fn random() -> Self;
     fn random_vec3() -> glm::TVec3<Self>;
+    fn random_vec4() -> glm::TVec4<Self>;
     fn random_walk(self) -> Self;
     fn act_fn_name(a_f:fn(Self)->Self)->&'static str{
         Self::ALL_ACT_FN.iter().position(|&f|f==a_f).map(|i|ALL_ACT_FN_NAME[i]).unwrap_or("???")
@@ -102,6 +103,9 @@ impl Num for f64 {
     fn random_vec3() -> glm::TVec3<Self>{
         glm::vec3(Self::random(),Self::random(),Self::random())
     }
+    fn random_vec4() -> glm::TVec4<Self>{
+        glm::vec4(Self::random(),Self::random(),Self::random(),Self::random())
+    }
     fn random_walk(self) -> Self{
         self + Self::random()-0.5
     }
@@ -165,6 +169,9 @@ impl Num for f32 {
     fn random_vec3() -> glm::TVec3<Self>{
         glm::vec3(Self::random(),Self::random(),Self::random())
     }
+    fn random_vec4() -> glm::TVec4<Self>{
+        glm::vec4(Self::random(),Self::random(),Self::random(),Self::random())
+    }
     fn random_walk(self) -> Self{
         self + Self::random()-0.5
     }
@@ -175,16 +182,3 @@ impl Num for f32 {
         self * self * (3. - 2. * self)
     }
 }
-
-
-// impl Num for i64 {}
-//
-// impl Num for i32 {}
-//
-// impl Num for i16 {}
-//
-// impl Num for u64 {}
-//
-// impl Num for u32 {}
-//
-// impl Num for u16 {}

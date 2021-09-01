@@ -29,10 +29,10 @@ void main() {
     const ParticleConstants c = constants;
     if (gID < c.bones){
         Bone bone = bones[gID];
+        bone.velocity += bone.impulse * PHYSICS_SIMULATION_DELTA_TIME_PER_STEP / bone.mass;
         bone.velocity.y -= GRAVITY * PHYSICS_SIMULATION_DELTA_TIME_PER_STEP;
-        float hitbox_size = bone_hitbox_side_half_length(bone);
-        vec3 hitbox_from = bone.center-vec3(hitbox_size,0,hitbox_size);
-        vec3 hitbox_to = bone.center+vec3(hitbox_size,bone.height,hitbox_size);
+        vec3 hitbox_from = bone.center-vec3(bone.half_side_length,0,bone.half_side_length);
+        vec3 hitbox_to = bone.center+vec3(bone.half_side_length,bone.height,bone.half_side_length);
         vec3 hitbox_to_ceil = ceil(hitbox_to);
         uvec3 world_borders = uvec3(c.world_width,CHUNK_HEIGHT,c.world_depth);
         uvec3 start = uvec3(hitbox_from);
@@ -67,5 +67,6 @@ void main() {
         }
         bones[gID].center = bone.center + bone.velocity;
         bones[gID].velocity = bone.velocity;
+        bones[gID].impulse = bone.impulse * IMPULSE_AVERAGING_OVER_TIMESETP;
     }
 }

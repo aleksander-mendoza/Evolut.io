@@ -1,5 +1,5 @@
 #version 450
-#extension GL_EXT_debug_printf : enable
+//#extension GL_EXT_debug_printf : enable
 #define IS_AVAILABLE_BUFFER_CONSTANTS
 #define IS_AVAILABLE_BUFFER_CONSTRAINTS
 #define IS_AVAILABLE_BUFFER_WORLD
@@ -8,6 +8,7 @@
 #define IS_AVAILABLE_BUFFER_COLLISION_GRID
 #define IS_AVAILABLE_BUFFER_INDIRECT
 #define IS_AVAILABLE_BUFFER_FACES
+#define IS_AVAILABLE_BUFFER_BONES
 #define IS_AVAILABLE_BUFFER_BLOCK_PROPS
 layout (local_size_x = 32) in;
 
@@ -88,8 +89,8 @@ void main()
         if(player_event.event_type == PLAYER_EVENT_THROW){
             // vec3_slot0 holds current player position
             // vec3_slot1 holds throwing velocity
-            particles[0].old_position = player_event.vec3_slot0;
-            particles[0].new_position = player_event.vec3_slot0 + player_event.vec3_slot1;
+            bones[0].center = player_event.vec3_slot0;
+            bones[0].velocity = player_event.vec3_slot1;
         } else if(player_event.event_type == PLAYER_EVENT_SET_BLOCK){
 
             // vec3_slot0 holds current player position

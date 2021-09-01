@@ -1,12 +1,11 @@
 #version 450
 
-#define IS_AVAILABLE_BUFFER_CONSTANTS
 #define IS_AVAILABLE_BUFFER_COLLISION_GRID
 #define IS_AVAILABLE_BUFFER_BONES
+#define IS_AVAILABLE_BUFFER_CONSTANTS
 layout (local_size_x = 32) in;
 
 #include "physics_descriptors.comp"
-#include "constants.comp"
 #include "grid.comp"
 
 void main()
@@ -15,7 +14,7 @@ void main()
     const ParticleConstants c = constants;
     if (gID < c.bones){
         const Bone bone = bones[gID];
-        uint cell_idx = broad_phase_position_to_cell_idx(c,bone.center);
+        uint cell_idx = broad_phase_position_to_cell_idx(c, bone.center);
         uint newly_assigned_bone_index = atomic_insert_broad_phase_cell_content(cell_idx, gID);
     }
 }

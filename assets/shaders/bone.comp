@@ -2,12 +2,16 @@
 #define BONE_COMP
 
 struct Bone{
-    vec3 old_center;
-    float half_side_length;
+    vec3 center;
+    float half_side_length;//width == 2*half_side_length && depth == 2*half_side_length
     vec3 direction;
     float height;
-    vec3 new_center;
+    vec3 impulse;
     float mass;
+    vec3 velocity;
+    uint entity_idx;
+    vec3 position_relative_to_parent;
+    uint parent_bone_idx;
     vec4 texture_coords;//xy components hold text UV coordinates. zw components hold width and height
 };
 

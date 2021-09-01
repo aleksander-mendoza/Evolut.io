@@ -1,25 +1,27 @@
 #ifndef CONSTRAINT_COMP
 #define CONSTRAINT_COMP
 #include "constants.comp"
+#define CONSTRAINT_TYPE_MIN_RELATIVE_POS 0 // minimum necessary relative position
+#define CONSTRAINT_TYPE_MAX_RELATIVE_POS 1 // maximum necessary relative position
+#define CONSTRAINT_TYPE_RELATIVE_POS 2 // exact necessary relative position
+#define CONSTRAINT_TYPE_MIN_DISTANCE 3 // minimum necessary distance
+#define CONSTRAINT_TYPE_MAX_DISTANCE 4 // maximum necessary distance
+#define CONSTRAINT_TYPE_DISTANCE 5 // exact necessary distance
 struct Constraint{
+    vec3 relative_position;
+    float distance;
+    uint constraint_type;
     float stiffness;
-    int particle1; // if negative, then the actual particle ID is obtained by negating this value. Moreover,
-        // negative numbers are used to specify that the constraint is an inequality:
-        // dist(particles[-particle1].position, particles[particle2].position) <= constant_param
-        // If the value is positive, then the constraint is an equality
-        // dist(particles[particle1].position, particles[particle2].position) == constant_param
-    int particle2;
-    float constant_param; // If this value is negative, then the constraint is an inequality
-        // that keeps the particles away from one another
-        // dist(particles[particle1].position, particles[particle2].position) >= -constant_param
+    uint this_bone_idx;
+    uint other_bone_idx;
 };
 
-Constraint collision_constraint(uint particle1, uint particle2){
+Constraint collision_constraint(float safe_distance, uint this_bone_idx, uint other_bone_idx){
     Constraint c;
     c.stiffness = PARTICLE_COLLISION_STIFFNESS;
-    c.particle1 = int(particle1);
-    c.particle2 = int(particle2);
-    c.constant_param = -PARTICLE_DIAMETER;
+    c.this_bone_idx = this_bone_idx;
+    c.other_bone_idx = other_bone_idx;
+    c.distance = safe_distance;
     return c;
 }
 

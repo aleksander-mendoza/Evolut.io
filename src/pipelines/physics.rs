@@ -32,6 +32,7 @@ use crate::pipelines::player_event::{PlayerEvent, EventType};
 pub struct PhysicsResources {
     broad_phase_collision_detection: ShaderModule<Compute>,
     broad_phase_collision_detection_cleanup: ShaderModule<Compute>,
+    narrow_phase_collision_detection: ShaderModule<Compute>,
     update_bones: ShaderModule<Compute>,
     update_particles: ShaderModule<Compute>,
     particle_uniform: HostBuffer<PlayerEvent, Uniform>,
@@ -47,12 +48,19 @@ impl PhysicsResources {
         // let generate_faces = ShaderModule::new(include_glsl!("assets/shaders/generate_faces.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let broad_phase_collision_detection = ShaderModule::new(include_glsl!("assets/shaders/broad_phase_collision_detection.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let broad_phase_collision_detection_cleanup = ShaderModule::new(include_glsl!("assets/shaders/broad_phase_collision_detection_cleanup.comp", kind: comp) as &[u32], cmd_pool.device())?;
+        let narrow_phase_collision_detection = ShaderModule::new(include_glsl!("assets/shaders/narrow_phase_collision_detection.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let update_particles = ShaderModule::new(include_glsl!("assets/shaders/update_particles.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let update_bones = ShaderModule::new(include_glsl!("assets/shaders/update_bones.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let feed_forward_net = ShaderModule::new(include_glsl!("assets/shaders/feed_forward_net.comp", kind: comp, target: vulkan1_1) as &[u32], cmd_pool.device())?;
         let agent_sensory_inputs = ShaderModule::new(include_glsl!("assets/shaders/agent_sensory_input_update.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let particle_uniform = HostBuffer::new(cmd_pool.device(), &[PlayerEvent::nothing()])?;
-        Ok(Self { broad_phase_collision_detection, broad_phase_collision_detection_cleanup, particle_uniform, update_particles, update_bones, agent_sensory_inputs, feed_forward_net })
+        Ok(Self { broad_phase_collision_detection,
+            broad_phase_collision_detection_cleanup,
+            narrow_phase_collision_detection,
+            particle_uniform, update_particles,
+            update_bones,
+            agent_sensory_inputs,
+            feed_forward_net })
     }
 }
 impl ComputeResources for PhysicsResources{
@@ -64,6 +72,7 @@ impl ComputeResources for PhysicsResources{
             broad_phase_collision_detection_cleanup,
             update_particles,
             particle_uniform,
+            narrow_phase_collision_detection,
             update_bones,
             agent_sensory_inputs,
             feed_forward_net,
@@ -91,7 +100,9 @@ impl ComputeResources for PhysicsResources{
         let agent_sensory_inputs = descriptors.build("main", agent_sensory_inputs)?;
         let feed_forward_net = descriptors.build("main", feed_forward_net)?;
         let update_particles = descriptors.build("main", update_particles)?;
+        let narrow_phase_collision_detection = descriptors.build("main", narrow_phase_collision_detection)?;
         Ok(Physics {
+            narrow_phase_collision_detection,
             update_particles,
             agent_sensory_inputs,
             feed_forward_net,
@@ -110,6 +121,7 @@ pub struct Physics {
     uniform_binding: UniformBufferBinding<PlayerEvent>,
     broad_phase_collision_detection: ComputePipeline,
     broad_phase_collision_detection_cleanup: ComputePipeline,
+    narrow_phase_collision_detection: ComputePipeline,
     update_bones: ComputePipeline,
     update_particles: ComputePipeline,
     agent_sensory_inputs: ComputePipeline,
@@ -130,6 +142,11 @@ impl Computable for Physics {
             .dispatch_indirect(foundations.indirect().broad_phase_collision_detection(), 0)
             .buffer_barriers(vk::PipelineStageFlags::COMPUTE_SHADER, vk::PipelineStageFlags::COMPUTE_SHADER, &[
                 make_shader_buffer_barrier(foundations.collision_grid())
+            ])
+            .bind_compute_pipeline(&self.narrow_phase_collision_detection)
+            .dispatch_indirect(foundations.indirect().narrow_phase_collision_detection(), 0)
+            .buffer_barriers(vk::PipelineStageFlags::COMPUTE_SHADER, vk::PipelineStageFlags::COMPUTE_SHADER, &[
+                make_shader_buffer_barrier(foundations.bones())
             ])
             .bind_compute_pipeline(&self.update_bones)
             .dispatch_indirect(foundations.indirect().update_bones(), 0)

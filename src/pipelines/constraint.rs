@@ -5,10 +5,10 @@ use crate::blocks::world_size::PARTICLE_DIAMETER;
 pub struct Constraint {
     pub constant_param: glm::Vec3,
     pub constant_param1: f32,
-    pub constant_param2: f32,
+    pub constraint_type: u32,
     pub stiffness: f32,
-    pub bone_idx1: u32,
-    pub bone_idx2: u32,
+    pub this_bone_idx: u32,
+    pub other_bone_idx: u32,
 
 }
 
