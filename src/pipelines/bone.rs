@@ -6,13 +6,13 @@ use crate::neat::num::Num;
 #[repr(C, packed)]
 #[derive(Copy,Clone,Debug)]
 pub struct Bone{
-    center:glm::Vec3,
+    new_center:glm::Vec3,
     half_side_length:f32,
     direction:glm::Vec3,
     half_height:f32,
     impulse:glm::Vec3,
     mass:f32,
-    velocity:glm::Vec3,
+    old_center:glm::Vec3,
     entity_idx:u32,
     position_relative_to_parent:glm::Vec3,
     parent_bone_idx:u32,
@@ -26,11 +26,12 @@ impl Bone{
                height:f32,
                mass:f32) -> Self{
         let direction_xz_len =  (direction.x*direction.x + direction.z*direction.z).sqrt();
+        let velocity = f32::random_vec3()*0.02-glm::vec3(0.01,0.01,0.01);
         Self{
-            center,
+            new_center:center,
             half_side_length,
             half_height:height/2f32,
-            velocity:f32::random_vec3()*0.01,
+            old_center:center - velocity,
             entity_idx: 0,
             position_relative_to_parent: Default::default(),
             mass,
@@ -49,7 +50,7 @@ impl VertexSource for Bone{
                 binding,
                 location: 0,
                 format:  glm::Vec3::FORMAT,
-                offset: offset_of!(Self, center) as u32,
+                offset: offset_of!(Self, new_center) as u32,
             },
             vk::VertexInputAttributeDescription {
                 binding,

@@ -89,8 +89,9 @@ void main()
         if(player_event.event_type == PLAYER_EVENT_THROW){
             // vec3_slot0 holds current player position
             // vec3_slot1 holds throwing velocity
-            bones[0].center = player_event.vec3_slot0;
-            bones[0].velocity = player_event.vec3_slot1;
+            reset_broad_phase_cell(broad_phase_position_to_cell_idx(c, bones[0].old_center));
+            bones[0].old_center = player_event.vec3_slot0;
+            bones[0].new_center = player_event.vec3_slot0 + player_event.vec3_slot1;
         } else if(player_event.event_type == PLAYER_EVENT_SET_BLOCK){
 
             // vec3_slot0 holds current player position

@@ -272,13 +272,13 @@ struct HeightMap{
 }
 
 impl HeightMap{
-    pub fn new(world_size:WorldSize)->Self{
+    pub fn new(world_size:WorldSize, mean:f32, variance:f32)->Self{
         let mut heights = Vec::with_capacity(world_size.world_area());
         unsafe{
             heights.set_len(world_size.world_area());
         }
         let size_with_margins = WorldSize::new(world_size.width()+2,world_size.depth()+2);
-        let chunk_heights:Vec<f32> = (0..size_with_margins.total_chunks()).map(|_|100. + f32::random()*60.).collect();
+        let chunk_heights:Vec<f32> = (0..size_with_margins.total_chunks()).map(|_|mean + f32::random()*variance).collect();
         for x in 0..world_size.world_width(){
             for z in 0..world_size.world_depth(){
                 let pos_with_margins_x = x + CHUNK_WIDTH;
@@ -322,16 +322,15 @@ impl FoundationsData {
     }
 
 
-    fn setup_world_blocks(&mut self, heights:&HeightMap) {
-        const SEA_LEVEL:usize = 128;
+    fn setup_world_blocks(&mut self, heights:&HeightMap, sea_level:usize) {
         let size_with_margins = WorldSize::new(self.world_blocks.size().width()+2,self.world_blocks.size().depth()+2);
         for x in 0..self.world_blocks.size().world_width(){
             for z in 0..self.world_blocks.size().world_depth(){
                 let height = heights.height(x,z);
                 self.world_blocks.fill_column_to(x,1,z,height  - 4, STONE);
                 self.world_blocks.fill_column_to(x,height - 4,z,height, DIRT);
-                if height < SEA_LEVEL{
-                    self.world_blocks.fill_column_to(x,height ,z,SEA_LEVEL+1 ,WATER);
+                if height < sea_level{
+                    self.world_blocks.fill_column_to(x,height ,z,sea_level+1 ,WATER);
                 }else{
                     self.world_blocks.set_block(x,height ,z, GRASS);
                 }
@@ -426,8 +425,8 @@ impl FoundationInitializer {
     pub fn new(cmd_pool: &CommandPool) -> Result<Self, failure::Error> {
         let cap = FoundationsCapacity::new();
         let mut data = FoundationsData::new(&cap);
-        let heights = HeightMap::new(cap.world_size);
-        data.setup_world_blocks(&heights);
+        let heights = HeightMap::new(cap.world_size, 100., 32.);
+        data.setup_world_blocks(&heights,120);
         data.setup_world_faces();
         data.particle_data.extend((0..64).map(|_| Particle::random()));
         for _ in 0..8{

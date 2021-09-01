@@ -10,6 +10,7 @@ use crate::blocks::block_properties::AIR;
 use crate::pipelines::physics::PhysicsResources;
 use crate::pipelines::renderable::RenderResources;
 use crate::pipelines::computable::ComputeResources;
+use num_traits::FloatConst;
 
 pub struct Player {
     projection_matrix: glm::Mat4,
@@ -39,7 +40,7 @@ impl Player {
         Self {
             projection_matrix: glm::identity::<f32, 4>(),
             mvp_uniforms: MvpUniforms::new(),
-            rotation: glm::quat_identity(),
+            rotation: glm::quat_angle_axis(45./360.*2.*f32::PI(),&glm::vec3(0.,1.,0.)),
             location: glm::vec3(2f32, 128f32, 2f32),
             block_in_hand: Block::new(2u32),
             model_matrix: glm::identity::<f32, 4>(),

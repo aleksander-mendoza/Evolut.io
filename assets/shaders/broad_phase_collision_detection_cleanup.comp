@@ -14,9 +14,8 @@ void main()
     const ParticleConstants c = constants;
     if (gID < c.bones){
         const Bone bone = bones[gID];
-        uint cell_idx = broad_phase_position_to_cell_idx(c, bone.center);
-        uint collision_grid_offset = (BROAD_PHASE_CELL_CAPACITY+1)*cell_idx;
-        collision_grid[collision_grid_offset] = 0;
+        uint cell_idx = broad_phase_position_to_cell_idx(c, bone.old_center); // notice that it uses OLD position!
+        reset_broad_phase_cell(cell_idx);
     }
 }
 

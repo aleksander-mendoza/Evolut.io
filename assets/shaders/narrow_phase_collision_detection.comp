@@ -1,6 +1,6 @@
 #version 450
 #extension GL_EXT_shader_atomic_float : enable
-//#extension GL_EXT_debug_printf : enable
+#extension GL_EXT_debug_printf : enable
 #define IS_AVAILABLE_BUFFER_CONSTANTS
 #define IS_AVAILABLE_BUFFER_BONES
 #define IS_AVAILABLE_BUFFER_COLLISION_GRID
@@ -17,15 +17,15 @@ void main() {
     if (gID < c.bones){
         const Bone bone = bones[gID];
         vec3 half_hitbox = vec3(bone.half_side_length,bone.half_height,bone.half_side_length);
-        vec3 hitbox_from = bone.center-half_hitbox;
-        vec3 hitbox_to = bone.center+half_hitbox;
+        vec3 hitbox_from = bone.new_center-half_hitbox;
+        vec3 hitbox_to = bone.new_center+half_hitbox;
         vec3 hitbox_to_ceil = ceil(hitbox_to);
         uvec3 world_borders = uvec3(c.world_width,CHUNK_HEIGHT,c.world_depth);
 
         uint potential_collisions_len = 0;
         uint[14*(BROAD_PHASE_CELL_CAPACITY)] potential_collisions;//14=13 neighbour cells + 1 middle cell
 
-        uvec3 cell_pos = broad_phase_position_to_cell_pos(bone.center);
+        uvec3 cell_pos = broad_phase_position_to_cell_pos(bone.new_center);
         uint cell_idx = broad_phase_cell_pos_to_cell_idx(c, cell_pos);
         uint cell_len = min(broad_phase_cell_len(cell_idx), BROAD_PHASE_CELL_CAPACITY);
         for(int i=0;i<cell_len;i++){// if everything is written correctly, gID must be located somewhere in this cell and the i<cell_len should never be false.
@@ -75,8 +75,8 @@ void main() {
             uint neighbouring_bone_idx = potential_collisions[i];
             const Bone neighbour_bone = bones[neighbouring_bone_idx];
             vec3 neighbour_half_hitbox = vec3(neighbour_bone.half_side_length,neighbour_bone.half_height,neighbour_bone.half_side_length);
-            vec3 neighbour_hitbox_from = neighbour_bone.center-neighbour_half_hitbox;
-            vec3 neighbour_hitbox_to = neighbour_bone.center+neighbour_half_hitbox;
+            vec3 neighbour_hitbox_from = neighbour_bone.new_center-neighbour_half_hitbox;
+            vec3 neighbour_hitbox_to = neighbour_bone.new_center+neighbour_half_hitbox;
             if (all(lessThan(neighbour_hitbox_from, hitbox_to)) && all(lessThan(hitbox_from, neighbour_hitbox_to))) {
                 vec3 penetration_distance_from = hitbox_from - neighbour_hitbox_to;
                 vec3 penetration_distance_to = hitbox_to - neighbour_hitbox_from;
@@ -90,6 +90,7 @@ void main() {
                 ));
                 vec3 impulse = overlapping_area_on_each_face * sign(penetration_distance) * (BONE_COLLISION_FORCE_PER_AREA_UNIT) * 0.5;
                 bone_impulse -= impulse;
+                debugPrintfEXT("%d %d:%v3f:%v3f", neighbouring_bone_idx, gID, bone.new_center, neighbour_bone.new_center);
                 atomicAdd(bones[neighbouring_bone_idx].impulse.x, impulse.x);
                 atomicAdd(bones[neighbouring_bone_idx].impulse.y, impulse.y);
                 atomicAdd(bones[neighbouring_bone_idx].impulse.z, impulse.z);
