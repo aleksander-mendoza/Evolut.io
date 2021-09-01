@@ -14,12 +14,6 @@ uint broad_phase_position_to_cell_idx(const ParticleConstants c,vec3 position){
     return broad_phase_cell_pos_to_cell_idx(c,broad_phase_position_to_cell_pos(position));
 }
 #ifdef IS_AVAILABLE_BUFFER_COLLISION_GRID
-uint atomic_insert_broad_phase_cell_content(uint broad_phase_cell_idx, uint bone_idx){
-    uint collision_grid_offset = (BROAD_PHASE_CELL_CAPACITY+1)*broad_phase_cell_idx;
-    uint newly_assigned_bone_index = atomicAdd(collision_grid[collision_grid_offset], 1);
-    collision_grid[collision_grid_offset+1+newly_assigned_bone_index] = bone_idx;
-    return newly_assigned_bone_index;
-}
 uint broad_phase_cell_len(uint broad_phase_cell_idx){
     uint collision_grid_offset = (BROAD_PHASE_CELL_CAPACITY+1)*broad_phase_cell_idx;
     return collision_grid[collision_grid_offset];
@@ -27,12 +21,6 @@ uint broad_phase_cell_len(uint broad_phase_cell_idx){
 uint broad_phase_cell_elem(uint broad_phase_cell_idx, uint element_idx){
     uint collision_grid_offset = (BROAD_PHASE_CELL_CAPACITY+1)*broad_phase_cell_idx;
     return collision_grid[collision_grid_offset+1+element_idx];
-}
-void reset_broad_phase_cell_content(uint broad_phase_cell_idx /*, uint bone_idx*/){
-    uint collision_grid_offset = (BROAD_PHASE_CELL_CAPACITY+1)*broad_phase_cell_idx;
-//    if(collision_grid[collision_grid_offset+1 /* + newly_assigned_bone_index */] == bone_idx){ // newly_assigned_bone_index is 0 here
-        collision_grid[collision_grid_offset] = 0;
-//    }
 }
 #endif
 

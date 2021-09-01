@@ -1,9 +1,8 @@
-#ifdef IS_AVAILABLE_BUFFER_WORLD
+#ifndef RAY_CAST_COMP
+#define RAY_CAST_COMP
+
 #ifdef IS_AVAILABLE_BUFFER_CONSTANTS
-
-#ifndef RAY_CAST_TEMPLATE_COMP
-#define RAY_CAST_TEMPLATE_COMP
-
+#ifdef IS_AVAILABLE_BUFFER_WORLD
 #include "util.comp"
 #include "world.comp"
 #include "constants.comp"
@@ -40,6 +39,7 @@ RayCastResult ray_cast(ParticleConstants c,vec3 start, vec3 distance_and_directi
     }
     return RayCastResult(v,v,false);
 }
-#endif //RAY_CAST_TEMPLATE_COMP
+
 #endif //IS_AVAILABLE_BUFFER_WORLD
 #endif //IS_AVAILABLE_BUFFER_CONSTANTS
+#endif //RAY_CAST_COMP

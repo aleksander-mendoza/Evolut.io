@@ -31,8 +31,9 @@ void main() {
         Bone bone = bones[gID];
         bone.velocity += bone.impulse * PHYSICS_SIMULATION_DELTA_TIME_PER_STEP / bone.mass;
         bone.velocity.y -= GRAVITY * PHYSICS_SIMULATION_DELTA_TIME_PER_STEP;
-        vec3 hitbox_from = bone.center-vec3(bone.half_side_length,0,bone.half_side_length);
-        vec3 hitbox_to = bone.center+vec3(bone.half_side_length,bone.height,bone.half_side_length);
+        vec3 half_hitbox = vec3(bone.half_side_length,bone.half_height,bone.half_side_length);
+        vec3 hitbox_from = bone.center-half_hitbox;
+        vec3 hitbox_to = bone.center+half_hitbox;
         vec3 hitbox_to_ceil = ceil(hitbox_to);
         uvec3 world_borders = uvec3(c.world_width,CHUNK_HEIGHT,c.world_depth);
         uvec3 start = uvec3(hitbox_from);

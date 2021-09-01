@@ -9,7 +9,7 @@ pub struct Bone{
     center:glm::Vec3,
     half_side_length:f32,
     direction:glm::Vec3,
-    height:f32,
+    half_height:f32,
     impulse:glm::Vec3,
     mass:f32,
     velocity:glm::Vec3,
@@ -29,7 +29,7 @@ impl Bone{
         Self{
             center,
             half_side_length,
-            height,
+            half_height:height/2f32,
             velocity:f32::random_vec3()*0.01,
             entity_idx: 0,
             position_relative_to_parent: Default::default(),
@@ -67,7 +67,7 @@ impl VertexSource for Bone{
                 binding,
                 location: 3,
                 format:  f32::FORMAT,
-                offset: offset_of!(Self, height) as u32,
+                offset: offset_of!(Self, half_height) as u32,
             },
             vk::VertexInputAttributeDescription {
                 binding,

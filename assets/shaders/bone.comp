@@ -5,7 +5,7 @@ struct Bone{
     vec3 center;
     float half_side_length;//width == 2*half_side_length && depth == 2*half_side_length
     vec3 direction;
-    float height;
+    float half_height;
     vec3 impulse;
     float mass;
     vec3 velocity;

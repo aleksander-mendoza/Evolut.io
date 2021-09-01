@@ -8,8 +8,7 @@ struct ParticleConstants{
     int collision_constraints;
     // there are two types of particles:
     int particles; // solid particles - they can collide. They have mass, velocity and everything else that a particle should have.
-    int dummy; // phantom particles - they do not collide with anything, but are merely used as extra anchors for constraints. They
-    // still have their own velocity and mass, so they can influence total mass of the body, its angular momentum etc.
+    int held_bone_idx; // player can grab a bone and pull it somewhere
     int chunks_x;
     int chunks_z;
     int bones;

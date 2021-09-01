@@ -16,8 +16,9 @@ void main() {
     const ParticleConstants c = constants;
     if (gID < c.bones){
         const Bone bone = bones[gID];
-        vec3 hitbox_from = bone.center-vec3(bone.half_side_length,0,bone.half_side_length);
-        vec3 hitbox_to = bone.center+vec3(bone.half_side_length,bone.height,bone.half_side_length);
+        vec3 half_hitbox = vec3(bone.half_side_length,bone.half_height,bone.half_side_length);
+        vec3 hitbox_from = bone.center-half_hitbox;
+        vec3 hitbox_to = bone.center+half_hitbox;
         vec3 hitbox_to_ceil = ceil(hitbox_to);
         uvec3 world_borders = uvec3(c.world_width,CHUNK_HEIGHT,c.world_depth);
 
@@ -26,7 +27,7 @@ void main() {
 
         uvec3 cell_pos = broad_phase_position_to_cell_pos(bone.center);
         uint cell_idx = broad_phase_cell_pos_to_cell_idx(c, cell_pos);
-        uint cell_len = broad_phase_cell_len(cell_idx);
+        uint cell_len = min(broad_phase_cell_len(cell_idx), BROAD_PHASE_CELL_CAPACITY);
         for(int i=0;i<cell_len;i++){// if everything is written correctly, gID must be located somewhere in this cell and the i<cell_len should never be false.
             // However, let's leave this extra check just in case, to make sure that infinite loop won't suddenly arise due to some bug earlier in the code.
             uint neighbouring_bone_idx = broad_phase_cell_elem(cell_idx,i);
@@ -62,7 +63,7 @@ void main() {
             uvec3 neighbour_pos = cell_pos + neighbour_cells[i]; // notice that if cell_pos.x == 0, then cell_pos.x - 1 == MAX_INT, which of course must be outside of world borders
             if(all(lessThan(neighbour_pos,world_borders))){
                 uint neighbour_idx = broad_phase_cell_pos_to_cell_idx(c, neighbour_pos);
-                uint neighbour_len = broad_phase_cell_len(neighbour_idx);
+                uint neighbour_len = min(broad_phase_cell_len(neighbour_idx), BROAD_PHASE_CELL_CAPACITY);
                 for(uint j=0;j<neighbour_len;j++){
                     uint neighbouring_bone_idx = broad_phase_cell_elem(neighbour_idx,j);
                     potential_collisions[potential_collisions_len++] = neighbouring_bone_idx;
@@ -73,8 +74,9 @@ void main() {
         for(int i=0;i<potential_collisions_len;i++){
             uint neighbouring_bone_idx = potential_collisions[i];
             const Bone neighbour_bone = bones[neighbouring_bone_idx];
-            vec3 neighbour_hitbox_from = neighbour_bone.center-vec3(neighbour_bone.half_side_length,0,neighbour_bone.half_side_length);
-            vec3 neighbour_hitbox_to = neighbour_bone.center+vec3(neighbour_bone.half_side_length,neighbour_bone.height,neighbour_bone.half_side_length);
+            vec3 neighbour_half_hitbox = vec3(neighbour_bone.half_side_length,neighbour_bone.half_height,neighbour_bone.half_side_length);
+            vec3 neighbour_hitbox_from = neighbour_bone.center-neighbour_half_hitbox;
+            vec3 neighbour_hitbox_to = neighbour_bone.center+neighbour_half_hitbox;
             if (all(lessThan(neighbour_hitbox_from, hitbox_to)) && all(lessThan(hitbox_from, neighbour_hitbox_to))) {
                 vec3 penetration_distance_from = hitbox_from - neighbour_hitbox_to;
                 vec3 penetration_distance_to = hitbox_to - neighbour_hitbox_from;
