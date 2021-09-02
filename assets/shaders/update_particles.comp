@@ -21,102 +21,42 @@ layout (local_size_x = 32) in;
 #include "ray_cast.comp"
 #include "update_faces.comp"
 
-
-vec3 compute_new_position(const ParticleConstants c, uint id){
-    const vec3 old_position = particles[id].old_position;
-    vec3 current_position = particles[id].new_position; // Current position is in fact the output of solve_constraints.comp
-    // Before we can use its value we need to first perform some postprocessing - detect collision with blocks and fix them.
-    // Only then we obtain the "actual" current value of position.
-    uvec3 old_block_position = uvec3(old_position);
-    uvec3 current_block_position = uvec3(current_position);
-    if(current_block_position!=old_block_position){
-        vec3 current_pos_relative_to_old_block = current_position - old_block_position;
-        vec3 current_pos_relative_to_old_block_center = current_pos_relative_to_old_block-vec3(0.5,0.5,0.5);
-        vec3 signum = sign(current_pos_relative_to_old_block_center);
-        vec3 distance = abs(current_pos_relative_to_old_block_center);
-        vec3 colliding_surface_normal=vec3(0,0,0);
-        if (distance.x > 0.5){
-            const uint block_idx = block_pos_into_world_idx(c, old_block_position + ivec3(signum.x, 0, 0));
-            const uint block = world[block_idx];
-            colliding_surface_normal.x = block>0 ? signum.x : 0;
-        }
-        if (distance.y > 0.5){
-            const uint block_idx = block_pos_into_world_idx(c, old_block_position + ivec3(0,signum.y, 0));
-            const uint block = world[block_idx];
-            colliding_surface_normal.y = block>0 ? signum.y : 0;
-        }
-        if (distance.z > 0.5){
-            const uint block_idx = block_pos_into_world_idx(c, old_block_position + ivec3( 0, 0, signum.z));
-            const uint block = world[block_idx];
-            colliding_surface_normal.z = block>0 ? signum.z : 0;
-        }
-        if(colliding_surface_normal==vec3(0,0,0)){
-            const uint block_idx = block_pos_into_world_idx(c, current_block_position);
-            const uint block = world[block_idx];
-            colliding_surface_normal = block > 0 ? signum : vec3(0,0,0);
-        }
-        if(colliding_surface_normal!=vec3(0,0,0)){
-            vec3 position_change = current_position - old_position;
-            colliding_surface_normal = normalize(-colliding_surface_normal);
-            vec3 reflected_by_normal = position_change - 2*(dot(position_change,colliding_surface_normal)*colliding_surface_normal);
-            vec3 damped_reflection = reflected_by_normal * BLOCK_COLLISION_FRICTION;
-            current_position = old_position + (dot(damped_reflection,damped_reflection) > BLOCK_COLLISION_MINIMUM_BOUNCE*BLOCK_COLLISION_MINIMUM_BOUNCE ? damped_reflection : vec3(0,0,0));
-        }
-    }
-
-    vec3 velocity = (current_position - old_position)/PHYSICS_SIMULATION_DELTA_TIME_PER_STEP*DAMPING_COEFFICIENT;
-    velocity.y -= GRAVITY*PHYSICS_SIMULATION_DELTA_TIME_PER_STEP;
-    vec3 new_position = current_position + velocity*PHYSICS_SIMULATION_DELTA_TIME_PER_STEP;
-    //TODO: implement damping, drag, friction, gravity etc. The velocity variable might be useful here
-    //The below code is a branchless test for bounding-box collision. It's equivalent to the code
-    // if(candidate_position.x<0){candidate_position.x=-candidate_position.x;}
-    // if(candidate_position.x>16*constants.chunks_x){candidate_position.x=16*constants.chunks_x-(candidate_position.x-16*constants.chunks_x);}
-    //and so on for each x,y,z coordinate.
-    new_position = new_position - 2*min(new_position, vec3(0, 0, 0)) + 2*min(vec3(c.chunks_x*16, 256, c.chunks_z*16)-new_position, vec3(0, 0, 0));
-
-    particles[id].old_position = current_position;
-    particles[id].new_position = new_position;
-    return new_position;
-}
-
 void main()
 {
 
-    uint gID = gl_GlobalInvocationID.x;
-    const ParticleConstants c = constants;
-    if(gID==0){
-        constants.collision_constraints = c.predefined_constraints; //First we reset the number of computed collision constraints
-        if(player_event.event_type == PLAYER_EVENT_THROW){
-            // vec3_slot0 holds current player position
-            // vec3_slot1 holds throwing velocity
-            reset_broad_phase_cell(broad_phase_position_to_cell_idx(c, bones[0].old_center));
-            bones[0].old_center = player_event.vec3_slot0;
-            bones[0].new_center = player_event.vec3_slot0 + player_event.vec3_slot1;
-        } else if(player_event.event_type == PLAYER_EVENT_SET_BLOCK){
 
-            // vec3_slot0 holds current player position
-            // vec3_slot1 holds ray cast direction
-            // u32_slot0 holds ray cast direction
-            const RayCastResult ray = ray_cast(c, player_event.vec3_slot0, player_event.vec3_slot1);
-            if(ray.found){
-                const uvec3 hit_pos = uvec3(player_event.u32_slot0>0?ray.prev_v:ray.v);
-                const uint hit_idx = block_pos_into_world_idx(c, hit_pos);
-                uint prev_block = world[hit_idx];
-                world[hit_idx] = player_event.u32_slot0;
-                if(player_event.u32_slot0==0){
-                    const uint number_of_faces = remove_block_faces(c,block_props[prev_block],hit_pos);
-                    draw_indirect[DRAW_INDIRECT_BLOCK].instance_count = number_of_faces;
-                }else{
-                    const uint number_of_faces = add_block_faces(c, hit_pos, player_event.u32_slot0);
-                    draw_indirect[DRAW_INDIRECT_BLOCK].instance_count = number_of_faces;
+    /*
+    if (gID < c.particles){
+        const Particle p = particles[gID];
+        if(p.energy > 0){
+            uvec3 block_position = uvec3(p.position);
+            uint block = world[block_pos_into_world_idx(c, block_position)];
+            float block_mass = block_props[block].mass;
+            uvec3 cell_position = block_position/BROAD_PHASE_CELL_SIZE;
+            uint cell_idx = broad_phase_cell_pos_to_cell_idx(cell_position);
+            uint cell_len = broad_phase_cell_len(cell_idx);
+            float penetrated_bone_mass = 0;
+            for (int i=0;i<cell_len;i++){
+                uint bone_idx = broad_phase_cell_elem(cell_idx, i);
+                const Bone bone = bones[bone_idx];
+                vec3 half_hitbox = vec3(bone.half_side_length, bone.half_height, bone.half_side_length);
+                if (all(lessThan(abs(p.position - bone.new_center), half_hitbox))){
+                    penetrated_bone_mass = bone.mass;
+                    break;
                 }
-
             }
+            float new_energy = p.energy - block_mass - penetrated_bone_mass;
+//            if(any(lessThan(p.energy,vec3(0,0,0)))){
+//                int top_of_stack = atomicAdd(constants.particle_stack, -1);
+//                if(top_of_stack>=0){
+//                    p = particles[top_of_stack];
+//                }
+//            }
+            particles[gID].energy = new_energy;
+            particles[gID].position = p.position + p.velocity;
         }
     }
-
-    if (gID < c.particles){
-        compute_new_position(c, gID);
-    }
+    */
 }
+
 

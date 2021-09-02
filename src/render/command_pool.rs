@@ -44,6 +44,12 @@ impl CommandBuffer {
 
     }
 
+    pub fn copy_to_staged<V:Copy, C:CpuWriteable, G:GpuWriteable, B:Buffer<V,G>>(&mut self, staged: &StageBuffer<V, C, G, B>) -> &mut Self {
+        self.copy(staged.gpu(), staged.cpu())
+
+    }
+
+
     pub fn copy<V:Copy, T1: BufferType, T2: BufferType>(&mut self, src: &impl Buffer<V, T1>, dst: &impl Buffer<V, T2>) -> &mut Self {
         assert!(src.bytes() <= dst.bytes());
         unsafe {

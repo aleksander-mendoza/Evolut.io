@@ -53,7 +53,7 @@ impl Player {
     }
 
 
-    pub fn update<P: RenderResources, C: ComputeResources>(&mut self, display:&mut Display<P,C>, input: &Input, fps_counter: &FpsCounter) ->Result<(),failure::Error>{
+    pub fn update<P: RenderResources, C: ComputeResources, A: ComputeResources>(&mut self, display:&mut Display<P,C, A>, input: &Input, fps_counter: &FpsCounter) ->Result<(),failure::Error>{
         let ash::vk::Extent2D { width, height } = display.extent();
         let (width, height) = (width as f32, height as f32);
         if input.has_mouse_move() {
@@ -94,7 +94,7 @@ impl Player {
     }
 
 
-    pub fn resize<P: RenderResources, C: ComputeResources>(&mut self, display:&Display<P,C>) {
+    pub fn resize<P: RenderResources, C: ComputeResources, A: ComputeResources>(&mut self, display:&Display<P,C,A>) {
         let ash::vk::Extent2D { width, height } = display.extent();
         let fov = 60f32 / 360f32 * std::f32::consts::PI * 2f32;
         self.projection_matrix = glm::perspective(

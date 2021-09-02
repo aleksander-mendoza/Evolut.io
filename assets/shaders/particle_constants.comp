@@ -7,7 +7,8 @@ struct ParticleConstants{
     int predefined_constraints;
     int collision_constraints;
     // there are two types of particles:
-    int particles; // solid particles - they can collide. They have mass, velocity and everything else that a particle should have.
+    int particles; // number of particles that have non-zero energy
+    int particle_stack;
     int held_bone_idx; // player can grab a bone and pull it somewhere
     int chunks_x;
     int chunks_z;
@@ -17,6 +18,9 @@ struct ParticleConstants{
     int world_area; // world_depth * world_width
     int total_chunks; // chunks_x * chunks_z
     uint sensors;
+    int dummy1;
+    int dummy2;
+    int dummy3;
 };
 
 

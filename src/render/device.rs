@@ -110,7 +110,8 @@ fn pick_queue_family(
 
 pub const QUEUE_COUNT:usize = 2;
 pub const QUEUE_IDX_GRAPHICS:usize = 0;
-pub const QUEUE_IDX_COMPUTE:usize = 1;
+pub const QUEUE_IDX_COMPUTE:usize = 1;//this is for simulating physics, agents, neural networks etc
+pub const QUEUE_IDX_AMBIENT_COMPUTE:usize = 2; // this is for simulating dynamic changes of environment that involve placing and removing blocks
 pub const QUEUE_IDX_TRANSFER:usize = 0;
 
 pub struct Queue{
@@ -120,7 +121,7 @@ pub struct Queue{
 struct DeviceInner {
     physical_device: vk::PhysicalDevice,
     device: ash::Device,
-    queue: [vk::Queue;2],
+    queue: [vk::Queue;3],
     instance: Instance,
     family_index: u32,
 }
@@ -151,7 +152,7 @@ impl Device {
 
         let mut queue_create_info = vk::DeviceQueueCreateInfo::builder()
             .queue_family_index(family_index)
-            .queue_priorities(&[1.0,1.0]);
+            .queue_priorities(&[1.0, 1.0, 1.0]);
 
         let features = vk::PhysicalDeviceFeatures::builder();
 
@@ -168,9 +169,10 @@ impl Device {
         let device = unsafe { instance.raw().create_device(physical_device, &device_create_info, None) }?;
 
         let queue1 = unsafe { device.get_device_queue(family_index, 0) };
-        let queue2 = unsafe { device.get_device_queue(family_index, 0) };
+        let queue2 = unsafe { device.get_device_queue(family_index, 1) };
+        let queue3 = unsafe { device.get_device_queue(family_index, 2) };
 
-        Ok(Self { inner: Arc::new(DeviceInner { device, instance: instance.clone(), queue:[queue1,queue2], family_index, physical_device }) })
+        Ok(Self { inner: Arc::new(DeviceInner { device, instance: instance.clone(), queue:[queue1,queue2,queue3], family_index, physical_device }) })
     }
     pub fn family_index(&self) -> u32 {
         self.inner.family_index

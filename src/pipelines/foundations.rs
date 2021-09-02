@@ -11,7 +11,7 @@ use failure::Error;
 
 use crate::render::submitter::{Submitter, fill_submit};
 
-use crate::render::buffer_type::{Cpu, Storage, GpuIndirect};
+use crate::render::buffer_type::{Cpu, Storage, GpuIndirect, Uniform};
 
 use crate::blocks::world_size::{CHUNK_VOLUME_IN_CELLS, CHUNK_WIDTH, CHUNK_DEPTH, BROAD_PHASE_CHUNK_VOLUME_IN_CELLS, BROAD_PHASE_CELL_CAPACITY};
 use crate::render::subbuffer::SubBuffer;
@@ -30,6 +30,8 @@ use crate::neat::neat::Neat;
 use crate::neat::num::Num;
 use crate::neat::cppn::CPPN;
 use crate::render::device::{QUEUE_IDX_GRAPHICS, QUEUE_IDX_TRANSFER};
+use crate::render::host_buffer::HostBuffer;
+use crate::pipelines::player_event::PlayerEvent;
 
 pub struct Indirect {
     update_particles: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
@@ -103,7 +105,10 @@ pub struct FoundationInitializer {
     faces: Submitter<StageSubBuffer<Face, Cpu, Storage>>,
     face_count_per_chunk_buffer: SubBuffer<Face, Storage>,
     opaque_and_transparent_face_buffer: SubBuffer<Face, Storage>,
-    particles: Submitter<StageSubBuffer<Particle, Cpu, Storage>>,
+    particles: SubBuffer<Particle, Storage>,
+    world_blocks_to_update: SubBuffer<u32, Storage>,
+    player_event_uniform:HostBuffer<PlayerEvent, Uniform>,
+    particle_stack_buffer: SubBuffer<u32, Storage>,
     collision_grid: SubBuffer<u32, Storage>,
     bones: Submitter<StageSubBuffer<Bone, Cpu, Storage>>,
     // sensors: Submitter<StageSubBuffer<Sensor, Cpu, Storage>>,
@@ -138,7 +143,7 @@ struct FoundationsCapacity {
 
 impl FoundationsCapacity {
     pub fn new() -> Self {
-        let world_size = WorldSize::new(2,2);
+        let world_size = WorldSize::new(6,6);
         let particles = 256u64;
         let bones = 1024u64;
         let faces = 16 * 1024u64 * world_size.total_chunks() as u64;
@@ -256,7 +261,6 @@ struct ZombieBrain<X:Num>{
 struct FoundationsData {
     world_blocks: WorldBlocks,
     world_faces: WorldFaces,
-    particle_data: Vec<Particle>,
     constraints_data: Vec<Constraint>,
     bone_data: Vec<Bone>,
     sensor_data: Vec<Sensor>,
@@ -310,7 +314,6 @@ impl FoundationsData {
             world_blocks: WorldBlocks::new(cap.world_size.clone()),
             world_faces: WorldFaces::with_capacity(cap.world_size.clone(), cap.faces as usize),
             // particles_data: std::iter::repeat_with(Particle::random).take((cap.solid_particles+cap.phantom_particles) as usize).collect(),
-            particle_data: vec![],
             constraints_data: vec![],
             bone_data: vec![],
             sensor_data: vec![],
@@ -346,12 +349,12 @@ impl FoundationsData {
 
     fn compute_constants(&self, cap: &FoundationsCapacity) -> ParticleConstants {
         let FoundationsCapacity { world_size, .. } = cap;
-        let Self { sensor_data, constraints_data, particle_data: phantom_particle_data, bone_data, .. } = self;
+        let Self { sensor_data, constraints_data, bone_data, .. } = self;
         ParticleConstants {
             predefined_constraints: constraints_data.len() as i32,
             collision_constraints: 0,
-            particles: phantom_particle_data.len() as i32,
-            dummy: 0,
+            particles: 0,
+            particle_stack: 0,
             chunks_x: world_size.width() as i32,
             chunks_z: world_size.depth() as i32,
             bones: bone_data.len() as i32,
@@ -360,6 +363,10 @@ impl FoundationsData {
             world_area: world_size.world_area() as i32,
             total_chunks: world_size.total_chunks() as i32,
             sensors: sensor_data.len() as u32,
+            dummy1: 0,
+            dummy2: 0,
+            held_bone_idx: 0,
+            dummy3: 0
         }
     }
 
@@ -390,12 +397,12 @@ impl FoundationInitializer {
     //     &self.muscles
     // }
     //
-    pub fn particles(&self) -> &StageSubBuffer<Particle, Cpu, Storage> {
+    pub fn particles(&self) -> &SubBuffer<Particle, Storage> {
         &self.particles
     }
-    // pub fn constraints(&self) -> &SubBuffer<Constraint, Storage> {
-    //     &self.constraints
-    // }
+    pub fn particle_stack(&self) -> &SubBuffer<u32, Storage> {
+        &self.particle_stack_buffer
+    }
     pub fn collision_grid(&self) -> &SubBuffer<u32, Storage> {
         &self.collision_grid
     }
@@ -428,7 +435,7 @@ impl FoundationInitializer {
         let heights = HeightMap::new(cap.world_size, 100., 32.);
         data.setup_world_blocks(&heights,120);
         data.setup_world_faces();
-        data.particle_data.extend((0..64).map(|_| Particle::random()));
+        // data.particle_data.extend((0..64).map(|_| Particle::random()));
         for _ in 0..8{
             let x = rand::random::<usize>() % cap.world_size.world_width();
             let z = rand::random::<usize>() % cap.world_size.world_depth();
@@ -452,10 +459,12 @@ impl FoundationInitializer {
         println!("{:?}", constants);
         assert!(cap.persistent_floats >= data.persistent_floats_len as u64,"{} < {}",cap.persistent_floats, data.persistent_floats_len);
         let particles_in_bytes = std::mem::size_of::<Particle>() as u64 * cap.particles;
+        let particle_stack_in_bytes = std::mem::size_of::<u32>() as u64 * cap.particles;
         let faces_in_bytes = std::mem::size_of::<Face>() as u64 * cap.faces;
         let grid_in_bytes = std::mem::size_of::<u32>() as u64 * cap.grid_size;
         let block_properties_in_bytes = std::mem::size_of_val(data.block_properties_data.as_slice()) as u64;
         let world_in_bytes = (std::mem::size_of::<Block>() * cap.world_size.world_volume()) as u64;
+        let world_blocks_to_update_in_bytes = (std::mem::size_of::<u32>() * cap.world_size.world_volume() / 4) as u64;
         // let constraints_in_bytes = std::mem::size_of::<Constraint>() as u64 * cap.max_constraints;
         let bones_in_bytes = std::mem::size_of::<Bone>() as u64 * cap.bones;
         let constants_in_bytes = std::mem::size_of_val(&constants) as u64;
@@ -466,10 +475,12 @@ impl FoundationInitializer {
 
         let super_buffer: SubBuffer<u8, Storage> = SubBuffer::with_capacity(cmd_pool.device(),
                                                                             particles_in_bytes +
+                                                                                particle_stack_in_bytes +
                                                                                 faces_in_bytes +
                                                                                 grid_in_bytes +
                                                                                 block_properties_in_bytes +
                                                                                 world_in_bytes +
+                                                                                world_blocks_to_update_in_bytes +
                                                                                 // constraints_in_bytes +
                                                                                 bones_in_bytes +
                                                                                 constants_in_bytes +
@@ -482,6 +493,9 @@ impl FoundationInitializer {
         let particle_buffer = super_buffer.sub(offset..offset + particles_in_bytes).reinterpret_into::<Particle>();
         let offset = offset + particles_in_bytes;
         assert_eq!(offset % 16, 0); // check correct GLSL alignment
+        let particle_stack_buffer = super_buffer.sub(offset..offset + particle_stack_in_bytes).reinterpret_into::<u32>();
+        let offset = offset + particle_stack_in_bytes;
+        assert_eq!(offset % 16, 0);
         let face_buffer = super_buffer.sub(offset..offset + faces_in_bytes).reinterpret_into::<Face>();
         let offset = offset + faces_in_bytes;
         assert_eq!(offset % 16, 0);
@@ -494,9 +508,9 @@ impl FoundationInitializer {
         let world_buffer = super_buffer.sub(offset..offset + world_in_bytes).reinterpret_into::<Block>();
         let offset = offset + world_in_bytes;
         assert_eq!(offset % 16, 0);
-        // let constraint_buffer = super_buffer.sub(offset..offset + constraints_in_bytes).reinterpret_into::<Constraint>();
-        // let offset = offset + constraints_in_bytes;
-        // assert_eq!(offset % 16, 0);
+        let world_blocks_to_update_buffer = super_buffer.sub(offset..offset + world_blocks_to_update_in_bytes).reinterpret_into::<u32>();
+        let offset = offset + world_blocks_to_update_in_bytes;
+        assert_eq!(offset % 16, 0);
         let bones_buffer = super_buffer.sub(offset..offset + bones_in_bytes).reinterpret_into::<Bone>();
         let offset = offset + bones_in_bytes;
         assert_eq!(offset % 16, 0);
@@ -518,7 +532,7 @@ impl FoundationInitializer {
 
         let particle_constants = StageBuffer::wrap(cmd_pool, &[constants], constants_buffer)?;
 
-        let particles = StageBuffer::wrap(cmd_pool, &data.particle_data, particle_buffer)?;
+        // let particles = StageBuffer::wrap(cmd_pool, &data.particle_data, particle_buffer)?;
 
         let face_count_per_chunk_buffer = face_buffer.sub(..std::mem::size_of::<Face>() as u64 * cap.world_size.total_chunks() as u64 * 2);
         let opaque_and_transparent_face_buffer = face_buffer.sub(std::mem::size_of::<Face>() as u64 * cap.world_size.total_chunks() as u64 * 2..);
@@ -563,7 +577,7 @@ impl FoundationInitializer {
             }
         }
         let indirect_dispatch_data = vec![
-            dispatch_indirect(data.particle_data.len()),// update_particles.comp
+            dispatch_indirect(1),// update_particles.comp
             dispatch_indirect(data.bone_data.len()),// broad_phase_collision_detection.comp broad_phase_collision_detection_cleanup.comp narrow_phase_collision_detection.comp update_bones.comp
             dispatch_indirect(data.sensor_data.len()), // agent_sensory_input_update.comp
             vk::DispatchIndirectCommand {  // feed_forward_net.comp
@@ -575,7 +589,7 @@ impl FoundationInitializer {
         let indirect_draw_data = vec![
             draw_indirect(36, data.bone_data.len() as u32),// bones.vert
             draw_indirect(6, data.world_faces.len() as u32),// block.vert
-            draw_indirect(data.particle_data.len() as u32, 1),// particles.vert
+            draw_indirect(0, 1),// particles.vert
 
         ];
         let indirect_dispatch_in_bytes = std::mem::size_of_val(indirect_dispatch_data.as_slice()) as u64;
@@ -593,7 +607,7 @@ impl FoundationInitializer {
         let indirect_draw = StageBuffer::wrap(cmd_pool, &indirect_draw_data, indirect_draw_buffer)?;
 
         let indirect = Indirect::new(super_indirect_buffer, &indirect_dispatch, &indirect_draw);
-
+        let player_event_uniform = HostBuffer::new(cmd_pool.device(), &[PlayerEvent::nothing()])?;
         Ok(Self {
             face_count_per_chunk_buffer,
             opaque_and_transparent_face_buffer,
@@ -602,12 +616,15 @@ impl FoundationInitializer {
             world,
             world_size: cap.world_size.clone(),
             sampler,
-            particles,
+            particles:particle_buffer,
+            world_blocks_to_update:world_blocks_to_update_buffer,
+            player_event_uniform,
             // constraints:constraint_buffer,
             // sensors,
             // zombie_brains,
             persistent_floats,
             neural_net_layers,
+            particle_stack_buffer,
             collision_grid:grid_buffer,
             particle_constants,
             indirect_dispatch,
@@ -619,9 +636,11 @@ impl FoundationInitializer {
     }
     pub fn build(self) -> Result<Foundations, Error> {
         let Self {
+            player_event_uniform,
             face_count_per_chunk_buffer,
             opaque_and_transparent_face_buffer,
             block_properties,
+            world_blocks_to_update,
             // zombie_brains,
             indirect_dispatch,
             indirect_draw,
@@ -632,6 +651,7 @@ impl FoundationInitializer {
             // sensors,
             persistent_floats,
             particles,
+            particle_stack_buffer,
             collision_grid,
             // constraints,
             particle_constants,
@@ -640,7 +660,7 @@ impl FoundationInitializer {
             // muscles,
             sampler,
         } = self;
-        let particles = particles.take()?.take_gpu();
+        // let particles = particles.take()?.take_gpu();
         // let collision_grid = collision_grid.take()?;
         let block_properties = block_properties.take()?.take_gpu();
         // let constraints = constraints.take()?.take_gpu();
@@ -654,13 +674,16 @@ impl FoundationInitializer {
         let world = world.take()?.take_gpu(); //wait for completion and then dispose of the staging buffer
         let faces = faces.take()?.take_gpu();
         Ok(Foundations {
+            player_event_uniform,
             // muscles,
             face_count_per_chunk_buffer,
             opaque_and_transparent_face_buffer,
             block_properties,
             faces,
+            world_blocks_to_update,
             // sensors,
             persistent_floats,
+            particle_stack_buffer,
             world,
             world_size,
             bones,
@@ -680,7 +703,10 @@ pub struct Foundations {
     world_size: WorldSize,
     block_properties: SubBuffer<BlockProp, Storage>,
     faces: SubBuffer<Face, Storage>,
+    player_event_uniform:HostBuffer<PlayerEvent, Uniform>,
     face_count_per_chunk_buffer: SubBuffer<Face, Storage>,
+    world_blocks_to_update: SubBuffer<u32, Storage>,
+    particle_stack_buffer: SubBuffer<u32, Storage>,
     opaque_and_transparent_face_buffer: SubBuffer<Face, Storage>,
     world: SubBuffer<Block, Storage>,
     particles: SubBuffer<Particle, Storage>,
@@ -704,6 +730,12 @@ impl Foundations {
     pub fn opaque_and_transparent_face_buffer(&self) -> &SubBuffer<Face, Storage> {
         &self.opaque_and_transparent_face_buffer
     }
+    pub fn player_event_uniform(&self)->&HostBuffer<PlayerEvent, Uniform>{
+        &self.player_event_uniform
+    }
+    pub fn player_event_uniform_mut(&mut self)->&mut HostBuffer<PlayerEvent, Uniform>{
+        &mut self.player_event_uniform
+    }
     pub fn world_size(&self) -> &WorldSize {
         &self.world_size
     }
@@ -713,12 +745,15 @@ impl Foundations {
     pub fn particles(&self) -> &SubBuffer<Particle, Storage> {
         &self.particles
     }
+    pub fn particle_stack(&self) -> &SubBuffer<u32, Storage> {
+        &self.particle_stack_buffer
+    }
     pub fn bones(&self) -> &SubBuffer<Bone, Storage> {
         &self.bones
     }
-    // pub fn sensors(&self) -> &SubBuffer<Sensor, Storage> {
-    //     &self.sensors
-    // }
+    pub fn world_blocks_to_update(&self) -> &SubBuffer<u32, Storage> {
+        &self.world_blocks_to_update
+    }
     // pub fn muscles(&self) -> &SubBuffer<Muscle, Storage> {
     //     &self.muscles
     // }

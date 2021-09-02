@@ -1,15 +1,20 @@
-#ifndef BONE_COMP
-#define BONE_COMP
+#ifndef ENTITY_COMP
+#define ENTITY_COMP
+
+#define ENTITY_LIDAR_COUNT 8
+#define ENTITY_MAX_EATEN_BONES 4
+
+struct EntityLidar {
+    vec3 relative_position;
+    float max_length;
+};
 
 struct Entity{
-    uint block_lidars_offset; // offset into persistent_floats buffer
-    uint block_lidars_count;
-    uint smell_lidars_offset; // offset into persistent_floats buffer
-    uint smell_lidars_count;
+    EntityLidar[ENTITY_LIDAR_COUNT] lidars;
     uint bone_idx;
-    float hunger;
+    uint lidars_used;
     float stamina;
     float strength;
 };
 
-#endif // BONE_COMP
+#endif // ENTITY_COMP

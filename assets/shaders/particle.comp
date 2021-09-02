@@ -2,10 +2,10 @@
 #define PARTICLE_COMP
 
 struct Particle{
-    vec3 old_position;
-    float size;
-    vec3 new_position;
-    float color;
+    vec3 position;
+    uint sender_entity_idx;
+    vec3 velocity;
+    float energy;
 };
 
 #endif // PARTICLE_COMP

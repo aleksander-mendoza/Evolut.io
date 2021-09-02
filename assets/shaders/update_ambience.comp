@@ -1,0 +1,12 @@
+#version 450
+#define IS_AVAILABLE_BUFFER_CONSTANTS
+#define IS_AVAILABLE_BUFFER_BONES
+#define IS_AVAILABLE_BUFFER_WORLD
+layout (local_size_x = 32) in;
+
+#include "ambience_descriptors.comp"
+#include "constants.comp"
+
+void main() {
+
+}

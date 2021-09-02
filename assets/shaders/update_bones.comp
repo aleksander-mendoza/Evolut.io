@@ -1,4 +1,5 @@
 #version 450
+#define IS_AVAILABLE_BUFFER_PLAYER_EVENT
 #define IS_AVAILABLE_BUFFER_CONSTANTS
 #define IS_AVAILABLE_BUFFER_BONES
 #define IS_AVAILABLE_BUFFER_WORLD
@@ -12,13 +13,22 @@ layout (local_size_x = 32) in;
 
 
 struct Neighbour{
-    vec3 velocity_components_affected;
+    uint velocity_component_affected;
     uint block_idx;
 };
 
 void main() {
     uint gID = gl_GlobalInvocationID.x;
     const ParticleConstants c = constants;
+    if(gID==0){
+        if (player_event.event_type == PLAYER_EVENT_THROW){
+            // vec3_slot0 holds current player position
+            // vec3_slot1 holds throwing velocity
+            reset_broad_phase_cell(broad_phase_position_to_cell_idx(c, bones[0].old_center));
+            bones[0].old_center = player_event.vec3_slot0;
+            bones[0].new_center = player_event.vec3_slot0 + player_event.vec3_slot1;
+        }
+    }
     if (gID < c.bones){
         const Bone bone = bones[gID];
         vec3 velocity = bone.new_center - bone.old_center;
@@ -37,7 +47,7 @@ void main() {
         uint neighbours_to_check_len = 0;
         Neighbour[32] neighbours_to_check;
         bvec3 velocity_sign = lessThan(velocity,vec3(0,0,0));
-        bvec3 velocity_sign_rotated = velocity_sign.yzx;
+        bvec3 velocity_sign_rotated = velocity_sign.yzx; // doesn't matter how we rotate this, we just need to chose one rotation and stick to it.
         ivec3 dim_of_rotated_velocity_sign = ivec3(1,2,0);
         bvec3 will_hitbox_move_to_next_block = mix(lessThan(hitbox_to_ceil, hitbox_to + velocity),lessThan(hitbox_from + velocity, vec3(start)),velocity_sign);
         for(int dim=0;dim<3;dim++){
@@ -49,6 +59,11 @@ void main() {
                 } else {
                     uvec3 from = start;
                     uvec3 to = end;
+                    // Every box has 6 faces and 8 edges. We need to check all the blocks that touch those faces and edges.
+                    // If they do, then we zero-out the respective components of velocity vector
+                    // Some optimisation can be made. If we know which direction the box is moving, we do not need to check the faces that
+                    // are "behind" it. We only check those that are "in front".
+                    // The code in the blow if-statement marks the region of blocks that touch a specific face.
                     if (neg){
                         from[dim]--;
                         to[dim] = start[dim];
@@ -56,6 +71,7 @@ void main() {
                         from[dim] = end[dim];
                         to[dim]++;
                     }
+                    // The if-statement below will extend this region to also include blocks touching one of the edges (if necessary).
                     if(will_hitbox_move_to_next_block[dim_of_rotated_velocity_sign[dim]]){
                         if (velocity_sign_rotated[dim]){
                             from[dim_of_rotated_velocity_sign[dim]]--;
@@ -66,9 +82,7 @@ void main() {
                     for(uint y=from.y;y<to.y;y++){
                         for(uint z=from.z;z<to.z;z++){
                             for(uint x=from.x;x<to.x;x++){
-                                vec3 v = vec3(1,1,1);
-                                v[dim] = 0;
-                                neighbours_to_check[neighbours_to_check_len++] = Neighbour(v,block_pos_into_world_idx(c,uvec3(x,y,z)));
+                                neighbours_to_check[neighbours_to_check_len++] = Neighbour(dim,block_pos_into_world_idx(c,uvec3(x,y,z)));
                             }
                         }
                     }
@@ -76,10 +90,10 @@ void main() {
             }
         }
         for(uint i=0;i<neighbours_to_check_len;i++){
-            if(world[neighbours_to_check[i].block_idx]>=NO_OF_TRAVERSABLE_BLOCKS){ // this operation is the most expensive, because it requires querying global memory.
+            if(world[neighbours_to_check[i].block_idx]>=NO_OF_TRAVERSABLE_BLOCKS){ // this operation is the most expensive, because it queries global memory.
                 // We can make major optimisation by factoring this out into it's own loop. This way all threads will query
                 // those blocks in parallel.
-                velocity *= neighbours_to_check[i].velocity_components_affected;
+                velocity[neighbours_to_check[i].velocity_component_affected] = 0;
             }
         }
         bones[gID].old_center = bone.new_center;

@@ -1,15 +1,14 @@
 #version 450
+//#extension GL_EXT_debug_printf : enable
 #define IS_AVAILABLE_BUFFER_CONSTANTS
 #define IS_AVAILABLE_BUFFER_WORLD
-#define IS_AVAILABLE_BUFFER_PARTICLES
 #define IS_AVAILABLE_BUFFER_PLAYER_EVENT
-#define IS_AVAILABLE_BUFFER_COLLISION_GRID
 #define IS_AVAILABLE_BUFFER_INDIRECT
 #define IS_AVAILABLE_BUFFER_FACES
 #define IS_AVAILABLE_BUFFER_BLOCK_PROPS
-layout (local_size_x = 32) in;
+layout (local_size_x = 1) in;
 
-#include "physics_descriptors.comp"
+#include "ambience_descriptors.comp"
 #include "constants.comp"
 #include "world.comp"
 #include "ray_cast.comp"
@@ -21,14 +20,7 @@ void main()
     uint gID = gl_GlobalInvocationID.x;
     const ParticleConstants c = constants;
     if(gID==0){
-        constants.collision_constraints = c.predefined_constraints; //First we reset the number of computed collision constraints
-        if(player_event.event_type == PLAYER_EVENT_THROW){
-            // vec3_slot0 holds current player position
-            // vec3_slot1 holds throwing velocity
-            particles[0].old_position = player_event.vec3_slot0;
-            particles[0].new_position = player_event.vec3_slot0 + player_event.vec3_slot1;
-        } else if(player_event.event_type == PLAYER_EVENT_SET_BLOCK){
-
+        if(player_event.event_type == PLAYER_EVENT_SET_BLOCK){
             // vec3_slot0 holds current player position
             // vec3_slot1 holds ray cast direction
             // u32_slot0 holds ray cast direction
@@ -45,7 +37,6 @@ void main()
                     const uint number_of_faces = add_block_faces(c, hit_pos, player_event.u32_slot0);
                     draw_indirect[DRAW_INDIRECT_BLOCK].instance_count = number_of_faces;
                 }
-
             }
         }
     }

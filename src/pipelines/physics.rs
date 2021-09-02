@@ -35,7 +35,6 @@ pub struct PhysicsResources {
     narrow_phase_collision_detection: ShaderModule<Compute>,
     update_bones: ShaderModule<Compute>,
     update_particles: ShaderModule<Compute>,
-    particle_uniform: HostBuffer<PlayerEvent, Uniform>,
     feed_forward_net: ShaderModule<Compute>,
     agent_sensory_inputs: ShaderModule<Compute>,
 }
@@ -53,11 +52,10 @@ impl PhysicsResources {
         let update_bones = ShaderModule::new(include_glsl!("assets/shaders/update_bones.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let feed_forward_net = ShaderModule::new(include_glsl!("assets/shaders/feed_forward_net.comp", kind: comp, target: vulkan1_1) as &[u32], cmd_pool.device())?;
         let agent_sensory_inputs = ShaderModule::new(include_glsl!("assets/shaders/agent_sensory_input_update.comp", kind: comp) as &[u32], cmd_pool.device())?;
-        let particle_uniform = HostBuffer::new(cmd_pool.device(), &[PlayerEvent::nothing()])?;
         Ok(Self { broad_phase_collision_detection,
             broad_phase_collision_detection_cleanup,
             narrow_phase_collision_detection,
-            particle_uniform, update_particles,
+            update_particles,
             update_bones,
             agent_sensory_inputs,
             feed_forward_net })
@@ -71,16 +69,15 @@ impl ComputeResources for PhysicsResources{
             broad_phase_collision_detection,
             broad_phase_collision_detection_cleanup,
             update_particles,
-            particle_uniform,
             narrow_phase_collision_detection,
             update_bones,
             agent_sensory_inputs,
             feed_forward_net,
         } = self;
         let mut descriptors = ComputeDescriptorsBuilder::new();
-        let uniform_binding = descriptors.uniform_buffer(particle_uniform.buffer());
+        let uniform_binding = descriptors.uniform_buffer(foundations.player_event_uniform().buffer());
         descriptors.storage_buffer(foundations.constants());
-        descriptors.storage_buffer(foundations.particles());
+        descriptors.storage_buffer(foundations.collision_grid());
         descriptors.storage_buffer(foundations.neural_net_layers());
         descriptors.storage_buffer(foundations.persistent_floats());
         descriptors.storage_buffer(foundations.indirect().super_buffer());
@@ -88,7 +85,7 @@ impl ComputeResources for PhysicsResources{
         descriptors.storage_buffer(foundations.world());
         descriptors.storage_buffer(foundations.faces());
         descriptors.storage_buffer(foundations.block_properties());
-        descriptors.storage_buffer(foundations.collision_grid());
+        // descriptors.storage_buffer(foundations.particles());
         // descriptors.storage_buffer(foundations.sensors());
 
         // descriptors.storage_buffer(foundations.constraints());
@@ -110,7 +107,6 @@ impl ComputeResources for PhysicsResources{
             broad_phase_collision_detection_cleanup,
             update_bones,
             uniform_binding,
-            player_event_uniform: particle_uniform,
         })
     }
 }
@@ -126,7 +122,6 @@ pub struct Physics {
     update_particles: ComputePipeline,
     agent_sensory_inputs: ComputePipeline,
     feed_forward_net: ComputePipeline,
-    player_event_uniform: HostBuffer<PlayerEvent, Uniform>,
 }
 
 impl Computable for Physics {
@@ -175,11 +170,11 @@ impl Computable for Physics {
         Ok(())
     }
 
-    fn update_uniforms(&mut self, player: &mut Player) {
+    fn update_uniforms(&mut self, player: &mut Player,foundations:&mut Foundations) {
         if let Some(event) = player.pop_event(){
-            self.player_event_uniform.as_slice_mut()[0] = event;
+            foundations.player_event_uniform_mut().as_slice_mut()[0] = event;
         }else {
-            self.player_event_uniform.as_slice_mut()[0].make_nothing();
+            foundations.player_event_uniform_mut().as_slice_mut()[0].make_nothing();
         }
     }
 

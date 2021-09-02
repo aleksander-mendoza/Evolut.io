@@ -38,7 +38,7 @@ impl RenderResources for BoneResources {
     type Render = Bones;
 
     fn create_descriptors(&self, descriptors: &mut DescriptorsBuilder, foundations:&FoundationInitializer) -> Result<(), Error> {
-        descriptors.storage_buffer(foundations.particles().gpu());
+        descriptors.storage_buffer(foundations.particles());
         descriptors.sampler(foundations.sampler(), self.texture.imageview());
         Ok(())
     }

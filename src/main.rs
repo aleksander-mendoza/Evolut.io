@@ -33,6 +33,7 @@ use crate::input::Input;
 
 use crate::render::vulkan_context::VulkanContext;
 use crate::pipelines::physics::PhysicsResources;
+use crate::pipelines::ambience::AmbienceResources;
 
 
 mod render;
@@ -64,7 +65,7 @@ fn run() -> Result<(),failure::Error>{
     // sdl.mouse().set_relative_mouse_mode(true);
     let vulkan = VulkanContext::new(window)?;
     let mut player = Player::new();
-    let mut display = Display::new(vulkan,&player, GameResources::new, PhysicsResources::new)?;
+    let mut display = Display::new(vulkan,&player, GameResources::new, PhysicsResources::new, AmbienceResources::new)?;
     let event_pump = sdl.event_pump().map_err(err_msg)?;
     let mut input = Input::new(event_pump);
     let mut fps_counter = FpsCounter::new(timer, 60);
@@ -73,6 +74,7 @@ fn run() -> Result<(),failure::Error>{
     player.resize(&display);
     display.rerecord_all_graphics_cmd_buffers()?;
     display.record_compute_cmd_buffer()?;
+    display.record_background_compute_cmd_buffer()?;
     'main: loop {
         fps_counter.update();
         input.poll();

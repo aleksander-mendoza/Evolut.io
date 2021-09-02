@@ -12,5 +12,5 @@ pub trait ComputeResources:Sized{
 }
 pub trait Computable:Sized{
     fn record_compute_cmd_buffer(&self, cmd: &mut CommandBuffer, foundations:&Foundations)->Result<(),failure::Error>;
-    fn update_uniforms(&mut self, player:&mut Player);
+    fn update_uniforms(&mut self, player:&mut Player,foundations:&mut Foundations);
 }

@@ -90,7 +90,7 @@ void main() {
                 ));
                 vec3 impulse = overlapping_area_on_each_face * sign(penetration_distance) * (BONE_COLLISION_FORCE_PER_AREA_UNIT) * 0.5;
                 bone_impulse -= impulse;
-                debugPrintfEXT("%d %d:%v3f:%v3f", neighbouring_bone_idx, gID, bone.new_center, neighbour_bone.new_center);
+//                debugPrintfEXT("%d %d:%v3f:%v3f", neighbouring_bone_idx, gID, bone.new_center, neighbour_bone.new_center);
                 atomicAdd(bones[neighbouring_bone_idx].impulse.x, impulse.x);
                 atomicAdd(bones[neighbouring_bone_idx].impulse.y, impulse.y);
                 atomicAdd(bones[neighbouring_bone_idx].impulse.z, impulse.z);

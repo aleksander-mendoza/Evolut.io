@@ -14,26 +14,26 @@ pub struct BlockProp{ // this thing needs to be aligned according to GLSL rules!
     mass:f32,
 }
 impl BlockProp{
-    const fn new(texture_ids:[u32;6], opacity:f32)->Self{
-        Self{texture_ids, opacity, mass:0.}
+    const fn new(texture_ids:[u32;6], opacity:f32, mass:f32)->Self{
+        Self{texture_ids, opacity, mass}
     }
 }
 
 impl BlockPropExtra{
-    const fn regular_transparent(name:&'static str, texture_id:u32, opacity:f32) ->Self{
-        Self{name,prop:BlockProp::new([texture_id;6],opacity)}
+    const fn regular_transparent(name:&'static str, texture_id:u32, opacity:f32, mass:f32) ->Self{
+        Self{name,prop:BlockProp::new([texture_id;6],opacity,mass)}
     }
-    const fn regular(name:&'static str, texture_id:u32)->Self{
-        Self::regular_transparent(name,texture_id,1.)
+    const fn regular(name:&'static str, texture_id:u32, mass:f32)->Self{
+        Self::regular_transparent(name,texture_id,1.,mass)
     }
-    const fn top_sides_bottom(name:&'static str, texture_id_top:u32,texture_id_side:u32,texture_id_bottom:u32)->Self{
-        Self::top_sides_bottom_transparent(name,texture_id_top,texture_id_side,texture_id_bottom,1.)
+    const fn top_sides_bottom(name:&'static str, texture_id_top:u32,texture_id_side:u32,texture_id_bottom:u32, mass:f32)->Self{
+        Self::top_sides_bottom_transparent(name,texture_id_top,texture_id_side,texture_id_bottom,1., mass)
     }
-    const fn top_sides_bottom_transparent(name:&'static str, texture_id_top:u32,texture_id_side:u32,texture_id_bottom:u32,opacity:f32)->Self{
-        Self{name,prop:BlockProp::new([texture_id_side,texture_id_side,texture_id_top,texture_id_bottom,texture_id_side,texture_id_side],opacity)}
+    const fn top_sides_bottom_transparent(name:&'static str, texture_id_top:u32,texture_id_side:u32,texture_id_bottom:u32,opacity:f32, mass:f32)->Self{
+        Self{name,prop:BlockProp::new([texture_id_side,texture_id_side,texture_id_top,texture_id_bottom,texture_id_side,texture_id_side],opacity, mass)}
     }
-    const fn top_sides_bottom_front(name:&'static str, texture_id_top:u32,texture_id_side:u32,texture_id_bottom:u32,texture_id_front:u32)->Self{
-        Self{name,prop:BlockProp::new([texture_id_side,texture_id_side,texture_id_top,texture_id_bottom,texture_id_side,texture_id_front],1.)}
+    const fn top_sides_bottom_front(name:&'static str, texture_id_top:u32,texture_id_side:u32,texture_id_bottom:u32,texture_id_front:u32, mass:f32)->Self{
+        Self{name,prop:BlockProp::new([texture_id_side,texture_id_side,texture_id_top,texture_id_bottom,texture_id_side,texture_id_front],1., mass)}
     }
     pub const fn get_texture_id(&self, ort:FaceOrientation)->u32{
         self.prop.texture_ids[ort as usize]
@@ -66,46 +66,46 @@ pub const GRAVEL:Block = Block::new(BEDROCK.id()+1);
 pub const NO_OF_TRAVERSABLE_BLOCKS:u32 = 3;
 pub const NO_OF_TRANSPARENT_BLOCKS:u32 = 7;
 pub const BLOCKS:[BlockPropExtra;34] = [
-    BlockPropExtra::regular_transparent("air", /*Some dummy value*/256, 0.),
-    BlockPropExtra::regular_transparent("water", 31, 0.5),
-    BlockPropExtra::regular_transparent("lava", 36, 0.5),
+    BlockPropExtra::regular_transparent("air", /*Some dummy value*/256, 0., 0.05),
+    BlockPropExtra::regular_transparent("water", 31, 0.5, 1.0),
+    BlockPropExtra::regular_transparent("lava", 36, 0.5, 3.011),
     // blocks above are traversable. Blocks below are solid (Notice
     // that if a block is traversable, player's camera might get inside it.
     // When that happens the block's faces will be culled. This means that every
     // traversable block must be transparent to prevent a situation where
     // the player could see through walls)
-    BlockPropExtra::regular_transparent("glass", 28, 0.1),
-    BlockPropExtra::regular_transparent("ice", 55, 0.7),
-    BlockPropExtra::regular_transparent("spawner", 53, 0.9),
-    BlockPropExtra::top_sides_bottom_transparent("leaves", 51,52, 51, 0.8),
+    BlockPropExtra::regular_transparent("glass", 28, 0.09, 0.1),
+    BlockPropExtra::regular_transparent("ice", 55, 0.7, 0.9167),
+    BlockPropExtra::regular_transparent("spawner", 53, 0.1, 2.710),
+    BlockPropExtra::top_sides_bottom_transparent("leaves", 51,52, 51, 0.1, 0.143),
     // blocks above are transparent. Blocks below are not
-    BlockPropExtra::regular("stone", 1),
-    BlockPropExtra::regular("dirt", 2),
-    BlockPropExtra::top_sides_bottom("grass", 0, 3,2),
-    BlockPropExtra::regular("plank", 4),
-    BlockPropExtra::top_sides_bottom_front("crafting", 59, 62,4, 63),
-    BlockPropExtra::top_sides_bottom("slab", 6,5,6),
-    BlockPropExtra::regular("brick", 7),
-    BlockPropExtra::top_sides_bottom("tnt", 9,8,10),
-    BlockPropExtra::regular("cobblestone", 11),
-    BlockPropExtra::regular("bedrock", 12),
-    BlockPropExtra::regular("sand", 13),
-    BlockPropExtra::regular("gravel", 14),
-    BlockPropExtra::top_sides_bottom("wood", 16,15,16),
-    BlockPropExtra::regular("iron", 17),
-    BlockPropExtra::regular("gold", 18),
-    BlockPropExtra::regular("diamond", 19),
-    BlockPropExtra::regular("emerald", 20),
-    BlockPropExtra::regular("gold ore", 21),
-    BlockPropExtra::regular("iron ore", 22),
-    BlockPropExtra::regular("coal ore", 23),
-    BlockPropExtra::regular("bookshelf", 24),
-    BlockPropExtra::regular("moss stone", 25),
-    BlockPropExtra::regular("obsidian", 26),
-    BlockPropExtra::regular("sponge", 27),
-    BlockPropExtra::regular("diamond ore", 29),
-    BlockPropExtra::regular("redstone ore", 30),
-    BlockPropExtra::regular("snow", 54),
+    BlockPropExtra::regular("stone", 1, 2.26796),
+    BlockPropExtra::regular("dirt", 2, 1.3),
+    BlockPropExtra::top_sides_bottom("grass", 0, 3,2, 1.4),
+    BlockPropExtra::regular("plank", 4, 1.5/4.),
+    BlockPropExtra::top_sides_bottom_front("crafting", 59, 62,4, 63, 1.5),
+    BlockPropExtra::top_sides_bottom("slab", 6,5,6, 2.26796),
+    BlockPropExtra::regular("brick", 7, 1.9),
+    BlockPropExtra::top_sides_bottom("tnt", 9,8,10, 1.65),
+    BlockPropExtra::regular("cobblestone", 11, 2.26796),
+    BlockPropExtra::regular("bedrock", 12, 3.1),
+    BlockPropExtra::regular("sand", 13, 1.62),
+    BlockPropExtra::regular("gravel", 14, 1.68),
+    BlockPropExtra::top_sides_bottom("wood", 16,15,16, 1.5),
+    BlockPropExtra::regular("iron", 17, 7.3),
+    BlockPropExtra::regular("gold", 18, 19.0),
+    BlockPropExtra::regular("diamond", 19, 3.514),
+    BlockPropExtra::regular("emerald", 20, 4.),
+    BlockPropExtra::regular("gold ore", 21, 2.9),
+    BlockPropExtra::regular("iron ore", 22, 2.7),
+    BlockPropExtra::regular("coal ore", 23, 2.0),
+    BlockPropExtra::regular("bookshelf", 24, 1.5),
+    BlockPropExtra::regular("moss stone", 25, 2.26796),
+    BlockPropExtra::regular("obsidian", 26, 3.1),
+    BlockPropExtra::regular("sponge", 27, 0.1),
+    BlockPropExtra::regular("diamond ore", 29, 2.1),
+    BlockPropExtra::regular("redstone ore", 30, 2.2),
+    BlockPropExtra::regular("snow", 54, 0.05),
 
 
 ];

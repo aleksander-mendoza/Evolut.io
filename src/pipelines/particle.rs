@@ -7,10 +7,10 @@ use crate::render::data::VertexAttrib;
 #[repr(C, packed)]
 #[derive(Copy,Clone,Debug)]
 pub struct Particle{
-    pub old_position:glm::Vec3,
-    pub size:f32,
-    pub new_position:glm::Vec3,
-    pub color:f32,
+    pub position:glm::Vec3,
+    pub sender_entity_idx:u32,
+    pub velocity:glm::Vec3,
+    pub energy:f32,
 }
 impl Particle{
     fn rand_f32()->f32{
@@ -20,20 +20,20 @@ impl Particle{
         glm::vec3(Self::rand_f32(),Self::rand_f32(),Self::rand_f32())
     }
     pub fn random()->Self{
-        let new_position = glm::vec3(random::<f32>()*16.,3.+random::<f32>()*8.,random::<f32>()*16.);
+        let position = glm::vec3(random::<f32>()*16.,3.+random::<f32>()*8.,random::<f32>()*16.);
         Self{
-            new_position,
-            size: 50.+random::<f32>()*50.,
-            old_position: new_position + Self::rand_vec3()*0.1,
-            color: random::<f32>(),
+            position,
+            sender_entity_idx: 0,
+            velocity: Self::rand_vec3()*0.1,
+            energy: random::<f32>(),
         }
     }
     pub fn new(pos:glm::Vec3)->Self{
         Self{
-            old_position: pos,
-            size: 50.+random::<f32>()*50.,
-            new_position: pos,
-            color: random::<f32>()
+            position: pos,
+            sender_entity_idx: 0,
+            velocity: glm::zero(),
+            energy: random::<f32>()
         }
     }
 }
@@ -44,19 +44,13 @@ impl VertexSource for Particle{
                 binding,
                 location: 0,
                 format:  glm::Vec3::FORMAT,
-                offset: offset_of!(Self, new_position) as u32,
+                offset: offset_of!(Self, position) as u32,
             },
             vk::VertexInputAttributeDescription {
                 binding,
                 location: 1,
                 format:  f32::FORMAT,
-                offset: offset_of!(Self, size) as u32,
-            },
-            vk::VertexInputAttributeDescription {
-                binding,
-                location: 2,
-                format:  f32::FORMAT,
-                offset: offset_of!(Self, color) as u32,
+                offset: offset_of!(Self, energy) as u32,
             }
         ]
     }

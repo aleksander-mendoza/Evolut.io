@@ -1,0 +1,48 @@
+#ifndef PHYSICS_DESCRIPTORS_COMP
+#define PHYSICS_DESCRIPTORS_COMP
+
+#ifdef IS_AVAILABLE_BUFFER_PLAYER_EVENT
+#include "player_event.comp"
+restrict layout (set = 0, binding = 0) uniform PlayerEvents{
+    PlayerEvent player_event;
+};
+#endif // IS_AVAILABLE_BUFFER_PLAYER_EVENT
+
+#ifdef IS_AVAILABLE_BUFFER_CONSTANTS
+#include "particle_constants.comp"
+restrict layout (std430, set = 0, binding = 1) buffer ParticleConstant{
+    ParticleConstants constants;
+};
+#endif
+
+
+#ifdef IS_AVAILABLE_BUFFER_INDIRECT
+#include "indirect.comp"
+restrict layout(std430, set = 0, binding = 2) buffer Indirect{
+    DispatchIndirectCommand[DISPATCH_INDIRECT_LEN] dispatch_indirect;
+    DrawIndirectCommand[DRAW_INDIRECT_LEN] draw_indirect;
+};
+#endif //IS_AVAILABLE_BUFFER_INDIRECT
+
+#ifdef IS_AVAILABLE_BUFFER_WORLD
+restrict layout(std430, set = 0, binding = 3) buffer World{
+    uint world[];
+};
+#endif
+
+#ifdef IS_AVAILABLE_BUFFER_FACES
+#include "face.comp"
+restrict layout(std430, set = 0, binding = 4) buffer Faces{
+    Face faces[];
+};
+#endif //IS_AVAILABLE_BUFFER_FACES
+
+#ifdef IS_AVAILABLE_BUFFER_BLOCK_PROPS
+#include "block.comp"
+restrict layout(std430, set = 0, binding = 5) buffer BlockProps{
+    BlockProp block_props[];
+};
+#endif // IS_AVAILABLE_BUFFER_BLOCK_PROPS
+
+
+#endif //PHYSICS_DESCRIPTORS_COMP

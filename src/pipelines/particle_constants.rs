@@ -4,7 +4,8 @@ pub struct ParticleConstants {
     pub predefined_constraints: i32,
     pub collision_constraints: i32,
     pub particles: i32,
-    pub dummy: i32,
+    pub particle_stack: i32,
+    pub held_bone_idx:i32,
     pub chunks_x: i32,
     pub chunks_z: i32,
     pub bones: i32,
@@ -13,4 +14,7 @@ pub struct ParticleConstants {
     pub world_area:i32, // world_depth * world_width
     pub total_chunks:i32, // chunks_x * chunks_z
     pub sensors:u32,
+    pub dummy1:i32,
+    pub dummy2:i32,
+    pub dummy3:i32,
 }

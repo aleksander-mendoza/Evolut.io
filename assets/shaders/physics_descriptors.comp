@@ -1,18 +1,12 @@
 #ifndef PHYSICS_DESCRIPTORS_COMP
 #define PHYSICS_DESCRIPTORS_COMP
 
+
 #ifdef IS_AVAILABLE_BUFFER_PLAYER_EVENT
-#define PLAYER_EVENT_NOTHING 0
-#define PLAYER_EVENT_THROW 1
-#define PLAYER_EVENT_SET_BLOCK 2
-restrict layout (set = 0, binding = 0) uniform PlayerEvent{
-    vec3 vec3_slot0;
-    uint u32_slot0;
-    vec3 vec3_slot1;
-    uint u32_slot1;
-    uvec3 uvec3_slot0;
-    uint event_type;
-}player_event;
+#include "player_event.comp"
+restrict layout (set = 0, binding = 0) uniform PlayerEvents{
+    PlayerEvent player_event;
+};
 #endif // IS_AVAILABLE_BUFFER_PLAYER_EVENT
 
 #ifdef IS_AVAILABLE_BUFFER_CONSTANTS
@@ -22,13 +16,11 @@ restrict layout (std430, set = 0, binding = 1) buffer ParticleConstant{
 };
 #endif
 
-#ifdef IS_AVAILABLE_BUFFER_PARTICLES
-#include "particle.comp"
-restrict layout(std430, set = 0, binding = 2) buffer Particles{
-    Particle particles[]; // the particles at indices from 0 (inclusive) to solid_particles (exclusive) are solid. All the remaining particles are phantom.
+#ifdef IS_AVAILABLE_BUFFER_COLLISION_GRID
+restrict layout(std430, set = 0, binding = 2) buffer CollisionGrid{
+    uint collision_grid[];
 };
-#endif // IS_AVAILABLE_BUFFER_PARTICLES
-
+#endif // IS_AVAILABLE_BUFFER_COLLISION_GRID
 
 #ifdef IS_AVAILABLE_BUFFER_NEURAL_NET_LAYERS
 #include "neural_net_layer.comp"
@@ -95,11 +87,20 @@ restrict layout(std430, set = 0, binding = 9) buffer BlockProps{
 #endif // IS_AVAILABLE_BUFFER_BLOCK_PROPS
 
 
-#ifdef IS_AVAILABLE_BUFFER_COLLISION_GRID
-restrict layout(std430, set = 0, binding = 10) buffer CollisionGrid{
-    uint collision_grid[];
-};
-#endif // IS_AVAILABLE_BUFFER_COLLISION_GRID
+//#ifdef IS_AVAILABLE_BUFFER_PARTICLES
+//#include "particle.comp"
+//restrict layout(std430, set = 0, binding = 2) buffer Particles{
+//    Particle particles[]; // the particles at indices from 0 (inclusive) to solid_particles (exclusive) are solid. All the remaining particles are phantom.
+//};
+//#endif // IS_AVAILABLE_BUFFER_PARTICLES
+
+
+//#ifdef IS_AVAILABLE_BUFFER_PARTICLE_STACK
+//restrict layout(std430, set = 0, binding = 11) buffer ParticleStack{
+//    uint particle_stack[]; // holds indices of particles that have non-zero energy. Such particles are considered "dead" and
+//    // can be popped off this stack at any time and reused (throw by some entity etc). When you pop from this stack, just decrement constants.particles
+//};
+//#endif // IS_AVAILABLE_BUFFER_COLLISION_GRID
 /**
 #ifdef IS_AVAILABLE_BUFFER_AUXILIARY_FLOATS
 #ifdef IS_AVAILABLE_BUFFER_COLLISION_GRID
