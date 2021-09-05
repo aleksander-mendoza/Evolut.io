@@ -2,10 +2,11 @@
 #ifndef UPDATE_FACES_COMP
 #define UPDATE_FACES_COMP
 #ifdef IS_AVAILABLE_BUFFER_FACES
-#ifdef IS_AVAILABLE_BUFFER_BLOCK_PROPS
+//#ifdef IS_AVAILABLE_BUFFER_BLOCK_PROPS
 #ifdef IS_AVAILABLE_BUFFER_WORLD
 #include "particle_constants.comp"
 #include "constants.comp"
+#include "block.comp"
 #include "face.comp"
 #include "world.comp"
 
@@ -48,7 +49,7 @@ uint remove_block_faces(const ParticleConstants c, const BlockProp p, uvec3 bloc
     uint number_of_opaque_blocks = 0;
     for(int i=0;i<6;i++){
         neighbour_block_ids[i] = has_neighbour[i] ? world[block_pos_into_world_idx(c, neighbour_block_pos[i])] : 0;
-        neighbour_opacity[i] = has_neighbour[i] ? block_props[neighbour_block_ids[i]].opacity : 0;
+        neighbour_opacity[i] = has_neighbour[i] ? BLOCK_PROPS[neighbour_block_ids[i]].opacity : 0;
         if(neighbour_opacity[i] <= p.opacity && neighbour_block_ids[i] >= NO_OF_TRANSPARENT_BLOCKS) {
             number_of_opaque_blocks++;
         }
@@ -76,7 +77,7 @@ uint remove_block_faces(const ParticleConstants c, const BlockProp p, uvec3 bloc
             neighbour_block_pos[i].x -= chunk_x * CHUNK_WIDTH;
             neighbour_block_pos[i].z -= chunk_z * CHUNK_DEPTH;
 
-            uvec2 face_to_insert = new_face(neighbour_block_pos[i], orientation, chunk_x, chunk_z, block_props[neighbour].texture_ids[orientation]);
+            uvec2 face_to_insert = new_face(neighbour_block_pos[i], orientation, chunk_x, chunk_z, BLOCK_PROPS[neighbour].texture_ids[orientation]);
             uint is_transparent = uint(neighbour < NO_OF_TRANSPARENT_BLOCKS);
             uint chunk_idx = chunk_pos_into_chunk_idx(c,chunk_x,chunk_z) + is_transparent*c.total_chunks;
             faces_to_insert[faces_to_insert_len[is_transparent]++] = uvec3(face_to_insert,chunk_idx);
@@ -148,7 +149,7 @@ uint remove_block_faces(const ParticleConstants c, const BlockProp p, uvec3 bloc
 
 uint add_block_faces(const ParticleConstants c, uvec3 block_pos, uint block_id){
     bool is_transparent = block_id < NO_OF_TRANSPARENT_BLOCKS;
-    const BlockProp p = block_props[block_id];
+    const BlockProp p = BLOCK_PROPS[block_id];
     uint chunk_x = block_pos.x / CHUNK_WIDTH;
     uint chunk_z = block_pos.z / CHUNK_DEPTH;
     uint chunk_idx = chunk_pos_into_chunk_idx(c,chunk_x,chunk_z);
@@ -187,7 +188,7 @@ uint add_block_faces(const ParticleConstants c, uvec3 block_pos, uint block_id){
         if(has_neighbour[neighbour]){
             uvec3 neighbour_pos = neighbour_block_pos[neighbour];
             neighbour_block_ids[neighbour] = world[block_pos_into_world_idx(c, neighbour_pos)];
-            neighbour_block_opacities[neighbour] = block_props[neighbour_block_ids[neighbour]].opacity;
+            neighbour_block_opacities[neighbour] = BLOCK_PROPS[neighbour_block_ids[neighbour]].opacity;
             if( neighbour_block_opacities[neighbour] <= p.opacity && neighbour_block_ids[neighbour]>0 && neighbour_block_opacities[neighbour] == 1){
                 opaque_neighbours++;
             }
@@ -276,6 +277,6 @@ uint add_block_faces(const ParticleConstants c, uvec3 block_pos, uint block_id){
     return total_faces + faces_to_insert_len;
 }
 #endif // IS_AVAILABLE_BUFFER_WORLD
-#endif // IS_AVAILABLE_BUFFER_BLOCK_PROPS
+//#endif // IS_AVAILABLE_BUFFER_BLOCK_PROPS
 #endif // IS_AVAILABLE_BUFFER_FACES
 #endif // UPDATE_FACES_COMP

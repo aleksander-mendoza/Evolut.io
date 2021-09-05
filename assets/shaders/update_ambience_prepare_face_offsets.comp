@@ -1,0 +1,53 @@
+#version 450
+#extension GL_KHR_shader_subgroup_basic : enable
+#define IS_AVAILABLE_BUFFER_CONSTANTS
+#define IS_AVAILABLE_BUFFER_TMP_FACES_COPY
+#define IS_AVAILABLE_BUFFER_FACES_TO_BE_REMOVED
+#define IS_AVAILABLE_BUFFER_FACES_TO_BE_INSERTED
+#define GROUP_SIZE 32
+layout (local_size_x = GROUP_SIZE) in;
+
+#include "ambience_descriptors.comp"
+
+//TODO: instead of using hard-coded length, use specialization constants  https://stackoverflow.com/questions/40773244/can-vulkan-specialization-constants-be-expressed-in-glsl
+shared uint face_counts_per_chunk[512];
+shared uint original_face_counts_per_chunk[512];
+
+void main() {
+
+    const uint lID = gl_LocalInvocationID.x;
+    const ParticleConstants c = constants;
+    if(lID==0){
+        face_counts_per_chunk[0] = 0;//the offset to faces of the first chunk is faces[c.total_chunks*2]. Here, however, we don't count those few leading faces and instead we use 0 as the initial offset
+        original_face_counts_per_chunk[0] = 0;
+    }
+    for (uint chunk_offset=lID;chunk_offset < c.total_chunks*2;chunk_offset+=GROUP_SIZE){
+        uvec2 inserted_and_delted = tmp_faces_copy[chunk_offset];
+        uint original_face_count = faces[chunk_offset].x;
+        face_counts_per_chunk[chunk_offset+1] = original_face_count + inserted_and_delted.x - inserted_and_delted.y;
+        //original_face_counts_per_chunk[0] contains the offset to the beginning of first chunk
+        //original_face_counts_per_chunk[1] contains the offset to the beginning of second chunk (and ending of first one)
+        //...and so on...
+        original_face_counts_per_chunk[chunk_offset+1] = original_face_count;
+    }
+    uint offset = 0;
+    for(int shift=1;shift<=c.total_chunks*2;shift*=2){
+        for (uint i=lID;i+shift <= c.total_chunks*2;i+=GROUP_SIZE){
+            face_counts_per_chunk[256 + i+shift] = face_counts_per_chunk[i] + face_counts_per_chunk[i+shift];
+            original_face_counts_per_chunk[256 + i+shift] = original_face_counts_per_chunk[i] + original_face_counts_per_chunk[i+shift];
+        }
+        shift*=2;
+        if(shift>c.total_chunks*2){
+            offset = 256;
+            break;
+        }
+        for (uint i=lID;i+shift <= c.total_chunks*2;i+=GROUP_SIZE){
+            face_counts_per_chunk[i+shift] = face_counts_per_chunk[256 + i] + face_counts_per_chunk[256 + i+shift];
+            original_face_counts_per_chunk[i+shift] = original_face_counts_per_chunk[256 + i] + original_face_counts_per_chunk[256 + i+shift];
+        }
+    }
+    for (uint chunk_offset=lID;chunk_offset <= c.total_chunks*2;chunk_offset+=GROUP_SIZE){
+        //now face_counts_per_chunk[offset + chunk_offset] holds information about total number of faces in all chunks from 0 up to chunk_offset (inclusive).
+        tmp_faces_copy[c.total_chunks*2 + chunk_offset] = uvec2(face_counts_per_chunk[offset + chunk_offset],original_face_counts_per_chunk[offset + chunk_offset]);
+    }
+}

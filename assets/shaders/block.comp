@@ -1,33 +1,113 @@
 #ifndef BLOCK_COMP
 #define BLOCK_COMP
 
-#define BLOCK_ID_AIR 0
-#define BLOCK_ID_GLASS 1
-#define BLOCK_ID_ICE 2
-#define BLOCK_ID_SPAWNER 3
-#define BLOCK_ID_WATER 4
-#define BLOCK_ID_LEAVES 5
-#define BLOCK_ID_STONE 6
-#define BLOCK_ID_DIRT 7
-#define BLOCK_ID_GRASS 8
-#define BLOCK_ID_PLANK 9
-#define BLOCK_ID_CRAFTING 10
-#define BLOCK_ID_SLAB 11
-#define BLOCK_ID_BRICK 12
-#define BLOCK_ID_TNT 13
-#define BLOCK_ID_COBBLESTONE 14
-#define BLOCK_ID_BEDROCK 15
-#define BLOCK_ID_GRAVEL 14
+#define Block uint
+#include "constants.comp"
 
+#define BLOCK_ID_AIR 0
+#define BLOCK_ID_WATER 1
+#define BLOCK_ID_LAVA 2
+// blocks above are traversable. Blocks below are solid (Notice
+// that if a block is traversable, player's camera might get inside it.
+// When that happens the block's faces will be culled. This means that every
+// traversable block must be transparent to prevent a situation where
+// the player could see through walls)
+#define BLOCK_ID_GLASS 3
+#define BLOCK_ID_ICE 4
+#define BLOCK_ID_SPAWNER 5
+#define BLOCK_ID_LEAVES 6
+// blocks above are transparent. Blocks below are not
+#define BLOCK_ID_STONE 7
+#define BLOCK_ID_DIRT 8
+#define BLOCK_ID_GRASS 9
+#define BLOCK_ID_PLANK 10
+#define BLOCK_ID_CRAFTING 11
+#define BLOCK_ID_SLAB 12
+#define BLOCK_ID_BRICK 13
+#define BLOCK_ID_TNT 14
+#define BLOCK_ID_COBBLESTONE 15
+#define BLOCK_ID_BEDROCK 16
+#define BLOCK_ID_SAND 17
+#define BLOCK_ID_GRAVEL 18
+#define BLOCK_ID_WOOD 19
+#define BLOCK_ID_IRON 20
+#define BLOCK_ID_GOLD 21
+#define BLOCK_ID_DIAMOND 22
+#define BLOCK_ID_EMERALD 23
+#define BLOCK_ID_GOLD_ORE 24
+#define BLOCK_ID_IRON_ORE 25
+#define BLOCK_ID_COAL_ORE 26
+#define BLOCK_ID_BOOKSHELF 27
+#define BLOCK_ID_MOSS_STONE 28
+#define BLOCK_ID_OBSIDIAN 29
+#define BLOCK_ID_SPONGE 30
+#define BLOCK_ID_DIAMOND_ORE 31
+#define BLOCK_ID_REDSTONE_ORE 32
+#define BLOCK_ID_SNOW 33
+#define BLOCKS_LEN 34
+#define NO_OF_TRAVERSABLE_BLOCKS 3 // every traversable block (mobs can pass through it without colliding) is transparent but the opposite may not necessarily hold
+#define NO_OF_TRANSPARENT_BLOCKS 7 // The blocks are aligned in such a way that transparent blocks come first. Hence in
+// order to check whether a block is transparent or not, it's enough to just check if its ID is below this value
 struct BlockProp{
     uint[6] texture_ids;
     float opacity; // the higher, the more opaque
     float mass;
+    bool falls_down;
+    bool falls_adjacent;
+    uint change_rate; // if constants.ambience_tick is divisible by this number, then the action happens
 };
 
-struct Block{
-    vec3 smell;
-    uint id;
-};
+/**Active blocks are those that perform some kind of action depending on their closest surrounding or the time elapsed.
+Trees and vegetables grow, water flows, sand falls etc.*/
+bool is_block_active(const BlockProp block_prop){
+    return block_prop.change_rate != AMBIENCE_MAX_TIME_TICK;
+}
+
+#define new_block_prop_regular_changing_transparent(texture_id, opacity, mass, falls_down, falls_adjacent, change_rate) BlockProp(uint[6](texture_id,texture_id,texture_id,texture_id,texture_id,texture_id),opacity,mass, falls_down, falls_adjacent, change_rate)
+#define new_block_prop_regular_transparent(texture_id, opacity, mass) BlockProp(uint[6](texture_id,texture_id,texture_id,texture_id,texture_id,texture_id),opacity,mass, false, false, AMBIENCE_MAX_TIME_TICK)
+#define new_block_prop_regular( texture_id, mass) new_block_prop_regular_transparent(texture_id,1.,mass)
+#define new_block_prop_regular_changing(texture_id, mass, falls_down, falls_adjacent, change_rate) new_block_prop_regular_changing_transparent(texture_id, 1., mass, falls_down, falls_adjacent, change_rate)
+#define new_block_prop_top_sides_bottom_transparent( texture_id_top, texture_id_side, texture_id_bottom, opacity, mass) BlockProp(uint[6](texture_id_side,texture_id_side,texture_id_top,texture_id_bottom,texture_id_side,texture_id_side),opacity, mass, false, false, 255)
+#define new_block_prop_top_sides_bottom_front( texture_id_top, texture_id_side, texture_id_bottom, texture_id_front, mass) BlockProp(uint[6](texture_id_side,texture_id_side,texture_id_top,texture_id_bottom,texture_id_side,texture_id_front),1., mass, false, false, 255)
+#define new_block_prop_top_sides_bottom(texture_id_top, texture_id_side, texture_id_bottom, mass) new_block_prop_top_sides_bottom_transparent(texture_id_top,texture_id_side,texture_id_bottom,1., mass)
+
+//TODO: use specialisation constants to populate block properties!
+const BlockProp[BLOCKS_LEN] BLOCK_PROPS = BlockProp[BLOCKS_LEN](
+    new_block_prop_regular_transparent( /*Some dummy value*/256, 0., 0.05), // air
+    new_block_prop_regular_changing_transparent( 31, 0.09, 1.0, true, true, 8), // water
+    new_block_prop_regular_changing_transparent( 36, 0.009, 3.011, true, true, 15), // lava
+    new_block_prop_regular_transparent( 28, 0.1, 0.1), // glass
+    new_block_prop_regular_transparent( 55, 0.7, 0.9167), // ice
+    new_block_prop_regular_transparent( 53, 0.1, 2.710), // spawner
+    new_block_prop_top_sides_bottom_transparent( 51,52, 51, 0.1, 0.143), // leaves
+    new_block_prop_regular( 1, 2.26796), // stone
+    new_block_prop_regular( 2, 1.3), // dirt
+    new_block_prop_top_sides_bottom( 0, 3,2, 1.4), // grass
+    new_block_prop_regular( 4, 1.5/4.), // plank
+    new_block_prop_top_sides_bottom_front( 59, 62,4, 63, 1.5), // crafting
+    new_block_prop_top_sides_bottom( 6,5,6, 2.26796), // slab
+    new_block_prop_regular( 7, 1.9), // brick
+    new_block_prop_top_sides_bottom( 9,8,10, 1.65), // tnt
+    new_block_prop_regular( 11, 2.26796), // cobblestone
+    new_block_prop_regular( 12, 3.1), // bedrock
+    new_block_prop_regular_changing( 13, 1.62, true, false, 4), // sand
+    new_block_prop_regular_changing( 14, 1.68, true, false, 4), // gravel
+    new_block_prop_top_sides_bottom( 16,15,16, 1.5), // wood
+    new_block_prop_regular( 17, 7.3), // iron
+    new_block_prop_regular( 18, 19.0), // gold
+    new_block_prop_regular( 19, 3.514), // diamond
+    new_block_prop_regular( 20, 4.), // emerald
+    new_block_prop_regular( 21, 2.9), // gold ore
+    new_block_prop_regular( 22, 2.7), // iron ore
+    new_block_prop_regular( 23, 2.0), // coal ore
+    new_block_prop_regular( 24, 1.5), // bookshelf
+    new_block_prop_regular( 25, 2.26796), // moss stone
+    new_block_prop_regular( 26, 3.1), // obsidian
+    new_block_prop_regular( 27, 0.1), // sponge
+    new_block_prop_regular( 29, 2.1), // diamond ore
+    new_block_prop_regular( 30, 2.2), // redstone ore
+    new_block_prop_regular( 54, 0.05) // snow
+);
+
 
 #endif // BLOCK_COMP

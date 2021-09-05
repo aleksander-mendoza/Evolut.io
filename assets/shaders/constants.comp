@@ -30,9 +30,6 @@
 #define BLOCK_COLLISION_MINIMUM_BOUNCE 0.01
 #define MUSCLE_REACTION_SPEED 0.01 // determines how quickly distance constraints (that simulate agent's muscles) are updated in response to signal coming from agent's neural network
 #define PHYSICS_SIMULATION_DELTA_TIME_PER_STEP 1.
-#define NO_OF_TRAVERSABLE_BLOCKS 3 // every traversable block (mobs can pass through it without colliding) is transparent but the opposite may not necessarily hold
-#define NO_OF_TRANSPARENT_BLOCKS 7 // The blocks are aligned in such a way that transparent blocks come first. Hence in
-// order to check whether a block is transparent or not, it's enough to just check if its ID is below this value
 #define BROAD_PHASE_CELL_SIZE 2 // how many blocks make up the side of one cell. Each cell may then hold multiple bones
 #define BROAD_PHASE_CHUNK_WIDTH_IN_CELLS (CHUNK_WIDTH/BROAD_PHASE_CELL_SIZE)
 #define BROAD_PHASE_CHUNK_DEPTH_IN_CELLS (CHUNK_DEPTH/BROAD_PHASE_CELL_SIZE)
@@ -42,5 +39,5 @@
 #define MAX_BONES 1024
 #define BONE_COLLISION_FORCE_PER_AREA_UNIT 0.01
 #define IMPULSE_AVERAGING_OVER_TIMESETP 0.2
-
+#define AMBIENCE_MAX_TIME_TICK 360 // this should be some anti-prime number, because BlockProp.change_rate is specified as a ratio
 #endif // CONSTANTS_COMP

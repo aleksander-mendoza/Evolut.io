@@ -79,12 +79,12 @@ restrict layout(std430, set = 0, binding = 8) buffer Faces{
 };
 #endif //IS_AVAILABLE_BUFFER_FACES
 
-#ifdef IS_AVAILABLE_BUFFER_BLOCK_PROPS
-#include "block.comp"
-restrict layout(std430, set = 0, binding = 9) buffer BlockProps{
-    BlockProp block_props[];
-};
-#endif // IS_AVAILABLE_BUFFER_BLOCK_PROPS
+//#ifdef IS_AVAILABLE_BUFFER_BLOCK_PROPS
+//#include "block.comp"
+//restrict layout(std430, set = 0, binding = 9) buffer BlockProps{
+//    BlockProp block_props[];
+//};
+//#endif // IS_AVAILABLE_BUFFER_BLOCK_PROPS
 
 
 //#ifdef IS_AVAILABLE_BUFFER_PARTICLES

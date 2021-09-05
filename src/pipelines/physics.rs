@@ -84,7 +84,7 @@ impl ComputeResources for PhysicsResources{
         descriptors.storage_buffer(foundations.bones());
         descriptors.storage_buffer(foundations.world());
         descriptors.storage_buffer(foundations.faces());
-        descriptors.storage_buffer(foundations.block_properties());
+        // descriptors.storage_buffer(foundations.block_properties());
         // descriptors.storage_buffer(foundations.particles());
         // descriptors.storage_buffer(foundations.sensors());
 
@@ -145,8 +145,8 @@ impl Computable for Physics {
             ])
             .bind_compute_pipeline(&self.update_bones)
             .dispatch_indirect(foundations.indirect().update_bones(), 0)
-            .bind_compute_pipeline(&self.update_particles)
-            .dispatch_indirect(foundations.indirect().update_particles(), 0)
+            // .bind_compute_pipeline(&self.update_particles)
+            // .dispatch_indirect(foundations.indirect().update_particles(), 0)
 
 
             // .buffer_barriers(vk::PipelineStageFlags::COMPUTE_SHADER, vk::PipelineStageFlags::COMPUTE_SHADER, &[

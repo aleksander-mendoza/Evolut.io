@@ -24,7 +24,7 @@ impl AmbienceResources {
     pub fn new(cmd_pool: &CommandPool, _foundations: &FoundationInitializer) -> Result<Self, failure::Error> {
         let update_player_events = ShaderModule::new(include_glsl!("assets/shaders/update_player_events.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let update_ambience = ShaderModule::new(include_glsl!("assets/shaders/update_ambience.comp", kind: comp) as &[u32], cmd_pool.device())?;
-
+        // let update_ambience_faces = ShaderModule::new(include_glsl!("assets/shaders/update_ambience_faces.comp", kind: comp) as &[u32], cmd_pool.device())?;
         Ok(Self {
             update_player_events,
             update_ambience,
@@ -46,7 +46,13 @@ impl ComputeResources for AmbienceResources {
         descriptors.storage_buffer(foundations.indirect().super_buffer());
         descriptors.storage_buffer(foundations.world());
         descriptors.storage_buffer(foundations.faces());
-        descriptors.storage_buffer(foundations.block_properties());
+        // descriptors.storage_buffer(foundations.block_properties());
+        descriptors.storage_buffer(foundations.world_blocks_to_update());
+        descriptors.storage_buffer(foundations.blocks_to_be_inserted());
+        descriptors.storage_buffer(foundations.blocks_to_be_removed());
+        descriptors.storage_buffer(foundations.tmp_faces_copy());
+        descriptors.storage_buffer(foundations.world_blocks_to_update_copy());
+        descriptors.storage_buffer(foundations.tmp_world_copy());
         let descriptors = descriptors.build(cmd_pool.device())?;
         let update_player_events = descriptors.build("main", update_player_events)?;
         let update_ambience = descriptors.build("main", update_ambience)?;

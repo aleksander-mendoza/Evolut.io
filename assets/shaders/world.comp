@@ -12,7 +12,13 @@ uint block_pos_into_chunk_idx(const ParticleConstants c, uint x,uint z){
 uint block_pos_into_world_idx(const ParticleConstants c, uvec3 pos){
     return pos.z * c.world_width + pos.x + pos.y * c.world_area;
 }
-
+uvec3 world_idx_into_block_pos(const ParticleConstants c, uint idx){
+    uint y = idx / c.world_area;
+    uint y_rem = idx - y*c.world_area;
+    uint z = y_rem / c.world_width;
+    uint x = y_rem - z * c.world_width;
+    return uvec3(x,y,z);
+}
 uint block_pos_relative_to_chunk_into_block_idx_relative_to_chunk(uvec3 position_relative_to_chunk) {
     //Notice that this conversion could equivalently be expressed as
     // position_relative_to_chunk.x + position_relative_to_chunk.z << 4 + position_relative_to_chunk.y << 8
@@ -22,12 +28,6 @@ uint block_pos_relative_to_chunk_into_block_idx_relative_to_chunk(uvec3 position
 //uvec3 block_idx_relative_to_chunk_into_block_pos_relative_to_chunk(uint index_relative_to_chunk) {
 //    return position_relative_to_chunk.x+(position_relative_to_chunk.y*CHUNK_DEPTH+position_relative_to_chunk.z)*CHUNK_WIDTH;
 //}
-//uvec3 world_idx_into_block_pos(uint world_width,uint world_area, uint idx) {
-//    uint z = idx / world_area;
-//    uint z_rem = idx - z * world_area; // == idx % world_area
-//    uint x = z_rem / world_width;
-//    uint x_rem = z_rem - x * world_width; // == idx % world_width
-//    return uvec3(x, x_rem, z);
-//}
+
 
 #endif // WORLD_COMP

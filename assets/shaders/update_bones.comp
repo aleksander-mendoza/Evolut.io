@@ -4,13 +4,14 @@
 #define IS_AVAILABLE_BUFFER_BONES
 #define IS_AVAILABLE_BUFFER_WORLD
 #define IS_AVAILABLE_BUFFER_COLLISION_GRID
+//TODO: use specialization constants https://www.reddit.com/r/vulkan/comments/cabask/set_localsize_dynamically/
 layout (local_size_x = 32) in;
 
 #include "physics_descriptors.comp"
 #include "constants.comp"
 #include "world.comp"
 #include "grid.comp"
-
+#include "block.comp"
 
 struct Neighbour{
     uint velocity_component_affected;
