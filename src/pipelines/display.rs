@@ -86,7 +86,7 @@ impl <P: RenderResources, C:ComputeResources, A:ComputeResources> Display<P,C,A>
         let mut descriptors_builder = DescriptorsBuilder::new();
         let foundations = FoundationInitializer::new(&graphics_cmd_pool)?;
         let uniforms_binding = descriptors_builder.singleton_uniform_buffer(player.mvp_uniforms());
-        let _ = descriptors_builder.storage_buffer(foundations.particle_constants().gpu());
+        let _ = descriptors_builder.storage_buffer(foundations.global_mutables().gpu());
         let render_resources = render(&graphics_cmd_pool,&foundations)?;
         let compute_resources = compute(&compute_cmd_pool,&foundations)?;
         let compute_background_resources = compute_background(&compute_background_cmd_pool,&foundations)?;
@@ -188,7 +188,7 @@ impl <P: RenderResources, C:ComputeResources, A:ComputeResources> Display<P,C,A>
     }
     pub fn recreate_graphics(&mut self) -> Result<(), failure::Error> {
         self.render_pass=self.vulkan.create_single_render_pass()?;
-        self.graphics_pipeline.recreate(&self.render_pass)?;
+        self.graphics_pipeline.recreate(&self.render_pass,self.foundations.specialization_constants())?;
         self.descriptors = self.descriptors_builder.build(self.render_pass.swapchain())?;
         let missing_buffers = self.swapchain().len() - self.graphics_command_buffers.len();
         if 0 < missing_buffers{

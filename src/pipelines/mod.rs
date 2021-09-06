@@ -1,4 +1,4 @@
-pub mod block_world;
+pub mod faces;
 pub mod foundations;
 pub mod joint;
 pub mod display;
@@ -9,7 +9,7 @@ pub mod game;
 pub mod player;
 pub mod bone;
 pub mod constraint;
-pub mod particle_constants;
+pub mod global_mutables;
 pub mod bones;
 pub mod physics;
 pub mod renderable;

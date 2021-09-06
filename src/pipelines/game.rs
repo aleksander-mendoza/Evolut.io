@@ -13,8 +13,7 @@ use crate::render::single_render_pass::SingleRenderPass;
 use crate::render::swap_chain::SwapchainImageIdx;
 
 use crate::pipelines::joint::{Joint, JointResources};
-use crate::pipelines::particles::{ParticleResources, Particles};
-use crate::pipelines::block_world::{BlockWorldResources, BlockWorld};
+use crate::pipelines::faces::{FacesResources, BlockWorld};
 
 
 
@@ -27,9 +26,10 @@ use crate::pipelines::foundations::{FoundationInitializer, Foundations};
 use crate::pipelines::physics::{PhysicsResources, Physics};
 use crate::pipelines::computable::{Computable, ComputeResources};
 use crate::pipelines::bones::{Bones, BonesBuilder, BoneResources};
+use crate::render::specialization_constants::SpecializationConstants;
 
 pub struct GameResources {
-    res: JointResources<JointResources<ParticleResources, BoneResources>,BlockWorldResources>,
+    res: JointResources<BoneResources, FacesResources>,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -42,11 +42,11 @@ pub struct ThrowUniform {
 impl GameResources {
 
     pub fn new(cmd_pool: &CommandPool, foundations:&FoundationInitializer) -> Result<Self, failure::Error> {
-        let particles = ParticleResources::new(cmd_pool, foundations)?;
-        let world = BlockWorldResources::new(cmd_pool, foundations)?;
+        // let particles = ParticleResources::new(cmd_pool, foundations)?;
+        let world = FacesResources::new(cmd_pool, foundations)?;
         let bones = BoneResources::new(cmd_pool, foundations)?;
 
-        let res = JointResources::new(JointResources::new(particles, bones), world );
+        let res = JointResources::new(bones, world );
 
         Ok(Self { res })
     }
@@ -69,22 +69,22 @@ impl RenderResources for GameResources {
 
 
 pub struct Game {
-    global: Joint<Joint<Particles, Bones>, BlockWorld>,
+    global: Joint<Bones, BlockWorld>,
 }
 
 impl Game {
     pub fn block_world(&self) -> &BlockWorld {
         self.global.b()
     }
-    pub fn particles(&self) -> &Particles {
-        self.global.a().a()
-    }
+    // pub fn particles(&self) -> &Particles {
+    //     self.global.a().a()
+    // }
     pub fn block_world_mut(&mut self) -> &mut BlockWorld {
         self.global.b_mut()
     }
-    pub fn particles_mut(&mut self) -> &mut Particles {
-        self.global.a_mut().a_mut()
-    }
+    // pub fn particles_mut(&mut self) -> &mut Particles {
+    //     self.global.a_mut()
+    // }
 }
 
 impl Renderable for Game {
@@ -100,7 +100,7 @@ impl Renderable for Game {
         self.global.update_uniforms(image_idx, player);
     }
 
-    fn recreate(&mut self, render_pass: &SingleRenderPass) -> Result<(), Error> {
-        self.global.recreate(render_pass)
+    fn recreate(&mut self, render_pass: &SingleRenderPass, constants:&SpecializationConstants) -> Result<(), Error> {
+        self.global.recreate(render_pass, constants)
     }
 }

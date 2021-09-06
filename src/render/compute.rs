@@ -98,12 +98,13 @@ impl ComputeDescriptors{
     pub fn descriptor_pool(&self) -> &DescriptorPool {
         &self.inner.descriptor_pool
     }
-    pub fn build(&self, shader_name: &str, shader_module: ShaderModule<ShCompute>) -> Result<ComputePipeline, failure::Error> {
+    pub fn build(&self, shader_name: &str, shader_module: ShaderModule<ShCompute>, specialization:&vk::SpecializationInfoBuilder) -> Result<ComputePipeline, failure::Error> {
         let shader_name = CString::new(shader_name).expect("Compute shader's function name contains null character");
         let descriptor_layout_raw = self.descriptor_layout().raw();
         let stage = vk::PipelineShaderStageCreateInfo::builder()
             .stage(vk::ShaderStageFlags::COMPUTE)
             .name(shader_name.as_c_str())
+            .specialization_info(specialization)
             .module(shader_module.raw());
         let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo::builder()
             .set_layouts(std::slice::from_ref(&descriptor_layout_raw));

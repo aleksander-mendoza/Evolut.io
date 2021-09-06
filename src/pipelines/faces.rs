@@ -24,20 +24,21 @@ use crate::render::stage_buffer::{StageBuffer, StageSubBuffer};
 use crate::render::buffer_type::{Storage, Cpu};
 use crate::render::compute::ComputePipeline;
 use crate::render::buffer::Buffer;
+use crate::render::specialization_constants::SpecializationConstants;
 
-pub struct BlockWorldResources {
+pub struct FacesResources {
     texture: Submitter<StageTexture<Dim2D>>,
     frag:ShaderModule<Fragment>,
     vert:ShaderModule<Vertex>,
 }
-impl BlockWorldResources{
+impl FacesResources {
     // pub fn world(&self) -> &Submitter<World>{
     //     &self.world
     // }
     pub fn new(cmd_pool: &CommandPool, foundations:&FoundationInitializer) -> Result<Self, failure::Error> {
         let texture = StageTexture::new("assets/img/blocks.png".as_ref(), cmd_pool, true)?;
-        let frag = ShaderModule::new(include_glsl!("assets/shaders/block.frag", kind: frag) as &[u32], cmd_pool.device())?;
-        let vert = ShaderModule::new(include_glsl!("assets/shaders/block.vert") as &[u32], cmd_pool.device())?;
+        let frag = ShaderModule::new(include_glsl!("assets/shaders/faces.frag", kind: frag) as &[u32], cmd_pool.device())?;
+        let vert = ShaderModule::new(include_glsl!("assets/shaders/faces.vert") as &[u32], cmd_pool.device())?;
         Ok(Self {
             texture,
             frag,
@@ -45,7 +46,7 @@ impl BlockWorldResources{
         })
     }
 }
-impl RenderResources for BlockWorldResources{
+impl RenderResources for FacesResources {
     type Render = BlockWorld;
     fn create_descriptors(&self,descriptors:&mut DescriptorsBuilder, foundations:&FoundationInitializer)->Result<(),failure::Error>{
         descriptors.sampler(foundations.sampler(), self.texture.imageview());
@@ -67,39 +68,39 @@ impl RenderResources for BlockWorldResources{
 
         let instance_binding = pipeline.instance_input_from(0, foundations.opaque_and_transparent_face_buffer());
         let texture = texture.take()?.take();
-        let mut block_world_builder = BlockWorldBuilder {
+        let mut block_world_builder = FacesBuilder {
             pipeline,
             texture,
             instance_binding,
         };
-        let block_world_compiled = block_world_builder.create_pipeline(render_pass)?;
+        let block_world_compiled = block_world_builder.create_pipeline(render_pass, foundations.specialization_constants())?;
         Ok(BlockWorld { block_world_builder, block_world_compiled })
     }
 
 }
 
-pub struct BlockWorldBuilder {
+pub struct FacesBuilder {
     pipeline: PipelineBuilder,
     texture: TextureView<Dim2D, Color>,
     instance_binding: BufferBinding<Face>,
 }
 
-impl BlockWorldBuilder {
+impl FacesBuilder {
 
-    pub fn create_pipeline(&mut self, render_pass: &SingleRenderPass) -> Result<Pipeline, Error> {
+    pub fn create_pipeline(&mut self, render_pass: &SingleRenderPass, constants:&SpecializationConstants) -> Result<Pipeline, Error> {
         self.pipeline
             .reset_scissors()
             .scissors(render_pass.swapchain().render_area())
             .reset_viewports()
             .viewports(render_pass.swapchain().viewport())
-            .build(render_pass)
+            .build(render_pass, constants)
     }
 
 }
 
 pub struct BlockWorld {
     block_world_compiled: Pipeline,
-    block_world_builder: BlockWorldBuilder,
+    block_world_builder: FacesBuilder,
 }
 
 impl BlockWorld {
@@ -134,8 +135,8 @@ impl Renderable for BlockWorld {
 
     fn update_uniforms(&mut self, _image_idx: SwapchainImageIdx, _player:&mut Player) {
     }
-    fn recreate(&mut self, render_pass: &SingleRenderPass) -> Result<(), Error> {
-        self.block_world_compiled = self.block_world_builder.create_pipeline(render_pass)?;
+    fn recreate(&mut self, render_pass: &SingleRenderPass, constants:&SpecializationConstants) -> Result<(), Error> {
+        self.block_world_compiled = self.block_world_builder.create_pipeline(render_pass, constants)?;
         Ok(())
     }
 }

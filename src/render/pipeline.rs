@@ -13,6 +13,7 @@ use crate::render::descriptor_layout::DescriptorLayout;
 use std::marker::PhantomData;
 use crate::render::buffer_type::BufferType;
 use crate::render::buffer::Buffer;
+use crate::render::specialization_constants::SpecializationConstants;
 
 
 pub struct Pipeline {
@@ -247,7 +248,7 @@ impl PipelineBuilder {
         BufferBinding(binding,PhantomData)
     }
 
-    pub fn build(&mut self, render_pass: &RenderPass) -> Result<Pipeline, failure::Error> {
+    pub fn build(&mut self, render_pass: &RenderPass, constants:&SpecializationConstants) -> Result<Pipeline, failure::Error> {
         let Self {
             viewport,
             scissors,
@@ -267,7 +268,8 @@ impl PipelineBuilder {
             .viewports(viewport)
             .scissors(scissors);
         let shader_names: Vec<CString> = shaders.iter().map(|(name, _)| CString::new(name.as_bytes()).expect("Name of shader's main function contains illegal null \\0 symbol")).collect();
-        let shader_stages: Vec<vk::PipelineShaderStageCreateInfo> = shader_names.iter().zip(shaders).map(|(c_name, (_, shader))| shader.to_stage_info(c_name).build()).collect();
+        let sc = constants.build();
+        let shader_stages: Vec<vk::PipelineShaderStageCreateInfo> = shader_names.iter().zip(shaders).map(|(c_name, (_, shader))| shader.to_stage_info(c_name, Some(&sc)).build()).collect();
         let vertex_input_state_create_info = vk::PipelineVertexInputStateCreateInfo::builder()
             .vertex_attribute_descriptions(&vertex_input_attribute)
             .vertex_binding_descriptions(&vertex_input_binding);

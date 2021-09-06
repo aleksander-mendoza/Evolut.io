@@ -38,11 +38,18 @@ pub struct AnyShaderModule{
     stage: ShaderStageFlags
 }
 impl AnyShaderModule{
-    pub fn to_stage_info<'a>(&'a self, main_function:&'a CStr)->vk::PipelineShaderStageCreateInfoBuilder<'a>{
-        vk::PipelineShaderStageCreateInfo::builder()
+    pub fn to_stage_info<'a>(&'a self, main_function:&'a CStr, specialization:Option<&'a vk::SpecializationInfoBuilder<'a>>)->vk::PipelineShaderStageCreateInfoBuilder<'a>{
+        let b = vk::PipelineShaderStageCreateInfo::builder()
             .module(self.inner.m)
             .name(main_function)
-            .stage(self.stage)
+            .stage(self.stage);
+        if let Some(specialization) = specialization{
+            b.specialization_info(specialization)
+        }else{
+            b
+        }
+
+
     }
 }
 
@@ -56,19 +63,22 @@ pub struct ShaderModule<T:ShaderStage>{
 impl <T:ShaderStage> ShaderModule<T> {
     pub fn new(src: &[u32], device: &Device) -> VkResult<Self> {
         let shader_module_create_info = vk::ShaderModuleCreateInfo::builder().code(src.into());
-
         unsafe { device.inner().create_shader_module(&shader_module_create_info, None) }
             .map(|m| Self { inner:Arc::new(ShaderModuleInner{m,device:device.clone() }),_p:PhantomData})
     }
     pub fn raw(&self)->vk::ShaderModule{
         self.inner.m
     }
-    pub fn to_stage_info<'a>(&'a self, main_function:&'a CStr)->vk::PipelineShaderStageCreateInfoBuilder<'a>{
-        vk::PipelineShaderStageCreateInfo::builder()
+    pub fn to_stage_info<'a>(&'a self, main_function:&'a CStr, specialization:Option<&'a vk::SpecializationInfoBuilder<'a>>)->vk::PipelineShaderStageCreateInfoBuilder<'a>{
+        let b = vk::PipelineShaderStageCreateInfo::builder()
             .module(self.inner.m)
             .name(main_function)
-            .stage(T::STAGE)
-
+            .stage(T::STAGE);
+        if let Some(specialization) = specialization{
+            b.specialization_info(specialization)
+        }else{
+            b
+        }
     }
     pub unsafe fn as_any(&self)->AnyShaderModule{
         AnyShaderModule{inner:self.inner.clone(), stage: T::STAGE }

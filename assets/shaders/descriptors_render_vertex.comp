@@ -1,0 +1,20 @@
+#ifndef DESCRIPTORS_RENDER_VERTEX_COMP
+#define DESCRIPTORS_RENDER_VERTEX_COMP
+
+#include "constants.comp"
+
+#ifdef IS_AVAILABLE_BUFFER_MVP
+layout (binding = 0) uniform Matrices{
+    mat4 MVP;
+    mat4 MV;
+};
+#endif
+
+#ifdef IS_AVAILABLE_BUFFER_CONSTANTS
+layout (std430, set = 0, binding = 1) buffer GlobalMutablesBlock{
+    GlobalMutables global_mutables;
+};
+#endif // IS_AVAILABLE_BUFFER_CONSTANTS
+
+
+#endif //DESCRIPTORS_RENDER_VERTEX_COMP

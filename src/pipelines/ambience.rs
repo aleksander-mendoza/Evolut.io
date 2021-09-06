@@ -2,7 +2,7 @@ use crate::render::command_pool::{CommandPool, CommandBuffer};
 use crate::render::shader_module::{ShaderModule, Compute};
 use ash::vk;
 use failure::Error;
-use crate::render::compute::{ComputePipeline, UniformBufferBinding, ComputeDescriptorsBuilder};
+use crate::render::compute::{ComputePipeline, UniformBufferBinding, ComputeDescriptorsBuilder, ComputeDescriptors};
 use crate::render::host_buffer::HostBuffer;
 use crate::pipelines::player::Player;
 use crate::render::uniform_types::Vec3;
@@ -41,21 +41,23 @@ impl ComputeResources for AmbienceResources {
             update_ambience,
         } = self;
         let mut descriptors = ComputeDescriptorsBuilder::new();
-        descriptors.uniform_buffer(foundations.player_event_uniform().buffer());
-        descriptors.storage_buffer(foundations.constants());
+        let uniform_binding = descriptors.uniform_buffer(foundations.player_event_uniform().buffer());
+        descriptors.storage_buffer(foundations.global_mutables());
+        descriptors.storage_buffer(foundations.world_blocks_to_update());
+        descriptors.storage_buffer(foundations.faces_to_be_inserted());
+        descriptors.storage_buffer(foundations.faces_to_be_removed());
         descriptors.storage_buffer(foundations.indirect().super_buffer());
+        descriptors.storage_buffer(foundations.tmp_faces_copy());
         descriptors.storage_buffer(foundations.world());
         descriptors.storage_buffer(foundations.faces());
-        // descriptors.storage_buffer(foundations.block_properties());
-        descriptors.storage_buffer(foundations.world_blocks_to_update());
-        descriptors.storage_buffer(foundations.blocks_to_be_inserted());
-        descriptors.storage_buffer(foundations.blocks_to_be_removed());
-        descriptors.storage_buffer(foundations.tmp_faces_copy());
         descriptors.storage_buffer(foundations.world_blocks_to_update_copy());
-        descriptors.storage_buffer(foundations.tmp_world_copy());
+        descriptors.storage_buffer(foundations.world_copy());
+        descriptors.storage_buffer(foundations.blocks_to_be_inserted_or_removed());
         let descriptors = descriptors.build(cmd_pool.device())?;
-        let update_player_events = descriptors.build("main", update_player_events)?;
-        let update_ambience = descriptors.build("main", update_ambience)?;
+
+        let sc = foundations.specialization_constants().build();
+        let update_player_events = descriptors.build("main", update_player_events, &sc)?;
+        let update_ambience = descriptors.build("main", update_ambience, &sc)?;
         Ok(Ambience {
             update_player_events,
             update_ambience,

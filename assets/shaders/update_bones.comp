@@ -1,17 +1,16 @@
 #version 450
+#extension GL_EXT_debug_printf : enable
+
 #define IS_AVAILABLE_BUFFER_PLAYER_EVENT
-#define IS_AVAILABLE_BUFFER_CONSTANTS
+#define IS_AVAILABLE_BUFFER_GLOBAL_MUTABLES
 #define IS_AVAILABLE_BUFFER_BONES
 #define IS_AVAILABLE_BUFFER_WORLD
 #define IS_AVAILABLE_BUFFER_COLLISION_GRID
-//TODO: use specialization constants https://www.reddit.com/r/vulkan/comments/cabask/set_localsize_dynamically/
-layout (local_size_x = 32) in;
 
-#include "physics_descriptors.comp"
-#include "constants.comp"
-#include "world.comp"
-#include "grid.comp"
-#include "block.comp"
+layout (local_size_x_id = 9) in;
+
+#include "descriptors_compute.comp"
+#include "utils.comp"
 
 struct Neighbour{
     uint velocity_component_affected;
@@ -20,17 +19,17 @@ struct Neighbour{
 
 void main() {
     uint gID = gl_GlobalInvocationID.x;
-    const ParticleConstants c = constants;
+    const uint bone_count = global_mutables.bones;
     if(gID==0){
         if (player_event.event_type == PLAYER_EVENT_THROW){
             // vec3_slot0 holds current player position
             // vec3_slot1 holds throwing velocity
-            reset_broad_phase_cell(broad_phase_position_to_cell_idx(c, bones[0].old_center));
+            collision_grid[broad_phase_position_to_cell_idx(bones[0].old_center)].len = 0;
             bones[0].old_center = player_event.vec3_slot0;
             bones[0].new_center = player_event.vec3_slot0 + player_event.vec3_slot1;
         }
     }
-    if (gID < c.bones){
+    if (gID < bone_count){
         const Bone bone = bones[gID];
         vec3 velocity = bone.new_center - bone.old_center;
         velocity += bone.impulse * PHYSICS_SIMULATION_DELTA_TIME_PER_STEP / bone.mass;
@@ -39,11 +38,10 @@ void main() {
         vec3 hitbox_from = bone.new_center-half_hitbox;
         vec3 hitbox_to = bone.new_center+half_hitbox;
         vec3 hitbox_to_ceil = ceil(hitbox_to);
-        uvec3 world_borders = uvec3(c.world_width,CHUNK_HEIGHT,c.world_depth);
         uvec3 start = uvec3(hitbox_from);
         uvec3 end = uvec3(hitbox_to_ceil);
         bvec3 is_start_limited_by_world_borders = equal(start,uvec3(0,0,0));
-        bvec3 is_end_limited_by_world_borders = lessThan(world_borders,end);
+        bvec3 is_end_limited_by_world_borders = lessThan(WORLD_BORDERS,end);
 
         uint neighbours_to_check_len = 0;
         Neighbour[32] neighbours_to_check;
@@ -54,7 +52,7 @@ void main() {
         for(int dim=0;dim<3;dim++){
             bool neg = velocity_sign[dim];
             if(will_hitbox_move_to_next_block[dim]){
-                bool bounded_by_world_border = neg ? start[dim] == 0 : end[dim] >= world_borders[dim];
+                bool bounded_by_world_border = neg ? start[dim] == 0 : end[dim] >= WORLD_BORDERS[dim];
                 if (bounded_by_world_border){
                     velocity[dim] = 0;
                 } else {
@@ -83,7 +81,7 @@ void main() {
                     for(uint y=from.y;y<to.y;y++){
                         for(uint z=from.z;z<to.z;z++){
                             for(uint x=from.x;x<to.x;x++){
-                                neighbours_to_check[neighbours_to_check_len++] = Neighbour(dim,block_pos_into_world_idx(c,uvec3(x,y,z)));
+                                neighbours_to_check[neighbours_to_check_len++] = Neighbour(dim,block_pos_into_world_idx(uvec3(x,y,z)));
                             }
                         }
                     }
@@ -97,8 +95,8 @@ void main() {
                 velocity[neighbours_to_check[i].velocity_component_affected] = 0;
             }
         }
-        bones[gID].old_center = bone.new_center;
-        bones[gID].new_center = bone.new_center + velocity;
-        bones[gID].impulse = bone.impulse * IMPULSE_AVERAGING_OVER_TIMESETP;
+       bones[gID].old_center = bone.new_center;
+       bones[gID].new_center = bone.new_center + velocity;
+       bones[gID].impulse = bone.impulse * IMPULSE_AVERAGING_OVER_TIMESETP;
     }
 }

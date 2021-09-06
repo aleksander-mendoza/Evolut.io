@@ -1,36 +1,33 @@
 #version 450
 #extension GL_EXT_shader_atomic_float : enable
 #extension GL_EXT_debug_printf : enable
-#define IS_AVAILABLE_BUFFER_CONSTANTS
+#define IS_AVAILABLE_BUFFER_GLOBAL_MUTABLES
 #define IS_AVAILABLE_BUFFER_BONES
 #define IS_AVAILABLE_BUFFER_COLLISION_GRID
 
-layout (local_size_x = 32) in;
+layout (local_size_x_id = 9) in;
 
-#include "physics_descriptors.comp"
-#include "constants.comp"
-#include "grid.comp"
+#include "descriptors_compute.comp"
 
 void main() {
     uint gID = gl_GlobalInvocationID.x;
-    const ParticleConstants c = constants;
-    if (gID < c.bones){
+    const uint bone_count = global_mutables.bones;
+    if (gID < bone_count){
         const Bone bone = bones[gID];
         vec3 half_hitbox = vec3(bone.half_side_length,bone.half_height,bone.half_side_length);
         vec3 hitbox_from = bone.new_center-half_hitbox;
         vec3 hitbox_to = bone.new_center+half_hitbox;
         vec3 hitbox_to_ceil = ceil(hitbox_to);
-        uvec3 world_borders = uvec3(c.world_width,CHUNK_HEIGHT,c.world_depth);
 
         uint potential_collisions_len = 0;
         uint[14*(BROAD_PHASE_CELL_CAPACITY)] potential_collisions;//14=13 neighbour cells + 1 middle cell
 
         uvec3 cell_pos = broad_phase_position_to_cell_pos(bone.new_center);
-        uint cell_idx = broad_phase_cell_pos_to_cell_idx(c, cell_pos);
-        uint cell_len = min(broad_phase_cell_len(cell_idx), BROAD_PHASE_CELL_CAPACITY);
+        uint cell_idx = broad_phase_cell_pos_to_cell_idx(cell_pos);
+        uint cell_len = min(collision_grid[cell_idx].len, BROAD_PHASE_CELL_CAPACITY);
         for(int i=0;i<cell_len;i++){// if everything is written correctly, gID must be located somewhere in this cell and the i<cell_len should never be false.
             // However, let's leave this extra check just in case, to make sure that infinite loop won't suddenly arise due to some bug earlier in the code.
-            uint neighbouring_bone_idx = broad_phase_cell_elem(cell_idx,i);
+            uint neighbouring_bone_idx = collision_grid[cell_idx].contents[i];
             if(neighbouring_bone_idx==gID)break;
             potential_collisions[potential_collisions_len++] = neighbouring_bone_idx;
         }
@@ -61,11 +58,11 @@ void main() {
 
         for(int i=0;i<13;i++){
             uvec3 neighbour_pos = cell_pos + neighbour_cells[i]; // notice that if cell_pos.x == 0, then cell_pos.x - 1 == MAX_INT, which of course must be outside of world borders
-            if(all(lessThan(neighbour_pos,world_borders))){
-                uint neighbour_idx = broad_phase_cell_pos_to_cell_idx(c, neighbour_pos);
-                uint neighbour_len = min(broad_phase_cell_len(neighbour_idx), BROAD_PHASE_CELL_CAPACITY);
+            if(is_in_world_borders(neighbour_pos)){
+                uint neighbour_idx = broad_phase_cell_pos_to_cell_idx(neighbour_pos);
+                uint neighbour_len = min(collision_grid[neighbour_idx].len, BROAD_PHASE_CELL_CAPACITY);
                 for(uint j=0;j<neighbour_len;j++){
-                    uint neighbouring_bone_idx = broad_phase_cell_elem(neighbour_idx,j);
+                    uint neighbouring_bone_idx =  collision_grid[neighbour_idx].contents[j];
                     potential_collisions[potential_collisions_len++] = neighbouring_bone_idx;
                 }
             }

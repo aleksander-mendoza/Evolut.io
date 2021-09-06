@@ -2,8 +2,7 @@
 //#extension GL_EXT_debug_printf : enable
 
 #define IS_AVAILABLE_BUFFER_MVP
-#define IS_AVAILABLE_BUFFER_PARTICLES
-#include "render_vertex_descriptors.comp"
+#include "descriptors_render_vertex.comp"
 
 layout(location = 0) in vec3 center;
 layout(location = 1) in float half_side_length;

@@ -7,11 +7,9 @@
 #define IS_AVAILABLE_BUFFER_CONSTRAINTS
 #define IS_AVAILABLE_BUFFER_MUSCLES
 
-#include "physics_descriptors.comp"
-#define GROUP_SIZE 32
+#include "descriptors_compute.comp"
 
-layout (local_size_x = GROUP_SIZE) in;
-
+layout (local_size_x_id = 9) in;
 
 
 shared float[512] hidden_layer_data; // If you have some large input, you probably should first perform some kind of dimensionality reduction.

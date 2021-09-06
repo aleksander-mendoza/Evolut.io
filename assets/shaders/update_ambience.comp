@@ -1,31 +1,28 @@
 #version 450
-#define IS_AVAILABLE_BUFFER_CONSTANTS
+#define IS_AVAILABLE_BUFFER_GLOBAL_MUTABLES
 #define IS_AVAILABLE_BUFFER_BONES
 #define IS_AVAILABLE_BUFFER_WORLD
 #define IS_AVAILABLE_BUFFER_WORLD_BLOCKS_TO_UPDATE
 #define IS_AVAILABLE_BUFFER_WORLD_BLOCKS_TO_UPDATE_COPY
 #define IS_AVAILABLE_BUFFER_WORLD_COPY
 #define IS_AVAILABLE_BUFFER_BLOCKS_TO_BE_INSERTED_OR_REMOVED
-layout (local_size_x = 32) in;
+layout (local_size_x_id = 9) in;
 
-#include "ambience_descriptors.comp"
-#include "constants.comp"
-#include "block.comp"
-#include "world.comp"
+#include "descriptors_ambient.comp"
+#include "utils.comp"
 
 void main() {
 
     uint gID = gl_GlobalInvocationID.x;
-    const ParticleConstants c = constants;
-    if (gID < c.world_blocks_to_update){
+    const int world_blocks_to_update_count = global_mutables.world_blocks_to_update;
+    if (gID < world_blocks_to_update_count){
         const uint block_idx = world_blocks_to_update[gID];
         const uint block_id = world[block_idx];
-        const uvec3 block_pos = world_idx_into_block_pos(c, block_idx);
+        const uvec3 block_pos = world_idx_into_block_pos(block_idx);
         const BlockProp p = BLOCK_PROPS[block_id];
-        const uvec3 world_borders = uvec3(c.world_width, CHUNK_HEIGHT, c.world_depth);
         bool update_neighbours = false;
         if (p.falls_down && block_pos.y > 0){
-            const uint block_below_idx = block_pos_into_world_idx(c, block_pos-uvec3(0, 1, 0));
+            const uint block_below_idx = block_pos_into_world_idx(block_pos-uvec3(0, 1, 0));
             const uint block_below = world[block_below_idx];
             if (block_below==BLOCK_ID_AIR){
                 const uint block_below_semaphore = atomicCompSwap(world_copy[block_below_idx], BLOCK_ID_AIR, block_id);// this makes sure that
@@ -34,7 +31,7 @@ void main() {
                     const uint block_semaphore = atomicCompSwap(world_copy[block_idx], block_id, BLOCK_ID_AIR);// this makes sure that
                     // no two threads concurrently remove a block from the same place (or remove and insert something in the same place)
                     if(block_semaphore==0){
-                        int offset = atomicAdd(constants.blocks_to_be_inserted_or_removed, 2);
+                        int offset = atomicAdd(global_mutables.blocks_to_be_inserted_or_removed, 2);
                         blocks_to_be_inserted_or_removed[offset] = block_idx;//remove this one
                         blocks_to_be_inserted_or_removed[offset+1] = block_below_idx;//insert this one
                         update_neighbours = true;
@@ -57,11 +54,11 @@ void main() {
             );
             for (int neighbour=0; neighbour<6;neighbour++){
                 const uvec3 neighbour_pos = block_pos + neighbours[neighbour];
-                if (all(lessThan(neighbour_pos, world_borders))){ //if pos.x==0 then pox.x-1==MAX_INT which obviously must be greater than world border
-                    neighbours_to_update[neighbours_to_update_len++] = block_pos_into_world_idx(c, neighbour_pos);
+                if (is_in_world_borders(neighbour_pos)){ //if pos.x==0 then pox.x-1==MAX_INT which obviously must be greater than world border
+                    neighbours_to_update[neighbours_to_update_len++] = block_pos_into_world_idx( neighbour_pos);
                 }
             }
-            int neighbours_to_update_offset = atomicAdd(constants.new_world_blocks_to_update_copy,neighbours_to_update_len);
+            int neighbours_to_update_offset = atomicAdd(global_mutables.new_world_blocks_to_update_copy,neighbours_to_update_len);
             for(int i=0;i<neighbours_to_update_len;i++){
                 world_blocks_to_update_copy[neighbours_to_update_offset + i] = neighbours_to_update[i];
             }

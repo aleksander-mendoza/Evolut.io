@@ -18,6 +18,7 @@ use crate::render::imageview::Color;
 
 use crate::pipelines::foundations::{Foundations, FoundationInitializer};
 use crate::render::buffer::Buffer;
+use crate::render::specialization_constants::SpecializationConstants;
 
 pub struct BoneResources{
     texture: Submitter<StageTexture<Dim2D>>,
@@ -38,7 +39,7 @@ impl RenderResources for BoneResources {
     type Render = Bones;
 
     fn create_descriptors(&self, descriptors: &mut DescriptorsBuilder, foundations:&FoundationInitializer) -> Result<(), Error> {
-        descriptors.storage_buffer(foundations.particles());
+        // descriptors.storage_buffer(foundations.particles());
         descriptors.sampler(foundations.sampler(), self.texture.imageview());
         Ok(())
     }
@@ -61,7 +62,7 @@ impl RenderResources for BoneResources {
             texture,
             instance_binding,
         };
-        let bones_compiled = bones_builder.create_pipeline(render_pass)?;
+        let bones_compiled = bones_builder.create_pipeline(render_pass, foundations.specialization_constants())?;
         Ok(Bones { bones_builder, bones_compiled })
     }
 }
@@ -74,13 +75,13 @@ pub struct BonesBuilder {
 }
 
 impl BonesBuilder{
-    pub fn create_pipeline(&mut self, render_pass: &SingleRenderPass) -> Result<Pipeline, Error> {
+    pub fn create_pipeline(&mut self, render_pass: &SingleRenderPass,constants:&SpecializationConstants) -> Result<Pipeline, Error> {
         self.pipeline
             .reset_scissors()
             .scissors(render_pass.swapchain().render_area())
             .reset_viewports()
             .viewports(render_pass.swapchain().viewport())
-            .build(render_pass)
+            .build(render_pass,constants)
     }
 }
 
@@ -118,8 +119,8 @@ impl Renderable for Bones {
     fn update_uniforms(&mut self, _image_idx: SwapchainImageIdx, _player:&mut Player) {
     }
 
-    fn recreate(&mut self, render_pass: &SingleRenderPass) -> Result<(), Error> {
-        self.bones_compiled = self.bones_builder.create_pipeline(render_pass)?;
+    fn recreate(&mut self, render_pass: &SingleRenderPass, constants:&SpecializationConstants) -> Result<(), Error> {
+        self.bones_compiled = self.bones_builder.create_pipeline(render_pass,constants)?;
         Ok(())
     }
 }

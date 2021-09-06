@@ -15,6 +15,7 @@ use crate::render::swap_chain::SwapchainImageIdx;
 
 use crate::pipelines::player::Player;
 use crate::pipelines::foundations::{Foundations, FoundationInitializer};
+use crate::render::specialization_constants::SpecializationConstants;
 
 pub struct JointResources<A: RenderResources,B: RenderResources> {
     a: A,
@@ -91,8 +92,8 @@ impl <A:Renderable,B:Renderable> Renderable for Joint<A,B> {
         self.b.update_uniforms(image_idx, player);
     }
 
-    fn recreate(&mut self, render_pass: &SingleRenderPass) -> Result<(), Error> {
-        self.a.recreate(render_pass)?;
-        self.b.recreate(render_pass)
+    fn recreate(&mut self, render_pass: &SingleRenderPass, constants:&SpecializationConstants) -> Result<(), Error> {
+        self.a.recreate(render_pass, constants)?;
+        self.b.recreate(render_pass, constants)
     }
 }

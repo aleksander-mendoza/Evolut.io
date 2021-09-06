@@ -34,4 +34,5 @@ pub mod uniform_types;
 pub mod buffer_type;
 pub mod subbuffer;
 pub mod buffer;
+pub mod specialization_constants;
 

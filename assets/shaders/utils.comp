@@ -1,23 +1,55 @@
+#ifndef UTILS_COMP
+#define UTILS_COMP
 
-#ifndef UPDATE_FACES_COMP
-#define UPDATE_FACES_COMP
-#ifdef IS_AVAILABLE_BUFFER_FACES
-//#ifdef IS_AVAILABLE_BUFFER_BLOCK_PROPS
-#ifdef IS_AVAILABLE_BUFFER_WORLD
-#include "particle_constants.comp"
 #include "constants.comp"
-#include "block.comp"
-#include "face.comp"
-#include "world.comp"
+
+#ifdef IS_AVAILABLE_BUFFER_WORLD
+
+struct RayCastResult{
+    vec3 v;
+    vec3 prev_v;
+    bool found;
+};
 
 
-uint remove_block_faces(const ParticleConstants c, const BlockProp p, uvec3 block_pos){
+RayCastResult ray_cast(vec3 start, vec3 distance_and_direction) {
+    //current voxel boundary
+    vec3 v = floor(start);
+    if(world[block_pos_into_world_idx( uvec3(v))]!=0) {
+        return RayCastResult(v,v,true);
+    }
+    //final voxel boundary B
+    vec3 b = start + distance_and_direction;
+    vec3 bv = floor(b);
+    vec3 step = sign(distance_and_direction);
+    vec3 t_max = (max(step, 0) + v - start) / distance_and_direction; //notice that the signs will cancel out and the result will be positive
+    vec3 t_delta = step / distance_and_direction;//notice that the signs will cancel out. Division by zero will yield +inf
+
+    while(v != bv){
+        uint min_dim = min_vec3_component(t_max);
+        vec3 new_v = v;
+        new_v[min_dim] += step[min_dim];
+        if(world[block_pos_into_world_idx(uvec3(new_v))]!=0){
+            return RayCastResult(new_v,v,true);
+        }
+        v = new_v;
+        t_max[min_dim] += t_delta[min_dim];
+    }
+    return RayCastResult(v,v,false);
+}
+
+#endif //IS_AVAILABLE_BUFFER_WORLD
+
+
+#ifdef IS_AVAILABLE_BUFFER_FACES
+#ifdef IS_AVAILABLE_BUFFER_WORLD
+uint remove_block_faces(const BlockProp p, uvec3 block_pos){
     ///////////////////////////////
     // FIRST WE COLLECT ALL THE NEIGHBOURING THAT USED TO BE COVERED AND WILL NOW BE UNCOVERED
     ///////////////////////////////
     uint chunk_x = block_pos.x / CHUNK_WIDTH;
     uint chunk_z = block_pos.z / CHUNK_DEPTH;
-    uint chunk_idx = chunk_pos_into_chunk_idx(c,chunk_x,chunk_z);
+    uint chunk_idx = chunk_pos_into_chunk_idx(chunk_x,chunk_z);
     uint[6] orientations = uint[6](
         ZPlus,
         XPlus,
@@ -39,8 +71,8 @@ uint remove_block_faces(const ParticleConstants c, const BlockProp p, uvec3 bloc
         block_pos.x>0,
         block_pos.y>0,
         block_pos.y+1<CHUNK_HEIGHT,
-        block_pos.x+1<c.world_width,
-        block_pos.z+1<c.world_depth
+        block_pos.x+1<WORLD_WIDTH,
+        block_pos.z+1<WORLD_DEPTH
     );
     uint[6] neighbour_block_ids;
     float[6] neighbour_opacity;
@@ -48,7 +80,7 @@ uint remove_block_faces(const ParticleConstants c, const BlockProp p, uvec3 bloc
     block_pos.z -= chunk_z * CHUNK_DEPTH;
     uint number_of_opaque_blocks = 0;
     for(int i=0;i<6;i++){
-        neighbour_block_ids[i] = has_neighbour[i] ? world[block_pos_into_world_idx(c, neighbour_block_pos[i])] : 0;
+        neighbour_block_ids[i] = has_neighbour[i] ? world[block_pos_into_world_idx(neighbour_block_pos[i])] : 0;
         neighbour_opacity[i] = has_neighbour[i] ? BLOCK_PROPS[neighbour_block_ids[i]].opacity : 0;
         if(neighbour_opacity[i] <= p.opacity && neighbour_block_ids[i] >= NO_OF_TRANSPARENT_BLOCKS) {
             number_of_opaque_blocks++;
@@ -65,7 +97,7 @@ uint remove_block_faces(const ParticleConstants c, const BlockProp p, uvec3 bloc
     }
     uvec3[7] faces_to_insert;
     uint[2] faces_to_insert_len = uint[](/*opaque index*/1,/*transparent index*/number_of_opaque_blocks+1);
-//    debugPrintfEXT("%d#%d",faces[0].x,faces[1].x);
+    //    debugPrintfEXT("%d#%d",faces[0].x,faces[1].x);
     for(int j=0;j<6;j++){
         int i = permutation[j];
         uint neighbour = neighbour_block_ids[i];
@@ -79,23 +111,20 @@ uint remove_block_faces(const ParticleConstants c, const BlockProp p, uvec3 bloc
 
             uvec2 face_to_insert = new_face(neighbour_block_pos[i], orientation, chunk_x, chunk_z, BLOCK_PROPS[neighbour].texture_ids[orientation]);
             uint is_transparent = uint(neighbour < NO_OF_TRANSPARENT_BLOCKS);
-            uint chunk_idx = chunk_pos_into_chunk_idx(c,chunk_x,chunk_z) + is_transparent*c.total_chunks;
+            uint chunk_idx = chunk_pos_into_chunk_idx(chunk_x,chunk_z) + is_transparent*TOTAL_CHUNKS;
             faces_to_insert[faces_to_insert_len[is_transparent]++] = uvec3(face_to_insert,chunk_idx);
-//            debugPrintfEXT("%d:%v4d",faces_to_insert_len[is_transparent]-1,
-//                face_coords_into_block_pos_relative_to_chunk_and_orientation(face_to_insert.x)
-//            );
         }
     }
     faces_to_insert[0].z = 0xFFFFFFFFu; //Every cube has 6 faces. We use array of length 7, to ensure that array overflow never occurs.
     // The 0xFFFFFFFFu value has analogical purpose to the 0 in null terminated strings in C.
 
-    uint face_offset = c.total_chunks*2;
+    uint face_offset = TOTAL_CHUNKS*2;
     ///////////////////////////////
     // THIS SECTION REMOVES FACES OF THE BLOCK THAT HAS BEEN REMOVED
     ///////////////////////////////
     int i=0;
     bool was_transparent = p.opacity < 1.0;
-    for(;i<chunk_idx+(was_transparent?c.total_chunks:0);i++){
+    for(;i<chunk_idx+(was_transparent?TOTAL_CHUNKS:0);i++){
         face_offset += faces[i].x;
     }
     uint length = faces[i].x;
@@ -110,7 +139,7 @@ uint remove_block_faces(const ParticleConstants c, const BlockProp p, uvec3 bloc
     }
     faces[i].x = length-number_of_removed_faces;
     face_offset += length;
-    for(i+=1;i<c.total_chunks*2;i++){
+    for(i+=1;i<TOTAL_CHUNKS*2;i++){
         length = faces[i].x;
         for(int j=0;j<number_of_removed_faces;){
             j++;
@@ -123,9 +152,9 @@ uint remove_block_faces(const ParticleConstants c, const BlockProp p, uvec3 bloc
     // THIS SECTION ADDS FACES OF NEIGHBOURS THAT WERE PREVIOUSLY HIDDEN AND ARE NOW BEING UNCOVERERD
     ///////////////////////////////
     uint faces_to_insert_idx = faces_to_insert_len[1]-1;
-    uint final_face_count = face_offset + faces_to_insert_idx - c.total_chunks*2;
+    uint final_face_count = face_offset + faces_to_insert_idx - TOTAL_CHUNKS*2;
     int total_number_of_inserted_faces = 0;
-    i=2*c.total_chunks-1;
+    i=2*int(TOTAL_CHUNKS)-1;
     for(;i>=0;i--){
         int length = int(faces[i].x);
         uint inserted_faces = 0;
@@ -140,19 +169,16 @@ uint remove_block_faces(const ParticleConstants c, const BlockProp p, uvec3 bloc
         }
         faces[i].x = length + inserted_faces;
         face_offset-=length;
-//        length = -faces_to_insert_idx;
     }
     return final_face_count;
 }
 
-
-
-uint add_block_faces(const ParticleConstants c, uvec3 block_pos, uint block_id){
+uint add_block_faces(uvec3 block_pos, uint block_id){
     bool is_transparent = block_id < NO_OF_TRANSPARENT_BLOCKS;
     const BlockProp p = BLOCK_PROPS[block_id];
     uint chunk_x = block_pos.x / CHUNK_WIDTH;
     uint chunk_z = block_pos.z / CHUNK_DEPTH;
-    uint chunk_idx = chunk_pos_into_chunk_idx(c,chunk_x,chunk_z);
+    uint chunk_idx = chunk_pos_into_chunk_idx(chunk_x,chunk_z);
     uint[6] orientations = uint[6](
         ZMinus,
         XMinus,
@@ -175,8 +201,8 @@ uint add_block_faces(const ParticleConstants c, uvec3 block_pos, uint block_id){
         block_pos.x>0,
         block_pos.y>0,
         block_pos.y+1<CHUNK_HEIGHT,
-        block_pos.x+1<c.world_width,
-        block_pos.z+1<c.world_depth
+        block_pos.x+1<WORLD_WIDTH,
+        block_pos.z+1<WORLD_DEPTH
     );
     block_pos.x -= chunk_x * CHUNK_WIDTH;
     block_pos.z -= chunk_z * CHUNK_DEPTH;
@@ -187,7 +213,7 @@ uint add_block_faces(const ParticleConstants c, uvec3 block_pos, uint block_id){
     for(int neighbour=0;neighbour<6;neighbour++){
         if(has_neighbour[neighbour]){
             uvec3 neighbour_pos = neighbour_block_pos[neighbour];
-            neighbour_block_ids[neighbour] = world[block_pos_into_world_idx(c, neighbour_pos)];
+            neighbour_block_ids[neighbour] = world[block_pos_into_world_idx(neighbour_pos)];
             neighbour_block_opacities[neighbour] = BLOCK_PROPS[neighbour_block_ids[neighbour]].opacity;
             if( neighbour_block_opacities[neighbour] <= p.opacity && neighbour_block_ids[neighbour]>0 && neighbour_block_opacities[neighbour] == 1){
                 opaque_neighbours++;
@@ -226,7 +252,7 @@ uint add_block_faces(const ParticleConstants c, uvec3 block_pos, uint block_id){
                 uint opposite = opposite_orientation(orientation);
                 uint face_coords = block_pos_relative_to_chunk_and_orientation_into_face_coords(uvec4(neighbour_pos,opposite));
                 uint is_transparent = uint(neighbour_opacity<1);
-                uint neighbour_chunk_idx = chunk_pos_into_chunk_idx(c,neighbour_chunk_x,neighbour_chunk_z) + is_transparent*c.total_chunks;
+                uint neighbour_chunk_idx = chunk_pos_into_chunk_idx(neighbour_chunk_x,neighbour_chunk_z) + is_transparent*TOTAL_CHUNKS;
                 faces_to_remove[faces_to_remove_len[is_transparent]++] = uvec2(face_coords,neighbour_chunk_idx);
             }
         }
@@ -234,11 +260,11 @@ uint add_block_faces(const ParticleConstants c, uvec3 block_pos, uint block_id){
     faces_to_remove[faces_to_remove_len[1]].y = 0xFFFFFFFFu;
 
 
-    uint face_offset = c.total_chunks*2;
+    uint face_offset = TOTAL_CHUNKS*2;
     uint i=0;
-    uint chunk_faces_idx = chunk_idx + (is_transparent?c.total_chunks:0);
+    uint chunk_faces_idx = chunk_idx + (is_transparent?TOTAL_CHUNKS:0);
     int faces_to_remove_idx = 0;
-    for(;i<2*c.total_chunks;i++){
+    for(;i<2*TOTAL_CHUNKS;i++){
         uint length = faces[i].x;
 
         for(uint j=0;j<faces_to_remove_idx;){
@@ -262,8 +288,8 @@ uint add_block_faces(const ParticleConstants c, uvec3 block_pos, uint block_id){
         face_offset += length;
     }
     face_offset -= faces_to_remove_idx;
-    const uint total_faces = face_offset - c.total_chunks*2;
-    for(int i=c.total_chunks*2-1;i>chunk_faces_idx;i--){
+    const uint total_faces = face_offset - TOTAL_CHUNKS*2;
+    for(int i=int(TOTAL_CHUNKS)*2-1;i>chunk_faces_idx;i--){
         uint length = faces[i].x;
         for(int j=0;j<faces_to_insert_len;j++){
             faces[face_offset+j] = faces[face_offset-length+j];
@@ -277,6 +303,8 @@ uint add_block_faces(const ParticleConstants c, uvec3 block_pos, uint block_id){
     return total_faces + faces_to_insert_len;
 }
 #endif // IS_AVAILABLE_BUFFER_WORLD
-//#endif // IS_AVAILABLE_BUFFER_BLOCK_PROPS
 #endif // IS_AVAILABLE_BUFFER_FACES
-#endif // UPDATE_FACES_COMP
+
+
+
+#endif // UTILS_COMP

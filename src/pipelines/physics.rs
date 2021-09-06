@@ -34,9 +34,9 @@ pub struct PhysicsResources {
     broad_phase_collision_detection_cleanup: ShaderModule<Compute>,
     narrow_phase_collision_detection: ShaderModule<Compute>,
     update_bones: ShaderModule<Compute>,
-    update_particles: ShaderModule<Compute>,
-    feed_forward_net: ShaderModule<Compute>,
-    agent_sensory_inputs: ShaderModule<Compute>,
+    // update_particles: ShaderModule<Compute>,
+    // feed_forward_net: ShaderModule<Compute>,
+    // agent_sensory_inputs: ShaderModule<Compute>,
 }
 
 
@@ -48,17 +48,18 @@ impl PhysicsResources {
         let broad_phase_collision_detection = ShaderModule::new(include_glsl!("assets/shaders/broad_phase_collision_detection.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let broad_phase_collision_detection_cleanup = ShaderModule::new(include_glsl!("assets/shaders/broad_phase_collision_detection_cleanup.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let narrow_phase_collision_detection = ShaderModule::new(include_glsl!("assets/shaders/narrow_phase_collision_detection.comp", kind: comp) as &[u32], cmd_pool.device())?;
-        let update_particles = ShaderModule::new(include_glsl!("assets/shaders/update_particles.comp", kind: comp) as &[u32], cmd_pool.device())?;
+        // let update_particles = ShaderModule::new(include_glsl!("assets/shaders/update_particles.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let update_bones = ShaderModule::new(include_glsl!("assets/shaders/update_bones.comp", kind: comp) as &[u32], cmd_pool.device())?;
-        let feed_forward_net = ShaderModule::new(include_glsl!("assets/shaders/feed_forward_net.comp", kind: comp, target: vulkan1_1) as &[u32], cmd_pool.device())?;
-        let agent_sensory_inputs = ShaderModule::new(include_glsl!("assets/shaders/agent_sensory_input_update.comp", kind: comp) as &[u32], cmd_pool.device())?;
+        // let feed_forward_net = ShaderModule::new(include_glsl!("assets/shaders/feed_forward_net.comp", kind: comp, target: vulkan1_1) as &[u32], cmd_pool.device())?;
+        // let agent_sensory_inputs = ShaderModule::new(include_glsl!("assets/shaders/agent_sensory_input_update.comp", kind: comp) as &[u32], cmd_pool.device())?;
         Ok(Self { broad_phase_collision_detection,
             broad_phase_collision_detection_cleanup,
             narrow_phase_collision_detection,
-            update_particles,
+            // update_particles,
             update_bones,
-            agent_sensory_inputs,
-            feed_forward_net })
+            // agent_sensory_inputs,
+            // feed_forward_net
+        })
     }
 }
 impl ComputeResources for PhysicsResources{
@@ -68,15 +69,15 @@ impl ComputeResources for PhysicsResources{
         let Self {
             broad_phase_collision_detection,
             broad_phase_collision_detection_cleanup,
-            update_particles,
+            // update_particles,
             narrow_phase_collision_detection,
             update_bones,
-            agent_sensory_inputs,
-            feed_forward_net,
+            // agent_sensory_inputs,
+            // feed_forward_net,
         } = self;
         let mut descriptors = ComputeDescriptorsBuilder::new();
         let uniform_binding = descriptors.uniform_buffer(foundations.player_event_uniform().buffer());
-        descriptors.storage_buffer(foundations.constants());
+        descriptors.storage_buffer(foundations.global_mutables());
         descriptors.storage_buffer(foundations.collision_grid());
         descriptors.storage_buffer(foundations.neural_net_layers());
         descriptors.storage_buffer(foundations.persistent_floats());
@@ -84,25 +85,26 @@ impl ComputeResources for PhysicsResources{
         descriptors.storage_buffer(foundations.bones());
         descriptors.storage_buffer(foundations.world());
         descriptors.storage_buffer(foundations.faces());
+        let descriptors = descriptors.build(cmd_pool.device())?;
         // descriptors.storage_buffer(foundations.block_properties());
         // descriptors.storage_buffer(foundations.particles());
         // descriptors.storage_buffer(foundations.sensors());
 
         // descriptors.storage_buffer(foundations.constraints());
         // descriptors.storage_buffer(foundations.muscles());
-        let descriptors = descriptors.build(cmd_pool.device())?;
-        let broad_phase_collision_detection = descriptors.build("main", broad_phase_collision_detection)?;
-        let broad_phase_collision_detection_cleanup = descriptors.build("main", broad_phase_collision_detection_cleanup)?;
-        let update_bones = descriptors.build("main", update_bones)?;
-        let agent_sensory_inputs = descriptors.build("main", agent_sensory_inputs)?;
-        let feed_forward_net = descriptors.build("main", feed_forward_net)?;
-        let update_particles = descriptors.build("main", update_particles)?;
-        let narrow_phase_collision_detection = descriptors.build("main", narrow_phase_collision_detection)?;
+        let sc = foundations.specialization_constants().build();
+        let broad_phase_collision_detection = descriptors.build("main", broad_phase_collision_detection,&sc)?;
+        let broad_phase_collision_detection_cleanup = descriptors.build("main", broad_phase_collision_detection_cleanup,&sc)?;
+        let update_bones = descriptors.build("main", update_bones,&sc)?;
+        // let agent_sensory_inputs = descriptors.build("main", agent_sensory_inputs)?;
+        // let feed_forward_net = descriptors.build("main", feed_forward_net)?;
+        // let update_particles = descriptors.build("main", update_particles,&sc)?;
+        let narrow_phase_collision_detection = descriptors.build("main", narrow_phase_collision_detection,&sc)?;
         Ok(Physics {
             narrow_phase_collision_detection,
-            update_particles,
-            agent_sensory_inputs,
-            feed_forward_net,
+            // update_particles,
+            // agent_sensory_inputs,
+            // feed_forward_net,
             broad_phase_collision_detection,
             broad_phase_collision_detection_cleanup,
             update_bones,
@@ -119,15 +121,15 @@ pub struct Physics {
     broad_phase_collision_detection_cleanup: ComputePipeline,
     narrow_phase_collision_detection: ComputePipeline,
     update_bones: ComputePipeline,
-    update_particles: ComputePipeline,
-    agent_sensory_inputs: ComputePipeline,
-    feed_forward_net: ComputePipeline,
+    // update_particles: ComputePipeline,
+    // agent_sensory_inputs: ComputePipeline,
+    // feed_forward_net: ComputePipeline,
 }
 
 impl Computable for Physics {
     fn record_compute_cmd_buffer(&self, cmd: &mut CommandBuffer,foundations:&Foundations) -> Result<(), Error> {
         cmd
-            .bind_compute_descriptors(&self.update_particles)
+            .bind_compute_descriptors(&self.broad_phase_collision_detection_cleanup)
             .bind_compute_pipeline(&self.broad_phase_collision_detection_cleanup)
             .dispatch_indirect(foundations.indirect().broad_phase_collision_detection_cleanup(), 0)
             .buffer_barriers(vk::PipelineStageFlags::COMPUTE_SHADER, vk::PipelineStageFlags::COMPUTE_SHADER, &[

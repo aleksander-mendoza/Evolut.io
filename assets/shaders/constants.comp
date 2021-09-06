@@ -1,43 +1,402 @@
 #ifndef CONSTANTS_COMP
 #define CONSTANTS_COMP
 
+#define Face uvec2
+
+#define XPlus 0
+#define XMinus 1
+#define YPlus 2
+#define YMinus 3
+#define ZPlus 4
+#define ZMinus 5
 #define CHUNK_WIDTH 16
 #define CHUNK_DEPTH 16
 #define CHUNK_HEIGHT 256
-#define GRID_GRANULARITY 8 // the total number of cells in a block is GRID_GRANULARITY raised to the power of 3
-#define CELL_SIZE 1./float(GRID_GRANULARITY)
-#define CELL_DIAGONAL sqrt(3.)*(CELL_SIZE)
-#define PARTICLE_RADIUS (CELL_DIAGONAL)/2. //the is the minimum possible particle size that still guarantees
-// only one particle will fall into each grid cell. Here we assume that the center of particle decides,
-// which cell a particel falls into. The particles should normally never overlap... well... sporadically it may happen
-// that they do, especially if they are moving with high speeds and suddenly collide. But such events should be rare
-// and if they do occur, only one fo them will be randomly picked to occupy the grid cell, while the other one will
-// be ignored. But in the next simulation step, the particle positions will almost surely change and the two particles
-// should at some point fall into different cells and then collision will be detected.
-#define PARTICLE_DIAMETER (PARTICLE_RADIUS)*2.
-#define CHUNK_WIDTH_IN_CELLS CHUNK_WIDTH*GRID_GRANULARITY
-#define CHUNK_DEPTH_IN_CELLS CHUNK_DEPTH*GRID_GRANULARITY
-#define CHUNK_HEIGHT_IN_CELLS CHUNK_HEIGHT*GRID_GRANULARITY
-#define PARTICLE_COLLISION_DISTANCE_SQUARE (PARTICLE_DIAMETER)*(PARTICLE_DIAMETER)
 #define MAX_UINT 4294967295
-#define PARTICLE_COLLISION_STIFFNESS 0.2
-#define MAX_STIFFNESS 1.0
-#define MIN_STIFFNESS 0.0
-#define GAUSS_SEIDEL_PASSES 12
-#define GRAVITY 0.0 //0.002
-#define DAMPING_COEFFICIENT 0.99
-#define BLOCK_COLLISION_FRICTION 0.7
-#define BLOCK_COLLISION_MINIMUM_BOUNCE 0.01
-#define MUSCLE_REACTION_SPEED 0.01 // determines how quickly distance constraints (that simulate agent's muscles) are updated in response to signal coming from agent's neural network
-#define PHYSICS_SIMULATION_DELTA_TIME_PER_STEP 1.
-#define BROAD_PHASE_CELL_SIZE 2 // how many blocks make up the side of one cell. Each cell may then hold multiple bones
+
+layout (constant_id = 1) const uint CHUNKS_X = 0;
+layout (constant_id = 2) const uint CHUNKS_Z = 0;
+#define WORLD_WIDTH (CHUNKS_X*CHUNK_WIDTH)
+#define WORLD_DEPTH (CHUNKS_Z*CHUNK_DEPTH)
+#define WORLD_AREA (WORLD_WIDTH*WORLD_DEPTH)
+#define TOTAL_CHUNKS (CHUNKS_X*CHUNKS_Z)
+#define WORLD_VOLUME (WORLD_AREA*CHUNK_HEIGHT)
+layout (constant_id = 3) const uint MAX_BONES = 128;
+layout (constant_id = 4) const uint MAX_SENSORS = 128;
+layout (constant_id = 5) const uint MAX_FACES = 128;
+layout (constant_id = 6) const float GRAVITY = 0;
+layout (constant_id = 7) const uint BROAD_PHASE_CELL_SIZE = 2; // how many blocks make up the side of one cell. Each cell may then hold multiple bones
 #define BROAD_PHASE_CHUNK_WIDTH_IN_CELLS (CHUNK_WIDTH/BROAD_PHASE_CELL_SIZE)
 #define BROAD_PHASE_CHUNK_DEPTH_IN_CELLS (CHUNK_DEPTH/BROAD_PHASE_CELL_SIZE)
 #define BROAD_PHASE_CHUNK_HEIGHT_IN_CELLS (CHUNK_HEIGHT/BROAD_PHASE_CELL_SIZE)
 #define BROAD_PHASE_CHUNK_VOLUME_IN_CELLS (BROAD_PHASE_CHUNK_WIDTH_IN_CELLS*BROAD_PHASE_CHUNK_DEPTH_IN_CELLS*BROAD_PHASE_CHUNK_HEIGHT_IN_CELLS)
+#define BROAD_PHASE_WORLD_VOLUME_IN_CELLS (BROAD_PHASE_CHUNK_VOLUME_IN_CELLS*TOTAL_CHUNKS)
 #define BROAD_PHASE_CELL_CAPACITY 8 // maximum number of bones that can be placed in one cell
-#define MAX_BONES 1024
-#define BONE_COLLISION_FORCE_PER_AREA_UNIT 0.01
-#define IMPULSE_AVERAGING_OVER_TIMESETP 0.2
+layout (constant_id = 9) const uint GROUP_SIZE = 32;
+layout (constant_id = 10) const float BLOCK_COLLISION_FRICTION = 0.7;
+layout (constant_id = 11) const float BLOCK_COLLISION_MINIMUM_BOUNCE = 0.01;
+layout (constant_id = 12) const float PHYSICS_SIMULATION_DELTA_TIME_PER_STEP = 1.;
+layout (constant_id = 13) const float BONE_COLLISION_FORCE_PER_AREA_UNIT = 0.01;
+layout (constant_id = 14) const float IMPULSE_AVERAGING_OVER_TIMESETP = 0.2;
+layout (constant_id = 15) const uint MAX_PERSISTENT_FLOATS = 128;
+layout (constant_id = 16) const uint MAX_NEURAL_NET_LAYERS = 128;
+layout (constant_id = 17) const uint MAX_TMP_FACES_COPY = 128;
+layout (constant_id = 18) const uint MAX_WORLD_BLOCKS_TO_UPDATE = 128;
+layout (constant_id = 19) const uint MAX_BLOCKS_TO_BE_INSERTED_OR_REMOVED = 128;
+layout (constant_id = 20) const uint MAX_FACES_TO_BE_INSERTED = 128;
+layout (constant_id = 21) const uint MAX_FACES_TO_BE_REMOVED = 128;
+layout (constant_id = 22) const float DAMPING_COEFFICIENT = 0.99;
 #define AMBIENCE_MAX_TIME_TICK 360 // this should be some anti-prime number, because BlockProp.change_rate is specified as a ratio
+const uvec3 WORLD_BORDERS = uvec3(WORLD_WIDTH,CHUNK_HEIGHT,WORLD_DEPTH);
+bool is_in_world_borders(uvec3 pos){
+    return all(lessThan(pos,WORLD_BORDERS));
+}
+
+#define PLAYER_EVENT_NOTHING 0
+#define PLAYER_EVENT_THROW 1
+#define PLAYER_EVENT_SET_BLOCK 2
+
+struct PlayerEvent{
+    vec3 vec3_slot0;
+    uint u32_slot0;
+    vec3 vec3_slot1;
+    uint u32_slot1;
+    uvec3 uvec3_slot0;
+    uint event_type;
+};
+
+struct Bone{
+    vec3 new_center;
+    float half_side_length;//width == 2*half_side_length && depth == 2*half_side_length
+    vec3 direction;
+    float half_height;
+    vec3 impulse;
+    float mass;
+    vec3 old_center;
+    uint entity_idx;
+    vec3 position_relative_to_parent;
+    uint parent_bone_idx;
+    vec4 texture_coords;//xy components hold text UV coordinates. zw components hold width and height
+};
+
+struct CollisionCell{
+    uint len;
+    uint contents[BROAD_PHASE_CELL_CAPACITY];
+};
+
+struct NeuralNetLayerHidden{
+    uint input_offset;
+    uint input_length;
+    uint weights_offset;
+    uint output_offset;
+    uint output_length;
+    uint next_layer_and_overwrite;
+};
+
+uint neural_net_layer_next_layer(const NeuralNetLayerHidden l){
+    return l.next_layer_and_overwrite/2;
+}
+bool neural_net_layer_overwrite(const NeuralNetLayerHidden l){
+    return bool(l.next_layer_and_overwrite & 1u);
+}
+bool neural_net_layer_has_next_layer(const NeuralNetLayerHidden l){
+    return l.next_layer_and_overwrite<65536;
+}
+uint neural_net_layer_weights_length(const NeuralNetLayerHidden l){
+    return l.input_length*l.output_length;
+}
+
+struct NeuralNetLayerInput{
+    uint region0_offset;
+    uint region1_offset;
+    uint region2_offset;
+    uint region0_length;
+    uint region1_length;
+    uint region2_length;
+};
+
+struct NeuralNetLayerOutput{
+    uint muscle_internal_offset;
+    uint muscle_external_offset;
+    uint muscle_length;
+    uint recurrent_internal_offset;
+    uint recurrent_external_offset;
+    uint recurrent_length;
+};
+
+#define ENTITY_LIDAR_COUNT 8
+#define ENTITY_MAX_EATEN_BONES 4
+
+struct EntityLidar {
+    vec3 relative_position;
+    float max_length;
+};
+
+struct Entity{
+    EntityLidar[ENTITY_LIDAR_COUNT] lidars;
+    uint bone_idx;
+    uint lidars_used;
+    float stamina;
+    float strength;
+};
+
+struct GlobalMutables{
+    int blocks_to_be_inserted_or_removed;
+    uint bones;
+    uint dummy1;
+    int dummy2;
+    int held_bone_idx; // player can grab a bone and pull it somewhere
+    int world_blocks_to_update;
+    int ambience_tick; // this number indefinitely loops over the range 0..AMBIENCE_MAX_TIME_TICK
+    int new_world_blocks_to_update_copy;
+};
+
+struct FaceRelocation{
+    uint dst_offset;
+    Face face;
+};
+//
+//struct Superbuffer{
+//    Bone bones[MAX_BONES];
+//    uint face_count_per_chunk[TOTAL_CHUNKS*2];
+//    uvec2 contiguous_faces[MAX_FACES];
+//    FaceRelocation tmp_faces_copy[MAX_TMP_FACES_COPY];
+//    CollisionCell collision_grid[BROAD_PHASE_WORLD_VOLUME_IN_CELLS];
+//    uint world[WORLD_VOLUME];
+//    uint world_copy[WORLD_VOLUME];
+//    uint world_blocks_to_update[MAX_WORLD_BLOCKS_TO_UPDATE];
+//    uint world_blocks_to_update_copy[MAX_WORLD_BLOCKS_TO_UPDATE];
+//    uint blocks_to_be_inserted_or_removed[MAX_BLOCKS_TO_BE_INSERTED_OR_REMOVED];
+//    GlobalMutables global_mutables;
+//    float persistent_floats[MAX_PERSISTENT_FLOATS];
+//    NeuralNetLayerHidden neural_net_layers[MAX_NEURAL_NET_LAYERS];
+//    Face faces_to_be_inserted[MAX_FACES_TO_BE_INSERTED];
+//    uint faces_to_be_removed[MAX_FACES_TO_BE_REMOVED];
+//};
+
+uint chunk_pos_into_chunk_idx(uint x, uint z) {
+    return z * CHUNKS_X + x;
+}
+uint block_pos_into_chunk_idx(uint x,uint z){
+    return chunk_pos_into_chunk_idx(x / CHUNK_WIDTH, z / CHUNK_DEPTH);
+}
+uint block_pos_into_world_idx(uvec3 pos){
+    return pos.z * WORLD_WIDTH + pos.x + pos.y * WORLD_AREA;
+}
+uvec3 world_idx_into_block_pos(uint idx){
+    uint y = idx / WORLD_AREA;
+    uint y_rem = idx - y*WORLD_AREA;
+    uint z = y_rem / WORLD_WIDTH;
+    uint x = y_rem - z * WORLD_WIDTH;
+    return uvec3(x,y,z);
+}
+uint block_pos_relative_to_chunk_into_block_idx_relative_to_chunk(uvec3 position_relative_to_chunk) {
+    //Notice that this conversion could equivalently be expressed as
+    // position_relative_to_chunk.x + position_relative_to_chunk.z << 4 + position_relative_to_chunk.y << 8
+    return position_relative_to_chunk.x+(position_relative_to_chunk.y*CHUNK_DEPTH+position_relative_to_chunk.z)*CHUNK_WIDTH;
+}
+
+uvec3 broad_phase_position_to_cell_pos(vec3 position){
+    return uvec3(position/(BROAD_PHASE_CELL_SIZE));
+}
+uint broad_phase_cell_pos_to_cell_idx(uvec3 cell_position){
+    return cell_position.x+(cell_position.y+cell_position.z*BROAD_PHASE_CHUNK_HEIGHT_IN_CELLS)*CHUNKS_X*BROAD_PHASE_CHUNK_WIDTH_IN_CELLS;
+}
+uint broad_phase_position_to_cell_idx(vec3 position){
+    return broad_phase_cell_pos_to_cell_idx(broad_phase_position_to_cell_pos(position));
+}
+
+uint opposite_orientation(uint orientation) {
+    return orientation + (bool(orientation & 1u) ? -1:+1);
+}
+uint orientation_for_dim_and_dir(uint dimension, bool minus_direction) {
+    return dimension*2+uint(minus_direction);
+}
+uint block_pos_relative_to_chunk_and_orientation_into_face_coords(uvec4 position_relative_to_chunk_and_orientation) {
+    return ((
+    position_relative_to_chunk_and_orientation.w*256+
+    position_relative_to_chunk_and_orientation.z)*256+
+    position_relative_to_chunk_and_orientation.y)*256+
+    position_relative_to_chunk_and_orientation.x;
+}
+
+uvec4 face_coords_into_block_pos_relative_to_chunk_and_orientation(uint face_coords) {
+    uint x = face_coords & 255u;
+    uint y = face_coords/256 & 255u;
+    uint z = face_coords/(256*256) & 255u;
+    uint w = face_coords/(256*256*256) & 255u;
+    return uvec4(x,y,z,w);
+}
+
+bool face_coords_have_the_same_pos(uint face_coords1, uint face_coords2) {
+    return (face_coords1 | 0xFF000000u) == (face_coords2 | 0xFF000000u);
+}
+
+uint pack_chunk_pos_and_tex_id(uint chunk_x, uint chunk_z, uint texture_id) {
+    return texture_id*256*256+(chunk_x + chunk_z*256);
+}
+
+uvec2 new_face(uvec3 block_position_relative_to_chunk, uint orientation, uint chunk_x, uint chunk_z, uint texture_id){
+    uint face_coords = block_pos_relative_to_chunk_and_orientation_into_face_coords(uvec4(block_position_relative_to_chunk,orientation));
+    uint tex_id = pack_chunk_pos_and_tex_id(chunk_x, chunk_z, texture_id);
+    return uvec2(face_coords,tex_id);
+}
+
+#define DISPATCH_INDIRECT_UPDATE_PARTICLES 0
+#define DISPATCH_INDIRECT_BROAD_PHASE_COLLISION_DETECTION 1
+#define DISPATCH_INDIRECT_BROAD_PHASE_COLLISION_DETECTION_CLEANUP 1
+#define DISPATCH_INDIRECT_UPDATE_BONES 1
+#define DISPATCH_INDIRECT_PER_BONE 1
+#define DISPATCH_INDIRECT_AGENT_SENSORY_INPUT_UPDATE 2
+#define DISPATCH_INDIRECT_FEED_FORWARD_NET 3
+#define DISPATCH_INDIRECT_LEN 4
+#define DRAW_INDIRECT_BONES 0
+#define DRAW_INDIRECT_BLOCK 1
+#define DRAW_INDIRECT_PARTICLES 2
+#define DRAW_INDIRECT_LEN 3
+
+struct DispatchIndirectCommand{
+    uint    x;
+    uint    y;
+    uint    z;
+};
+struct DrawIndirectCommand{
+    uint vertex_count;
+    uint instance_count;
+    uint first_vertex;
+    uint first_instance;
+};
+
+uint max_vec3_component(vec3 v){
+    return v.x > v.y ? (v.x > v.z ? 0 : 2) : (v.y > v.z ? 1 : 2);
+}
+uint min_vec3_component(vec3 v){
+    return v.x < v.y ? (v.x < v.z ? 0 : 2) : (v.y < v.z ? 1 : 2);
+}
+
+vec4 quat_conj(vec4 q)
+{
+    return vec4(-q.x, -q.y, -q.z, q.w);
+}
+
+vec4 quat_mult(vec4 q1, vec4 q2)
+{
+    vec4 qr;
+    qr.x = (q1.w * q2.x) + (q1.x * q2.w) + (q1.y * q2.z) - (q1.z * q2.y);
+    qr.y = (q1.w * q2.y) - (q1.x * q2.z) + (q1.y * q2.w) + (q1.z * q2.x);
+    qr.z = (q1.w * q2.z) + (q1.x * q2.y) - (q1.y * q2.x) + (q1.z * q2.w);
+    qr.w = (q1.w * q2.w) - (q1.x * q2.x) - (q1.y * q2.y) - (q1.z * q2.z);
+    return qr;
+}
+
+vec3 quat_rotate_vec(vec4 q, vec3 v){
+    return quat_mult(q,quat_mult(vec4(v,0.),quat_conj(q))).xyz;
+}
+
+#define Block uint
+
+#define BLOCK_ID_AIR 0
+#define BLOCK_ID_WATER 1
+#define BLOCK_ID_LAVA 2
+// blocks above are traversable. Blocks below are solid (Notice
+// that if a block is traversable, player's camera might get inside it.
+// When that happens the block's faces will be culled. This means that every
+// traversable block must be transparent to prevent a situation where
+// the player could see through walls)
+#define BLOCK_ID_GLASS 3
+#define BLOCK_ID_ICE 4
+#define BLOCK_ID_SPAWNER 5
+#define BLOCK_ID_LEAVES 6
+// blocks above are transparent. Blocks below are not
+#define BLOCK_ID_STONE 7
+#define BLOCK_ID_DIRT 8
+#define BLOCK_ID_GRASS 9
+#define BLOCK_ID_PLANK 10
+#define BLOCK_ID_CRAFTING 11
+#define BLOCK_ID_SLAB 12
+#define BLOCK_ID_BRICK 13
+#define BLOCK_ID_TNT 14
+#define BLOCK_ID_COBBLESTONE 15
+#define BLOCK_ID_BEDROCK 16
+#define BLOCK_ID_SAND 17
+#define BLOCK_ID_GRAVEL 18
+#define BLOCK_ID_WOOD 19
+#define BLOCK_ID_IRON 20
+#define BLOCK_ID_GOLD 21
+#define BLOCK_ID_DIAMOND 22
+#define BLOCK_ID_EMERALD 23
+#define BLOCK_ID_GOLD_ORE 24
+#define BLOCK_ID_IRON_ORE 25
+#define BLOCK_ID_COAL_ORE 26
+#define BLOCK_ID_BOOKSHELF 27
+#define BLOCK_ID_MOSS_STONE 28
+#define BLOCK_ID_OBSIDIAN 29
+#define BLOCK_ID_SPONGE 30
+#define BLOCK_ID_DIAMOND_ORE 31
+#define BLOCK_ID_REDSTONE_ORE 32
+#define BLOCK_ID_SNOW 33
+#define BLOCKS_LEN 34
+#define NO_OF_TRAVERSABLE_BLOCKS 3 // every traversable block (mobs can pass through it without colliding) is transparent but the opposite may not necessarily hold
+#define NO_OF_TRANSPARENT_BLOCKS 7 // The blocks are aligned in such a way that transparent blocks come first. Hence in
+// order to check whether a block is transparent or not, it's enough to just check if its ID is below this value
+struct BlockProp{
+    uint[6] texture_ids;
+    float opacity; // the higher, the more opaque
+    float mass;
+    bool falls_down;
+    bool falls_adjacent;
+    uint change_rate; // if constants.ambience_tick is divisible by this number, then the action happens
+};
+
+/**Active blocks are those that perform some kind of action depending on their closest surrounding or the time elapsed.
+Trees and vegetables grow, water flows, sand falls etc.*/
+bool is_block_active(const BlockProp block_prop){
+    return block_prop.change_rate != AMBIENCE_MAX_TIME_TICK;
+}
+
+#define new_block_prop_regular_changing_transparent(texture_id, opacity, mass, falls_down, falls_adjacent, change_rate) BlockProp(uint[6](texture_id,texture_id,texture_id,texture_id,texture_id,texture_id),opacity,mass, falls_down, falls_adjacent, change_rate)
+#define new_block_prop_regular_transparent(texture_id, opacity, mass) BlockProp(uint[6](texture_id,texture_id,texture_id,texture_id,texture_id,texture_id),opacity,mass, false, false, AMBIENCE_MAX_TIME_TICK)
+#define new_block_prop_regular( texture_id, mass) new_block_prop_regular_transparent(texture_id,1.,mass)
+#define new_block_prop_regular_changing(texture_id, mass, falls_down, falls_adjacent, change_rate) new_block_prop_regular_changing_transparent(texture_id, 1., mass, falls_down, falls_adjacent, change_rate)
+#define new_block_prop_top_sides_bottom_transparent( texture_id_top, texture_id_side, texture_id_bottom, opacity, mass) BlockProp(uint[6](texture_id_side,texture_id_side,texture_id_top,texture_id_bottom,texture_id_side,texture_id_side),opacity, mass, false, false, 255)
+#define new_block_prop_top_sides_bottom_front( texture_id_top, texture_id_side, texture_id_bottom, texture_id_front, mass) BlockProp(uint[6](texture_id_side,texture_id_side,texture_id_top,texture_id_bottom,texture_id_side,texture_id_front),1., mass, false, false, 255)
+#define new_block_prop_top_sides_bottom(texture_id_top, texture_id_side, texture_id_bottom, mass) new_block_prop_top_sides_bottom_transparent(texture_id_top,texture_id_side,texture_id_bottom,1., mass)
+
+const BlockProp[BLOCKS_LEN] BLOCK_PROPS = BlockProp[BLOCKS_LEN](
+    new_block_prop_regular_transparent( /*Some dummy value*/256, 0., 0.05), // air
+    new_block_prop_regular_changing_transparent( 31, 0.09, 1.0, true, true, 8), // water
+    new_block_prop_regular_changing_transparent( 36, 0.009, 3.011, true, true, 15), // lava
+    new_block_prop_regular_transparent( 28, 0.1, 0.1), // glass
+    new_block_prop_regular_transparent( 55, 0.7, 0.9167), // ice
+    new_block_prop_regular_transparent( 53, 0.1, 2.710), // spawner
+    new_block_prop_top_sides_bottom_transparent( 51,52, 51, 0.1, 0.143), // leaves
+    new_block_prop_regular( 1, 2.26796), // stone
+    new_block_prop_regular( 2, 1.3), // dirt
+    new_block_prop_top_sides_bottom( 0, 3,2, 1.4), // grass
+    new_block_prop_regular( 4, 1.5/4.), // plank
+    new_block_prop_top_sides_bottom_front( 59, 62,4, 63, 1.5), // crafting
+    new_block_prop_top_sides_bottom( 6,5,6, 2.26796), // slab
+    new_block_prop_regular( 7, 1.9), // brick
+    new_block_prop_top_sides_bottom( 9,8,10, 1.65), // tnt
+    new_block_prop_regular( 11, 2.26796), // cobblestone
+    new_block_prop_regular( 12, 3.1), // bedrock
+    new_block_prop_regular_changing( 13, 1.62, true, false, 4), // sand
+    new_block_prop_regular_changing( 14, 1.68, true, false, 4), // gravel
+    new_block_prop_top_sides_bottom( 16,15,16, 1.5), // wood
+    new_block_prop_regular( 17, 7.3), // iron
+    new_block_prop_regular( 18, 19.0), // gold
+    new_block_prop_regular( 19, 3.514), // diamond
+    new_block_prop_regular( 20, 4.), // emerald
+    new_block_prop_regular( 21, 2.9), // gold ore
+    new_block_prop_regular( 22, 2.7), // iron ore
+    new_block_prop_regular( 23, 2.0), // coal ore
+    new_block_prop_regular( 24, 1.5), // bookshelf
+    new_block_prop_regular( 25, 2.26796), // moss stone
+    new_block_prop_regular( 26, 3.1), // obsidian
+    new_block_prop_regular( 27, 0.1), // sponge
+    new_block_prop_regular( 29, 2.1), // diamond ore
+    new_block_prop_regular( 30, 2.2), // redstone ore
+    new_block_prop_regular( 54, 0.05) // snow
+);
+
 #endif // CONSTANTS_COMP

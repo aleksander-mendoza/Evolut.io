@@ -1,0 +1,82 @@
+#ifndef DESCRIPTORS_COMPUTE_COMP
+#define DESCRIPTORS_COMPUTE_COMP
+
+#include "constants.comp"
+
+#ifdef IS_AVAILABLE_BUFFER_PLAYER_EVENT
+restrict layout (set = 0, binding = 0) uniform PlayerEvents{
+    PlayerEvent player_event;
+};
+#endif // IS_AVAILABLE_BUFFER_PLAYER_EVENT
+
+#ifdef IS_AVAILABLE_BUFFER_GLOBAL_MUTABLES
+restrict layout (std430, set = 0, binding = 1) buffer GlobalMutablesBlock{
+    GlobalMutables global_mutables;
+};
+#endif
+
+#ifdef IS_AVAILABLE_BUFFER_WORLD_BLOCKS_TO_UPDATE
+restrict layout(std430, set = 0, binding = 2) buffer WorldBlocksToUpdate{
+    uint world_blocks_to_update[];
+};
+#endif // IS_AVAILABLE_BUFFER_WORLD_BLOCKS_TO_UPDATE
+
+#ifdef IS_AVAILABLE_BUFFER_FACES_TO_BE_INSERTED
+restrict layout(std430, set = 0, binding = 3) buffer FacesToBeInserted{
+    Face faces_to_be_inserted[];
+};
+#endif
+
+
+#ifdef IS_AVAILABLE_BUFFER_FACES_TO_BE_REMOVED
+restrict layout(std430, set = 0, binding = 4) buffer FacesToBeRemoved{
+    uint faces_to_be_removed[];
+};
+#endif
+
+
+#ifdef IS_AVAILABLE_BUFFER_INDIRECT
+restrict layout(std430, set = 0, binding = 5) buffer Indirect{
+    DispatchIndirectCommand[DISPATCH_INDIRECT_LEN] dispatch_indirect;
+    DrawIndirectCommand[DRAW_INDIRECT_LEN] draw_indirect;
+};
+#endif //IS_AVAILABLE_BUFFER_INDIRECT
+
+#ifdef IS_AVAILABLE_BUFFER_TMP_FACES_COPY
+restrict layout(std430, set = 0, binding = 6) buffer TmpFacesCopy{
+    Face tmp_faces_copy[];
+};
+#endif
+
+
+#ifdef IS_AVAILABLE_BUFFER_WORLD
+restrict layout(std430, set = 0, binding = 7) buffer World{
+    uint world[];
+};
+#endif
+
+#ifdef IS_AVAILABLE_BUFFER_FACES
+restrict layout(std430, set = 0, binding = 8) buffer Faces{
+    Face faces[];
+};
+#endif //IS_AVAILABLE_BUFFER_FACES
+
+#ifdef IS_AVAILABLE_BUFFER_WORLD_BLOCKS_TO_UPDATE_COPY
+restrict layout(std430, set = 0, binding = 9) buffer WorldBlocksToUpdateCopy{
+    uint world_blocks_to_update_copy[];
+};
+#endif // IS_AVAILABLE_BUFFER_WORLD_BLOCKS_TO_UPDATE_COPY
+
+#ifdef IS_AVAILABLE_BUFFER_WORLD_COPY
+restrict layout(std430, set = 0, binding = 10) buffer WorldCopy{
+    uint world_copy[];
+};
+#endif
+
+#ifdef IS_AVAILABLE_BUFFER_BLOCKS_TO_BE_INSERTED_OR_REMOVED
+restrict layout(std430, set = 0, binding = 11) buffer BlocksToBeInsertedOrRemoved{
+    uint blocks_to_be_inserted_or_removed[];
+};
+#endif
+
+#endif //DESCRIPTORS_COMPUTE_COMP

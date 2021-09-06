@@ -12,6 +12,12 @@ pub struct Face {
     tex_id: u8_u8_u16
 }
 
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+#[repr(C, packed)]
+pub struct FaceRelocation{
+    dst_offset:u32,
+    face:Face,
+}
 
 impl VertexSource for Face {
     fn get_attribute_descriptions(binding:u32) -> Vec<vk::VertexInputAttributeDescription>{

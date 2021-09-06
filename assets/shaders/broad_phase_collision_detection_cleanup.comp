@@ -2,20 +2,20 @@
 
 #define IS_AVAILABLE_BUFFER_COLLISION_GRID
 #define IS_AVAILABLE_BUFFER_BONES
-#define IS_AVAILABLE_BUFFER_CONSTANTS
-layout (local_size_x = 32) in;
+#define IS_AVAILABLE_BUFFER_GLOBAL_MUTABLES
 
-#include "physics_descriptors.comp"
-#include "grid.comp"
+layout (local_size_x_id = 9) in;
+
+#include "descriptors_compute.comp"
 
 void main()
 {
     uint gID = gl_GlobalInvocationID.x;
-    const ParticleConstants c = constants;
-    if (gID < c.bones){
-        const Bone bone = bones[gID];
-        uint cell_idx = broad_phase_position_to_cell_idx(c, bone.old_center); // notice that it uses OLD position!
-        reset_broad_phase_cell(cell_idx);
+    const uint bone_count = global_mutables.bones;
+    if (gID < bone_count){
+        const vec3 old_center = bones[gID].old_center;
+        uint cell_idx = broad_phase_position_to_cell_idx(old_center); // notice that it uses OLD position!
+        collision_grid[cell_idx].len = 0;
     }
 }
 

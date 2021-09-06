@@ -1,5 +1,5 @@
 #version 450
-#include "constants.comp"
+#define IS_AVAILABLE_BUFFER_MVP
 
 //#extension GL_EXT_debug_printf : enable
 
@@ -7,13 +7,7 @@ layout (location = 0) in uvec4 coords;
 layout (location = 1) in uvec4 chunk_x_chunk_y_tex_id;
 layout (location = 0) out vec2 UV;
 
-layout (push_constant) uniform Chunk{
-    vec3 chunk_location;
-};
-layout (binding = 0) uniform Matrices{
-    mat4 MVP;
-    mat4 MV;
-};
+#include "descriptors_render_vertex.comp"
 
 void main()
 {

@@ -1,29 +1,27 @@
-#ifndef PHYSICS_DESCRIPTORS_COMP
-#define PHYSICS_DESCRIPTORS_COMP
+#ifndef DESCRIPTORS_COMPUTE_COMP
+#define DESCRIPTORS_COMPUTE_COMP
 
+#include "constants.comp"
 
 #ifdef IS_AVAILABLE_BUFFER_PLAYER_EVENT
-#include "player_event.comp"
 restrict layout (set = 0, binding = 0) uniform PlayerEvents{
     PlayerEvent player_event;
 };
 #endif // IS_AVAILABLE_BUFFER_PLAYER_EVENT
 
-#ifdef IS_AVAILABLE_BUFFER_CONSTANTS
-#include "particle_constants.comp"
-restrict layout (std430, set = 0, binding = 1) buffer ParticleConstant{
-    ParticleConstants constants;
+#ifdef IS_AVAILABLE_BUFFER_GLOBAL_MUTABLES
+restrict layout (std430, set = 0, binding = 1) buffer GlobalMutablesBlock{
+    GlobalMutables global_mutables;
 };
 #endif
 
 #ifdef IS_AVAILABLE_BUFFER_COLLISION_GRID
 restrict layout(std430, set = 0, binding = 2) buffer CollisionGrid{
-    uint collision_grid[];
+    CollisionCell collision_grid[];
 };
 #endif // IS_AVAILABLE_BUFFER_COLLISION_GRID
 
 #ifdef IS_AVAILABLE_BUFFER_NEURAL_NET_LAYERS
-#include "neural_net_layer.comp"
 restrict layout(std430, set = 0, binding = 3) buffer NeuralNetLayers{
     NeuralNetLayer neural_net_layers[];
 };
@@ -38,7 +36,6 @@ restrict layout(std430, set = 0, binding = 4) buffer PersistentFloats{
 
 
 #ifdef IS_AVAILABLE_BUFFER_INDIRECT
-#include "indirect.comp"
 restrict layout(std430, set = 0, binding = 5) buffer Indirect{
     DispatchIndirectCommand[DISPATCH_INDIRECT_LEN] dispatch_indirect;
     DrawIndirectCommand[DRAW_INDIRECT_LEN] draw_indirect;
@@ -46,7 +43,6 @@ restrict layout(std430, set = 0, binding = 5) buffer Indirect{
 #endif //IS_AVAILABLE_BUFFER_INDIRECT
 
 #ifdef IS_AVAILABLE_BUFFER_BONES
-#include "bone.comp"
 restrict layout(std430, set = 0, binding = 6) buffer Bones{
     Bone bones[];
 };
@@ -60,21 +56,20 @@ restrict layout(std430, set = 0, binding = 7) buffer World{
 #endif
 
 #ifdef IS_AVAILABLE_BUFFER_FACES
-#include "face.comp"
 restrict layout(std430, set = 0, binding = 8) buffer Faces{
-    // The first few faces are in fact, not faces at all!
-    // Instead the faces at possitons 0..total_chunks are used to store the number of faces in eahc chunk.
-    // For example faces[0].x stores the number of faces in first chunk, faces[1].x is second chunk and so on.
-    // The chunks are indexed according to chunk_pos_into_chunk_idx().
-    // Opaque faces need to be rendered first, before the transparent faces! For this reason the faces[] is split into
-    // two regions, first for opaque, second for transparent. The faces at indices total_chunks..2*total_chunks store
-    // the number of transparent faces at each chunk. So faces[0].x is the number of opaque faces in first chunk, while
-    // faces[total_chunks].x is the number of transparent faces in first chunk. The very first actual face can be found at index
-    // faces[2*total_chunks].
-    // Notice that every face holds two numbers: coords and tex_idx. The faces at indices 0..2*total_chunks store the
-    // number of faces in first component but  do not make
-    // any use of the second component. Its value is undefined. However! Some algorithms do make use of the y component,
-    // as a temporary storage purely for the purpose of some computations.
+// The first few faces are in fact, not faces at all!
+// Instead the faces at possitons 0..total_chunks are used to store the number of faces in eahc chunk.
+// For example faces[0].x stores the number of faces in first chunk, faces[1].x is second chunk and so on.
+// The chunks are indexed according to chunk_pos_into_chunk_idx().
+// Opaque faces need to be rendered first, before the transparent faces! For this reason the faces[] is split into
+// two regions, first for opaque, second for transparent. The faces at indices total_chunks..2*total_chunks store
+// the number of transparent faces at each chunk. So faces[0].x is the number of opaque faces in first chunk, while
+// faces[total_chunks].x is the number of transparent faces in first chunk. The very first actual face can be found at index
+// faces[2*total_chunks].
+// Notice that every face holds two numbers: coords and tex_idx. The faces at indices 0..2*total_chunks store the
+// number of faces in first component but  do not make
+// any use of the second component. Its value is undefined. However! Some algorithms do make use of the y component,
+// as a temporary storage purely for the purpose of some computations.
     Face faces[];
 };
 #endif //IS_AVAILABLE_BUFFER_FACES
@@ -134,4 +129,4 @@ restrict layout(std430, set = 0, binding = 13) buffer Muscles{
 #endif
 */
 
-#endif //PHYSICS_DESCRIPTORS_COMP
+#endif //DESCRIPTORS_COMPUTE_COMP
