@@ -575,6 +575,8 @@ impl FoundationInitializer {
         let indirect = Indirect::new(super_indirect_buffer, &indirect_dispatch, &indirect_draw);
         let player_event_uniform = HostBuffer::new(cmd_pool.device(), &[PlayerEvent::nothing()])?;
 
+        let max_subgroup_size = cmd_pool.device().get_max_subgroup_size();
+        println!("MAX subgroup size={}",max_subgroup_size);
         let mut specialization_constants = SpecializationConstants::new();
         specialization_constants.entry_uint(1,cap.world_size.width() as u32);//CHUNKS_X
         specialization_constants.entry_uint(2,cap.world_size.depth() as u32);//CHUNKS_Z
@@ -584,7 +586,7 @@ impl FoundationInitializer {
         specialization_constants.entry_float(6,0f32);//GRAVITY
         specialization_constants.entry_uint(7,2);//BROAD_PHASE_CELL_SIZE
         specialization_constants.entry_uint(8,8);//BROAD_PHASE_CELL_CAPACITY
-        specialization_constants.entry_uint(9,32);//GROUP_SIZE
+        specialization_constants.entry_uint(9,max_subgroup_size);//GROUP_SIZE
         specialization_constants.entry_float(10,0.7);//BLOCK_COLLISION_FRICTION
         specialization_constants.entry_float(11,0.01);//BLOCK_COLLISION_MINIMUM_BOUNCE
         specialization_constants.entry_float(12,1.0);//PHYSICS_SIMULATION_DELTA_TIME_PER_STEP

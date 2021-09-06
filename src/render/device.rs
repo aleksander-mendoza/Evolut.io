@@ -132,6 +132,16 @@ pub struct Device {
 }
 
 impl Device {
+    pub fn get_max_subgroup_size(&self)->u32{
+        let mut sub_p = vk::PhysicalDeviceSubgroupProperties::builder();
+        let mut p = vk::PhysicalDeviceProperties2::builder()
+            .push_next(&mut sub_p)
+            .build();
+        unsafe{
+            self.inner.instance.raw().get_physical_device_properties2(self.physical_device(),&mut p)
+        }
+        sub_p.subgroup_size
+    }
     pub fn find_memory_type(&self,
                             memory_requirement: MemoryRequirements,
                             required_properties: vk::MemoryPropertyFlags,
