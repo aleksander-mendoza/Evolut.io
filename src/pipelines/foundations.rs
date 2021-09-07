@@ -108,7 +108,7 @@ pub struct FoundationInitializer {
     face_count_per_chunk_buffer: SubBuffer<Face, Storage>,
     opaque_and_transparent_face_buffer: SubBuffer<Face, Storage>,
     world_copy: Submitter<StageSubBuffer<Block, Cpu, Storage>>,
-    tmp_faces_copy: SubBuffer<Face, Storage>,
+    tmp_faces_copy: SubBuffer<u32, Storage>,
     blocks_to_be_inserted_or_removed: SubBuffer<u32, Storage>,
     faces_to_be_inserted: SubBuffer<Face, Storage>,
     faces_to_be_removed: SubBuffer<u32, Storage>,
@@ -129,8 +129,11 @@ pub struct FoundationInitializer {
 
 struct FoundationsCapacity {
     world_size: WorldSize,
+    faces_to_be_inserted_chunk_capacity: u32,
+    faces_to_be_removed_chunk_capacity: u32,
     max_bones: u64,
     max_faces: u64,
+    max_faces_copy: u64,
     max_persistent_floats: u64,
     max_neural_net_layers: u64,
     max_tmp_faces_copy: u64,
@@ -144,7 +147,11 @@ struct FoundationsCapacity {
 impl FoundationsCapacity {
     pub fn new(x: usize, z: usize) -> Self {
         let world_size = WorldSize::new(x, z);
+        let faces_to_be_inserted_chunk_capacity = 128;
+        let faces_to_be_removed_chunk_capacity = 128;
         Self {
+            faces_to_be_inserted_chunk_capacity,
+            faces_to_be_removed_chunk_capacity,
             max_bones: 1024u64,
             max_faces: 16 * 1024u64 * world_size.total_chunks() as u64,
             max_persistent_floats: 64 * 1024u64, // used as backing memory for vectors, matrices and
@@ -154,9 +161,10 @@ impl FoundationsCapacity {
             max_tmp_faces_copy: world_size.world_volume() as u64 / 4,
             max_world_blocks_to_update: world_size.world_volume() as u64 / 4,
             max_blocks_to_be_inserted_or_removed: world_size.world_volume() as u64 / 16,
-            max_faces_to_be_inserted: world_size.world_volume() as u64 / 16,
-            max_faces_to_be_removed: world_size.world_volume() as u64 / 16,
+            max_faces_to_be_inserted: faces_to_be_inserted_chunk_capacity as u64 * world_size.total_chunks() as u64,
+            max_faces_to_be_removed: faces_to_be_removed_chunk_capacity as u64 * world_size.total_chunks() as u64,
             max_sensors: 0u64,
+            max_faces_copy: 1024u64 * world_size.total_chunks() as u64,
             world_size,
         }
     }
@@ -373,7 +381,7 @@ impl FoundationInitializer {
     pub fn opaque_and_transparent_face_buffer(&self) -> &SubBuffer<Face, Storage> {
         &self.opaque_and_transparent_face_buffer
     }
-    pub fn tmp_faces_copy(&self) -> &SubBuffer<Face, Storage> {
+    pub fn tmp_faces_copy(&self) -> &SubBuffer<u32, Storage> {
         &self.tmp_faces_copy
     }
     pub fn global_mutables(&self) -> &StageSubBuffer<GlobalMutables, Cpu, Storage> {
@@ -435,7 +443,7 @@ impl FoundationInitializer {
 
         let bones_in_bytes = std::mem::size_of::<Bone>() as u64 * cap.max_bones;
         let faces_in_bytes = std::mem::size_of::<Face>() as u64 * cap.max_faces;
-        let tmp_faces_copy_in_bytes = faces_in_bytes;
+        let tmp_faces_copy_in_bytes = std::mem::size_of::<u32>() as u64 * 3 * cap.max_faces_copy;
         let grid_in_bytes = std::mem::size_of::<CollisionCell>() as u64 * cap.grid_size();
         let world_in_bytes = (std::mem::size_of::<Block>() * cap.world_size.world_volume()) as u64;
         let world_copy_in_bytes = world_in_bytes;
@@ -471,7 +479,7 @@ impl FoundationInitializer {
         let face_buffer = super_buffer.sub(offset..offset + faces_in_bytes).reinterpret_into::<Face>();
         let offset = offset + faces_in_bytes ;
         assert_eq!(offset % 16, 0);
-        let tmp_faces_copy_buffer = super_buffer.sub(offset..offset + tmp_faces_copy_in_bytes).reinterpret_into::<Face>();
+        let tmp_faces_copy_buffer = super_buffer.sub(offset..offset + tmp_faces_copy_in_bytes).reinterpret_into::<u32>();
         let offset = offset + tmp_faces_copy_in_bytes;
         assert_eq!(offset % 16, 0);
         let grid_buffer = super_buffer.sub(offset..offset + grid_in_bytes).reinterpret_into::<u32>();
@@ -578,29 +586,32 @@ impl FoundationInitializer {
         let max_subgroup_size = cmd_pool.device().get_max_subgroup_size();
         println!("MAX subgroup size={}",max_subgroup_size);
         let mut specialization_constants = SpecializationConstants::new();
-        specialization_constants.entry_uint(1,cap.world_size.width() as u32);//CHUNKS_X
-        specialization_constants.entry_uint(2,cap.world_size.depth() as u32);//CHUNKS_Z
-        specialization_constants.entry_uint(3,cap.max_bones as u32);//MAX_BONES
-        specialization_constants.entry_uint(4,cap.max_sensors as u32);//MAX_SENSORS
-        specialization_constants.entry_uint( 5,cap.max_faces as u32);//MAX_FACES
-        specialization_constants.entry_float(6,0f32);//GRAVITY
-        specialization_constants.entry_uint(7,2);//BROAD_PHASE_CELL_SIZE
-        specialization_constants.entry_uint(8,8);//BROAD_PHASE_CELL_CAPACITY
-        specialization_constants.entry_uint(9,max_subgroup_size);//GROUP_SIZE
-        specialization_constants.entry_float(10,0.7);//BLOCK_COLLISION_FRICTION
-        specialization_constants.entry_float(11,0.01);//BLOCK_COLLISION_MINIMUM_BOUNCE
-        specialization_constants.entry_float(12,1.0);//PHYSICS_SIMULATION_DELTA_TIME_PER_STEP
-        specialization_constants.entry_float(13,0.01);//BONE_COLLISION_FORCE_PER_AREA_UNIT
-        specialization_constants.entry_float(14,0.2);//IMPULSE_AVERAGING_OVER_TIMESETP
-        specialization_constants.entry_uint(15,cap.max_persistent_floats as u32);//MAX_PERSISTENT_FLOATS
-        specialization_constants.entry_uint(16,cap.max_neural_net_layers as u32);//MAX_NEURAL_NET_LAYERS
-        specialization_constants.entry_uint(17,cap.max_tmp_faces_copy as u32);//MAX_TMP_FACES_COPY
-        specialization_constants.entry_uint(18,cap.max_world_blocks_to_update as u32);//MAX_WORLD_BLOCKS_TO_UPDATE
-        specialization_constants.entry_uint(19,cap.max_blocks_to_be_inserted_or_removed as u32);//MAX_BLOCKS_TO_BE_INSERTED_OR_REMOVED
-        specialization_constants.entry_uint(20,cap.max_faces_to_be_inserted as u32);//MAX_FACES_TO_BE_INSERTED
-        specialization_constants.entry_uint(21,cap.max_faces_to_be_removed as u32);//MAX_FACES_TO_BE_REMOVED
-        specialization_constants.entry_float(22,0.99);//DAMPING_COEFFICIENT
-        specialization_constants.entry_uint(23,32);//DAMPING_COEFFICIENT
+        specialization_constants.entry_uint(1,max_subgroup_size);//GROUP_SIZE
+        specialization_constants.entry_uint(2,cap.world_size.width() as u32);//CHUNKS_X
+        specialization_constants.entry_uint(3,cap.world_size.depth() as u32);//CHUNKS_Z
+        specialization_constants.entry_uint(4,cap.faces_to_be_inserted_chunk_capacity);//
+        specialization_constants.entry_uint(5,cap.faces_to_be_removed_chunk_capacity);//
+        specialization_constants.entry_uint(6,2);//BROAD_PHASE_CELL_SIZE
+        specialization_constants.entry_uint(7,8);//BROAD_PHASE_CELL_CAPACITY
+        specialization_constants.entry_float(100,0.7);//BLOCK_COLLISION_FRICTION
+        specialization_constants.entry_float(101,0.01);//BLOCK_COLLISION_MINIMUM_BOUNCE
+        specialization_constants.entry_float(102,1.0);//PHYSICS_SIMULATION_DELTA_TIME_PER_STEP
+        specialization_constants.entry_float(103,0.01);//BONE_COLLISION_FORCE_PER_AREA_UNIT
+        specialization_constants.entry_float(104,0.2);//IMPULSE_AVERAGING_OVER_TIMESETP
+        specialization_constants.entry_float(105,0f32);//GRAVITY
+        specialization_constants.entry_float(106,0.99);//DAMPING_COEFFICIENT
+
+        specialization_constants.entry_uint(300,cap.max_bones as u32);//MAX_BONES
+        specialization_constants.entry_uint(301,cap.max_sensors as u32);//MAX_SENSORS
+        specialization_constants.entry_uint(302,cap.max_faces as u32);//MAX_FACES
+        specialization_constants.entry_uint(303,cap.max_persistent_floats as u32);//MAX_PERSISTENT_FLOATS
+        specialization_constants.entry_uint(304,cap.max_neural_net_layers as u32);//MAX_NEURAL_NET_LAYERS
+        specialization_constants.entry_uint(305,cap.max_tmp_faces_copy as u32);//MAX_TMP_FACES_COPY
+        specialization_constants.entry_uint(306,cap.max_world_blocks_to_update as u32);//MAX_WORLD_BLOCKS_TO_UPDATE
+        specialization_constants.entry_uint(307,cap.max_blocks_to_be_inserted_or_removed as u32);//MAX_BLOCKS_TO_BE_INSERTED_OR_REMOVED
+        specialization_constants.entry_uint(308,cap.max_faces_to_be_inserted as u32);//MAX_FACES_TO_BE_INSERTED
+        specialization_constants.entry_uint(309,cap.max_faces_to_be_removed as u32);//MAX_FACES_TO_BE_REMOVED
+
         Ok(Self {
             specialization_constants,
             face_count_per_chunk_buffer,
@@ -696,7 +707,7 @@ pub struct Foundations {
     faces_to_be_inserted: SubBuffer<Face, Storage>,
     faces_to_be_removed: SubBuffer<u32, Storage>,
     world_size: WorldSize,
-    tmp_faces_copy: SubBuffer<Face, Storage>,
+    tmp_faces_copy: SubBuffer<u32, Storage>,
     blocks_to_be_inserted_or_removed: SubBuffer<u32, Storage>,
     player_event_uniform: HostBuffer<PlayerEvent, Uniform>,
     world_blocks_to_update: SubBuffer<u32, Storage>,
@@ -715,7 +726,7 @@ impl Foundations {
     pub fn specialization_constants(&self) -> &SpecializationConstants{
         &self.specialization_constants
     }
-    pub fn tmp_faces_copy(&self) -> &SubBuffer<Face, Storage> {
+    pub fn tmp_faces_copy(&self) -> &SubBuffer<u32, Storage> {
         &self.tmp_faces_copy
     }
     pub fn faces(&self) -> &SubBuffer<Face, Storage> {

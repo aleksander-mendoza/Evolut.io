@@ -2,9 +2,9 @@
 #define IS_AVAILABLE_BUFFER_COLLISION_GRID
 #define IS_AVAILABLE_BUFFER_BONES
 #define IS_AVAILABLE_BUFFER_GLOBAL_MUTABLES
-layout (local_size_x_id = 9) in;
 
 #include "descriptors_compute.comp"
+layout (local_size_x_id = GROUP_SIZE_CONST_ID) in;
 
 void main()
 {

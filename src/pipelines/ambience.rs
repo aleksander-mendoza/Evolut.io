@@ -17,6 +17,10 @@ use crate::pipelines::player_event::{PlayerEvent, EventType};
 pub struct AmbienceResources {
     update_player_events: ShaderModule<Compute>,
     update_ambience: ShaderModule<Compute>,
+    update_ambience_faces: ShaderModule<Compute>,
+    update_ambience_flush_insertions: ShaderModule<Compute>,
+    update_ambience_prepare_face_offsets: ShaderModule<Compute>,
+    update_ambience_prepare_insertions: ShaderModule<Compute>,
 }
 
 
@@ -24,10 +28,17 @@ impl AmbienceResources {
     pub fn new(cmd_pool: &CommandPool, _foundations: &FoundationInitializer) -> Result<Self, failure::Error> {
         let update_player_events = ShaderModule::new(include_glsl!("assets/shaders/update_player_events.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let update_ambience = ShaderModule::new(include_glsl!("assets/shaders/update_ambience.comp", kind: comp) as &[u32], cmd_pool.device())?;
-        // let update_ambience_faces = ShaderModule::new(include_glsl!("assets/shaders/update_ambience_faces.comp", kind: comp) as &[u32], cmd_pool.device())?;
+        let update_ambience_faces = ShaderModule::new(include_glsl!("assets/shaders/update_ambience_faces.comp", kind: comp) as &[u32], cmd_pool.device())?;
+        let update_ambience_flush_insertions = ShaderModule::new(include_glsl!("assets/shaders/update_ambience_flush_insertions.comp", kind: comp) as &[u32], cmd_pool.device())?;
+        let update_ambience_prepare_face_offsets = ShaderModule::new(include_glsl!("assets/shaders/update_ambience_prepare_face_offsets.comp", kind: comp) as &[u32], cmd_pool.device())?;
+        let update_ambience_prepare_insertions = ShaderModule::new(include_glsl!("assets/shaders/update_ambience_prepare_insertions.comp", kind: comp) as &[u32], cmd_pool.device())?;
         Ok(Self {
             update_player_events,
             update_ambience,
+            update_ambience_faces,
+            update_ambience_flush_insertions,
+            update_ambience_prepare_face_offsets,
+            update_ambience_prepare_insertions,
         })
     }
 }
@@ -39,6 +50,10 @@ impl ComputeResources for AmbienceResources {
         let Self {
             update_player_events,
             update_ambience,
+            update_ambience_faces,
+            update_ambience_flush_insertions,
+            update_ambience_prepare_face_offsets,
+            update_ambience_prepare_insertions,
         } = self;
         let mut descriptors = ComputeDescriptorsBuilder::new();
         let uniform_binding = descriptors.uniform_buffer(foundations.player_event_uniform().buffer());
@@ -58,9 +73,17 @@ impl ComputeResources for AmbienceResources {
         let sc = foundations.specialization_constants().build();
         let update_player_events = descriptors.build("main", update_player_events, &sc)?;
         let update_ambience = descriptors.build("main", update_ambience, &sc)?;
+        let update_ambience_faces = descriptors.build("main", update_ambience_faces,&sc)?;
+        let update_ambience_flush_insertions = descriptors.build("main", update_ambience_flush_insertions,&sc)?;
+        let update_ambience_prepare_face_offsets = descriptors.build("main", update_ambience_prepare_face_offsets,&sc)?;
+        let update_ambience_prepare_insertions = descriptors.build("main", update_ambience_prepare_insertions,&sc)?;
         Ok(Ambience {
             update_player_events,
             update_ambience,
+            update_ambience_faces,
+            update_ambience_flush_insertions,
+            update_ambience_prepare_face_offsets,
+            update_ambience_prepare_insertions,
         })
     }
 }
@@ -69,6 +92,10 @@ impl ComputeResources for AmbienceResources {
 pub struct Ambience {
     update_player_events: ComputePipeline,
     update_ambience: ComputePipeline,
+    update_ambience_faces: ComputePipeline,
+    update_ambience_flush_insertions: ComputePipeline,
+    update_ambience_prepare_face_offsets: ComputePipeline,
+    update_ambience_prepare_insertions: ComputePipeline,
 }
 
 impl Computable for Ambience {

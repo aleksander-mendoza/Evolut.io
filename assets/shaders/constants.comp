@@ -13,41 +13,44 @@
 #define CHUNK_DEPTH 16
 #define CHUNK_HEIGHT 256
 #define MAX_UINT 4294967295
-
-layout (constant_id = 1) const uint CHUNKS_X = 0;
-layout (constant_id = 2) const uint CHUNKS_Z = 0;
-#define WORLD_WIDTH (CHUNKS_X*CHUNK_WIDTH)
-#define WORLD_DEPTH (CHUNKS_Z*CHUNK_DEPTH)
-#define WORLD_AREA (WORLD_WIDTH*WORLD_DEPTH)
-#define TOTAL_CHUNKS (CHUNKS_X*CHUNKS_Z)
-#define WORLD_VOLUME (WORLD_AREA*CHUNK_HEIGHT)
-layout (constant_id = 3) const uint MAX_BONES = 128;
-layout (constant_id = 4) const uint MAX_SENSORS = 128;
-layout (constant_id = 5) const uint MAX_FACES = 128;
-layout (constant_id = 6) const float GRAVITY = 0;
-layout (constant_id = 7) const uint BROAD_PHASE_CELL_SIZE = 2; // how many blocks make up the side of one cell. Each cell may then hold multiple bones
-#define BROAD_PHASE_CHUNK_WIDTH_IN_CELLS (CHUNK_WIDTH/BROAD_PHASE_CELL_SIZE)
-#define BROAD_PHASE_CHUNK_DEPTH_IN_CELLS (CHUNK_DEPTH/BROAD_PHASE_CELL_SIZE)
-#define BROAD_PHASE_CHUNK_HEIGHT_IN_CELLS (CHUNK_HEIGHT/BROAD_PHASE_CELL_SIZE)
-#define BROAD_PHASE_CHUNK_VOLUME_IN_CELLS (BROAD_PHASE_CHUNK_WIDTH_IN_CELLS*BROAD_PHASE_CHUNK_DEPTH_IN_CELLS*BROAD_PHASE_CHUNK_HEIGHT_IN_CELLS)
-#define BROAD_PHASE_WORLD_VOLUME_IN_CELLS (BROAD_PHASE_CHUNK_VOLUME_IN_CELLS*TOTAL_CHUNKS)
-#define BROAD_PHASE_CELL_CAPACITY 8 // maximum number of bones that can be placed in one cell
-layout (constant_id = 9) const uint GROUP_SIZE = 32;
-layout (constant_id = 10) const float BLOCK_COLLISION_FRICTION = 0.7;
-layout (constant_id = 11) const float BLOCK_COLLISION_MINIMUM_BOUNCE = 0.01;
-layout (constant_id = 12) const float PHYSICS_SIMULATION_DELTA_TIME_PER_STEP = 1.;
-layout (constant_id = 13) const float BONE_COLLISION_FORCE_PER_AREA_UNIT = 0.01;
-layout (constant_id = 14) const float IMPULSE_AVERAGING_OVER_TIMESETP = 0.2;
-layout (constant_id = 15) const uint MAX_PERSISTENT_FLOATS = 128;
-layout (constant_id = 16) const uint MAX_NEURAL_NET_LAYERS = 128;
-layout (constant_id = 17) const uint MAX_TMP_FACES_COPY = 128;
-layout (constant_id = 18) const uint MAX_WORLD_BLOCKS_TO_UPDATE = 128;
-layout (constant_id = 19) const uint MAX_BLOCKS_TO_BE_INSERTED_OR_REMOVED = 128;
-layout (constant_id = 20) const uint MAX_FACES_TO_BE_INSERTED = 128;
-layout (constant_id = 21) const uint MAX_FACES_TO_BE_REMOVED = 128;
-layout (constant_id = 22) const float DAMPING_COEFFICIENT = 0.99;
-#define AMBIENCE_MAX_TIME_TICK 360 // this should be some anti-prime number, because BlockProp.change_rate is specified as a ratio
+#define GROUP_SIZE_CONST_ID 1
+layout (constant_id = 1) const uint GROUP_SIZE = 32;
+layout (constant_id = 2) const uint CHUNKS_X = 0;
+layout (constant_id = 3) const uint CHUNKS_Z = 0;
+layout (constant_id = 4) const uint FACES_TO_BE_INSERTED_CHUNK_CAPACITY = 128;
+layout (constant_id = 5) const uint FACES_TO_BE_REMOVED_CHUNK_CAPACITY = 128;
+layout (constant_id = 6) const uint BROAD_PHASE_CELL_SIZE = 2; // how many blocks make up the side of one cell. Each cell may then hold multiple bones
+layout (constant_id = 7) const uint BROAD_PHASE_CELL_CAPACITY = 8; // maximum number of bones that can be placed in one cell
+const uint WORLD_WIDTH = CHUNKS_X*CHUNK_WIDTH;
+const uint WORLD_DEPTH = CHUNKS_Z*CHUNK_DEPTH;
+const uint WORLD_AREA = WORLD_WIDTH*WORLD_DEPTH;
+const uint TOTAL_CHUNKS = CHUNKS_X*CHUNKS_Z;
+const uint WORLD_VOLUME = WORLD_AREA*CHUNK_HEIGHT;
+const uint BROAD_PHASE_CHUNK_WIDTH_IN_CELLS = CHUNK_WIDTH/BROAD_PHASE_CELL_SIZE;
+const uint BROAD_PHASE_CHUNK_DEPTH_IN_CELLS = CHUNK_DEPTH/BROAD_PHASE_CELL_SIZE;
+const uint BROAD_PHASE_CHUNK_HEIGHT_IN_CELLS = CHUNK_HEIGHT/BROAD_PHASE_CELL_SIZE;
+const uint BROAD_PHASE_CHUNK_VOLUME_IN_CELLS = BROAD_PHASE_CHUNK_WIDTH_IN_CELLS*BROAD_PHASE_CHUNK_DEPTH_IN_CELLS*BROAD_PHASE_CHUNK_HEIGHT_IN_CELLS;
+const uint BROAD_PHASE_WORLD_VOLUME_IN_CELLS = BROAD_PHASE_CHUNK_VOLUME_IN_CELLS*TOTAL_CHUNKS;
 const uvec3 WORLD_BORDERS = uvec3(WORLD_WIDTH,CHUNK_HEIGHT,WORLD_DEPTH);
+layout (constant_id = 100) const float BLOCK_COLLISION_FRICTION = 0.7;
+layout (constant_id = 101) const float BLOCK_COLLISION_MINIMUM_BOUNCE = 0.01;
+layout (constant_id = 102) const float PHYSICS_SIMULATION_DELTA_TIME_PER_STEP = 1.;
+layout (constant_id = 103) const float BONE_COLLISION_FORCE_PER_AREA_UNIT = 0.01;
+layout (constant_id = 104) const float IMPULSE_AVERAGING_OVER_TIMESETP = 0.2;
+layout (constant_id = 105) const float GRAVITY = 0;
+layout (constant_id = 106) const float DAMPING_COEFFICIENT = 0.99;
+layout (constant_id = 300) const uint MAX_BONES = 128;
+layout (constant_id = 301) const uint MAX_SENSORS = 128;
+layout (constant_id = 302) const uint MAX_FACES = 128;
+layout (constant_id = 303) const uint MAX_PERSISTENT_FLOATS = 128;
+layout (constant_id = 304) const uint MAX_NEURAL_NET_LAYERS = 128;
+layout (constant_id = 305) const uint MAX_TMP_FACES_COPY = 128;
+layout (constant_id = 306) const uint MAX_WORLD_BLOCKS_TO_UPDATE = 128;
+layout (constant_id = 307) const uint MAX_BLOCKS_TO_BE_INSERTED_OR_REMOVED = 128;
+layout (constant_id = 308) const uint MAX_FACES_TO_BE_INSERTED = 128 ;
+layout (constant_id = 309) const uint MAX_FACES_TO_BE_REMOVED = 128 ;
+#define AMBIENCE_MAX_TIME_TICK 360 // this should be some anti-prime number, because BlockProp.change_rate is specified as a ratio
+
 bool is_in_world_borders(uvec3 pos){
     return all(lessThan(pos,WORLD_BORDERS));
 }
@@ -293,6 +296,21 @@ vec3 quat_rotate_vec(vec4 q, vec3 v){
     return quat_mult(q,quat_mult(vec4(v,0.),quat_conj(q))).xyz;
 }
 
+struct BlockProp{
+    uint[6] texture_ids;
+    float opacity; // the higher, the more opaque
+    float mass;
+    bool falls_down;
+    bool falls_adjacent;
+    uint change_rate; // if constants.ambience_tick is divisible by this number, then the action happens
+};
+
+/**Active blocks are those that perform some kind of action depending on their closest surrounding or the time elapsed.
+Trees and vegetables grow, water flows, sand falls etc.*/
+bool is_block_active(const BlockProp block_prop){
+    return block_prop.change_rate != AMBIENCE_MAX_TIME_TICK;
+}
+
 #define Block uint
 
 #define BLOCK_ID_AIR 0
@@ -339,20 +357,6 @@ vec3 quat_rotate_vec(vec4 q, vec3 v){
 #define NO_OF_TRAVERSABLE_BLOCKS 3 // every traversable block (mobs can pass through it without colliding) is transparent but the opposite may not necessarily hold
 #define NO_OF_TRANSPARENT_BLOCKS 7 // The blocks are aligned in such a way that transparent blocks come first. Hence in
 // order to check whether a block is transparent or not, it's enough to just check if its ID is below this value
-struct BlockProp{
-    uint[6] texture_ids;
-    float opacity; // the higher, the more opaque
-    float mass;
-    bool falls_down;
-    bool falls_adjacent;
-    uint change_rate; // if constants.ambience_tick is divisible by this number, then the action happens
-};
-
-/**Active blocks are those that perform some kind of action depending on their closest surrounding or the time elapsed.
-Trees and vegetables grow, water flows, sand falls etc.*/
-bool is_block_active(const BlockProp block_prop){
-    return block_prop.change_rate != AMBIENCE_MAX_TIME_TICK;
-}
 
 #define new_block_prop_regular_changing_transparent(texture_id, opacity, mass, falls_down, falls_adjacent, change_rate) BlockProp(uint[6](texture_id,texture_id,texture_id,texture_id,texture_id,texture_id),opacity,mass, falls_down, falls_adjacent, change_rate)
 #define new_block_prop_regular_transparent(texture_id, opacity, mass) BlockProp(uint[6](texture_id,texture_id,texture_id,texture_id,texture_id,texture_id),opacity,mass, false, false, AMBIENCE_MAX_TIME_TICK)

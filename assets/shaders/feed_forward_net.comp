@@ -9,8 +9,7 @@
 
 #include "descriptors_compute.comp"
 
-layout (local_size_x_id = 9) in;
-
+layout (local_size_x_id = GROUP_SIZE_CONST_ID) in;
 
 shared float[512] hidden_layer_data; // If you have some large input, you probably should first perform some kind of dimensionality reduction.
 // For instance, if your agent needs to see visual input, don't just chug the entire thing here. First run it through

@@ -1,22 +1,22 @@
 #version 450
 #extension GL_KHR_shader_subgroup_basic : enable
-#define IS_AVAILABLE_BUFFER_CONSTANTS
+#define IS_AVAILABLE_BUFFER_FACES
 #define IS_AVAILABLE_BUFFER_TMP_FACES_COPY
-#define IS_AVAILABLE_BUFFER_FACES_TO_BE_REMOVED
-#define IS_AVAILABLE_BUFFER_FACES_TO_BE_INSERTED
-#define GROUP_SIZE 32
-layout (local_size_x = GROUP_SIZE) in;
 
-#include "ambience_descriptors.comp"
+#include "descriptors_ambience.comp"
+layout (local_size_x_id = GROUP_SIZE_CONST_ID) in;
+#include "utils.comp"
 
 void main() {
-    const uint gID = gl_GlobalInvocationID.x;
-    const uint total_faces = tmp_faces_copy[6*(2*c.total_chunks-1) + 4];
-    if(gID < total_faces){
-        const uint offset = 6*2*c.total_chunks + gID*3;
-        uint dst_offset = tmp_faces_copy[offset];
-        uint face_coords = tmp_faces_copy[offset+1];
-        uint tex_id = tmp_faces_copy[offset+2];
-        faces[2*c.total_chunks + dst_offset] = uvec2(face_coords,tex_id);
+    const uint chunk_offset = gl_WorkGroupID.x;
+    const uint lID = gl_LocalInvocationID.x;
+    const uint copied_face_count = get_copied_face_count(chunk_offset);
+    const uint new_faces_beginning_offset = get_new_faces_beginning_offset(chunk_offset);
+    const uint tmp_faces_copy_chunk_offset = offset_of_face_copy(new_faces_beginning_offset);
+    for(uint i=tmp_faces_copy_chunk_offset+lID; i < tmp_faces_copy_chunk_offset+copied_face_count;i+=GROUP_SIZE){
+        uint dst_offset = tmp_faces_copy[i];
+        uint face_coords = tmp_faces_copy[i+1];
+        uint tex_id = tmp_faces_copy[i+2];
+        faces[2*TOTAL_CHUNKS + dst_offset] = uvec2(face_coords,tex_id);
     }
 }

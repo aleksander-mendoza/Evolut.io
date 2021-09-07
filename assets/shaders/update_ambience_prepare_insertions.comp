@@ -1,17 +1,17 @@
 #version 450
 #extension GL_KHR_shader_subgroup_basic : enable
-#define IS_AVAILABLE_BUFFER_CONSTANTS
+#define IS_AVAILABLE_BUFFER_FACES
 #define IS_AVAILABLE_BUFFER_TMP_FACES_COPY
 #define IS_AVAILABLE_BUFFER_FACES_TO_BE_REMOVED
 #define IS_AVAILABLE_BUFFER_FACES_TO_BE_INSERTED
-#define GROUP_SIZE 32
-layout (local_size_x = GROUP_SIZE) in;
 
-#include "ambience_descriptors.comp"
 
+#include "descriptors_ambience.comp"
+layout (local_size_x_id = GROUP_SIZE_CONST_ID) in;
+#include "utils.comp"
 shared uint shared_faces_to_be_removed[FACES_TO_BE_REMOVED_CHUNK_CAPACITY];
 shared uint removed_faces_index_from_common_part;
-shared uint inserted_faces_idx;
+shared uint copied_faces_idx;
 
 uint positive_sub(uint x,uint y){
     return x>y?x-y:0;
@@ -21,14 +21,13 @@ void main() {
 
     const uint chunk_offset = gl_WorkGroupID.x;
     const uint lID = gl_LocalInvocationID.x;
-    const ParticleConstants c = constants;
 
-    const uint inserted_face_count = tmp_faces_copy[6*chunk_offset];
-    const uint removed_face_count = tmp_faces_copy[6*chunk_offset+1];
-    const uint new_faces_beginning_offset = tmp_faces_copy[6*chunk_offset + 2];
-    const uint original_faces_beginning_offset = tmp_faces_copy[6*chunk_offset + 3];
-    const uint new_faces_ending_offset = tmp_faces_copy[6*chunk_offset + 4];
-    const uint original_faces_ending_offset = tmp_faces_copy[6*chunk_offset + 5];
+    const uint inserted_face_count = get_inserted_face_count(chunk_offset);
+    const uint removed_face_count = get_removed_face_count(chunk_offset);
+    const uint new_faces_beginning_offset = get_new_faces_beginning_offset(chunk_offset);
+    const uint original_faces_beginning_offset = get_original_faces_beginning_offset(chunk_offset);
+    const uint new_faces_ending_offset = get_new_faces_ending_offset(chunk_offset);
+    const uint original_faces_ending_offset = get_original_faces_ending_offset(chunk_offset);
     for(uint i=lID;i<removed_face_count;i+=GROUP_SIZE){
         shared_faces_to_be_removed[i] = faces_to_be_removed[chunk_offset*FACES_TO_BE_REMOVED_CHUNK_CAPACITY + i];
     }
@@ -42,10 +41,7 @@ void main() {
     const uint number_of_relocated_leading_faces = positive_sub(min(new_faces_beginning_offset, original_faces_ending_offset), offset_to_relocated_leading_faces);
     const uint offset_to_relocated_trailing_faces = max(new_faces_ending_offset, original_faces_beginning_offset);
     const uint number_of_relocated_trailing_faces = positive_sub(original_faces_ending_offset, offset_to_relocated_trailing_faces);
-    const uint tmp_faces_copy_chunk_offset = 2*c.total_chunks*6+3*new_faces_beginning_offset;//
-    // times 2, because there are c.total_chunks opaque chunks and another c.total_chunks transparent chunks.
-    // times 6, because there are 6 stored variables (inserted_face_count,removed_face_count,new_faces_beginning_offset,original_faces_beginning_offset,new_faces_ending_offset,original_faces_ending_offset)
-    // times 3, because each face takes up 2 uint plus one uint to store offset to original faces buffer, where the new face should be inserted
+    const uint tmp_faces_copy_chunk_offset = offset_of_face_copy(new_faces_beginning_offset);
     for(uint i=0;i<number_of_assignable_leading_faces;i+=GROUP_SIZE){
         tmp_faces_copy[tmp_faces_copy_chunk_offset+3*i] = offset_to_assignable_leading_faces + i; //after relocation, some faces will need to be prepended. Here we populate assignable_face_indices
         // with offsets of all those leading faces that will have to be populated
@@ -56,19 +52,19 @@ void main() {
     }
     if(lID==0){
         removed_faces_index_from_common_part=number_of_assignable_leading_faces+number_of_assignable_trailing_faces;
-        inserted_faces_idx = 0;
+        copied_faces_idx = 0;
     }
     uint face_offset = common_part_beginning+lID;
-    uint face_coords = faces[c.total_chunks*2+face_offset].x;
+    uint face_coords = faces[TOTAL_CHUNKS*2+face_offset].x;
     int i=-1;
     while(face_offset<common_part_ending){
         i++;
         if(i==removed_face_count||shared_faces_to_be_removed[i]==face_coords){
             if(i<removed_face_count) {
-                assignable_face_indices[atomicAdd(removed_faces_index_from_common_part,1)] = face_offset;
+                tmp_faces_copy[atomicAdd(removed_faces_index_from_common_part,1)] = face_offset;
             }
             face_offset+=GROUP_SIZE;
-            face_coords = faces[c.total_chunks*2+face_offset].x;
+            face_coords = faces[TOTAL_CHUNKS*2+face_offset].x;
             i=-1;
         }
     }
@@ -80,7 +76,7 @@ void main() {
     const uint[2] beginning = uint[2](offset_to_relocated_leading_faces, offset_to_relocated_trailing_faces);
     uint part = 0;
     face_offset = offset_to_relocated_leading_faces+lID;
-    Face face_to_relocate = faces[c.total_chunks*2+face_offset];
+    Face face_to_relocate = faces[TOTAL_CHUNKS*2+face_offset];
     i=-1;
     while(true){
         while(face_offset>=ending[part]){
@@ -93,22 +89,24 @@ void main() {
         i++;
         if(i==removed_face_count||shared_faces_to_be_removed[i]==face_to_relocate.x){
             if(i==removed_face_count) {
-                uint offset = 3*atomicAdd(inserted_faces_idx,1);
+                uint offset = 3*atomicAdd(copied_faces_idx,1);
                 tmp_faces_copy[tmp_faces_copy_chunk_offset+offset+1] = face_to_relocate.x;
                 tmp_faces_copy[tmp_faces_copy_chunk_offset+offset+2] = face_to_relocate.y;
             }
             face_offset+=GROUP_SIZE;
-            face_to_relocate = faces[c.total_chunks*2+face_offset];
+            face_to_relocate = faces[TOTAL_CHUNKS*2+face_offset];
             i=-1;
         }
     }
     for(uint i=0;i<inserted_face_count;i+=GROUP_SIZE){
-        uint offset = 3*atomicAdd(inserted_faces_idx,1);
+        uint offset = 3*atomicAdd(copied_faces_idx,1);
         face_to_relocate = faces_to_be_inserted[chunk_offset*FACES_TO_BE_INSERTED_CHUNK_CAPACITY + i];
         tmp_faces_copy[tmp_faces_copy_chunk_offset+offset+1] = face_to_relocate.x;
         tmp_faces_copy[tmp_faces_copy_chunk_offset+offset+2] = face_to_relocate.y;
     }
-
+    if(lID==0){
+        set_copied_face_count(chunk_offset, copied_faces_idx);
+    }
 
 
 }

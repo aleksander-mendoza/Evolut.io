@@ -306,5 +306,77 @@ uint add_block_faces(uvec3 block_pos, uint block_id){
 #endif // IS_AVAILABLE_BUFFER_FACES
 
 
+#ifdef IS_AVAILABLE_BUFFER_FACES
+Face get_face_at(uint face_idx){
+    return faces[TOTAL_CHUNKS*2+face_idx];
+}
+uint get_chunk_face_count_at(uint chunk_offset){
+    return faces[chunk_offset].x;
+}
+#endif // IS_AVAILABLE_BUFFER_FACES
+
+
+#ifdef IS_AVAILABLE_BUFFER_TMP_FACES_COPY
+uint offset_of_face_copy_face_count(uint chunk_offset){
+    return 3*chunk_offset;
+}
+uint get_inserted_face_count(uint chunk_offset){
+    return tmp_faces_copy[offset_of_face_copy_face_count(chunk_offset)];
+}
+uint atomic_increment_inserted_face_count(uint chunk_offset){
+    return atomicAdd(tmp_faces_copy[offset_of_face_copy_face_count(chunk_offset)],1);
+}
+uint get_removed_face_count(uint chunk_offset){
+    return tmp_faces_copy[offset_of_face_copy_face_count(chunk_offset)+1];
+}
+uint atomic_increment_removed_face_count(uint chunk_offset){
+    return atomicAdd(tmp_faces_copy[offset_of_face_copy_face_count(chunk_offset)+1],1);
+}
+uint get_copied_face_count(uint chunk_offset){
+    return tmp_faces_copy[offset_of_face_copy_face_count(chunk_offset)+2];
+}
+void set_copied_face_count(uint chunk_offset,uint copied_faces){
+    tmp_faces_copy[offset_of_face_copy_face_count(chunk_offset)+2] = copied_faces;
+}
+uint offset_of_face_copy_chunk_offset(uint chunk_offset){
+    return offset_of_face_copy_face_count(2*TOTAL_CHUNKS) + 2*chunk_offset;
+}
+uint get_new_faces_beginning_offset(uint chunk_offset){
+    return tmp_faces_copy[offset_of_face_copy_chunk_offset(chunk_offset)];
+}
+uint get_original_faces_beginning_offset(uint chunk_offset){
+    return tmp_faces_copy[offset_of_face_copy_chunk_offset(chunk_offset) + 1];
+}
+uint get_new_faces_ending_offset(uint chunk_offset){
+    return get_new_faces_beginning_offset(chunk_offset+1);
+}
+uint get_original_faces_ending_offset(uint chunk_offset){
+    return get_original_faces_beginning_offset(chunk_offset+1);
+}
+void set_faces_beginning_offset(uint chunk_offset, uvec2 new_and_original_faces_beginning_offset){
+    tmp_faces_copy[offset_of_face_copy_chunk_offset(chunk_offset)] = new_and_original_faces_beginning_offset.x;
+    tmp_faces_copy[offset_of_face_copy_chunk_offset(chunk_offset) + 1] = new_and_original_faces_beginning_offset.y;
+}
+
+uint offset_of_face_copy(uint face_idx){
+    return offset_of_face_copy_chunk_offset(TOTAL_CHUNKS+1) + 3*face_idx;
+}
+uint get_face_copy_destination(uint face_idx){
+    return tmp_faces_copy[offset_of_face_copy(face_idx)];
+}
+void set_face_copy_destination(uint face_idx, uint dst_offset){
+    tmp_faces_copy[offset_of_face_copy(face_idx)] = dst_offset;
+}
+void set_face_copy(uint face_idx, uvec2 face){
+    tmp_faces_copy[offset_of_face_copy(face_idx) + 1] = face.x;
+    tmp_faces_copy[offset_of_face_copy(face_idx) + 2] = face.y;
+}
+uvec2 get_face_copy(uint face_idx){
+    uint face_coords = tmp_faces_copy[offset_of_face_copy(face_idx) + 1];
+    uint tex_id = tmp_faces_copy[offset_of_face_copy(face_idx) + 2];
+    return uvec2(face_coords, tex_id);
+}
+#endif // IS_AVAILABLE_BUFFER_TMP_FACES_COPY
 
 #endif // UTILS_COMP
+

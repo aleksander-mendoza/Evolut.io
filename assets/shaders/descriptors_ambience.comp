@@ -44,7 +44,7 @@ restrict layout(std430, set = 0, binding = 5) buffer Indirect{
 
 #ifdef IS_AVAILABLE_BUFFER_TMP_FACES_COPY
 restrict layout(std430, set = 0, binding = 6) buffer TmpFacesCopy{
-    Face tmp_faces_copy[];
+    uint tmp_faces_copy[];
 };
 #endif
 

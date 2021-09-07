@@ -7,9 +7,10 @@
 #define IS_AVAILABLE_BUFFER_WORLD
 #define IS_AVAILABLE_BUFFER_COLLISION_GRID
 
-layout (local_size_x_id = 9) in;
-
 #include "descriptors_compute.comp"
+
+layout (local_size_x_id = GROUP_SIZE_CONST_ID) in;
+
 #include "utils.comp"
 
 struct Neighbour{

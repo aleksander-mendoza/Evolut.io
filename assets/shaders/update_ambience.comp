@@ -6,9 +6,9 @@
 #define IS_AVAILABLE_BUFFER_WORLD_BLOCKS_TO_UPDATE_COPY
 #define IS_AVAILABLE_BUFFER_WORLD_COPY
 #define IS_AVAILABLE_BUFFER_BLOCKS_TO_BE_INSERTED_OR_REMOVED
-layout (local_size_x_id = 9) in;
 
-#include "descriptors_ambient.comp"
+#include "descriptors_ambience.comp"
+layout (local_size_x_id = GROUP_SIZE_CONST_ID) in;
 #include "utils.comp"
 
 void main() {
