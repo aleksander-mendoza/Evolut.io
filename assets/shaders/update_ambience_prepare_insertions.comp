@@ -1,5 +1,6 @@
 #version 450
 #extension GL_KHR_shader_subgroup_basic : enable
+#extension GL_EXT_debug_printf : enable
 #define IS_AVAILABLE_BUFFER_FACES
 #define IS_AVAILABLE_BUFFER_TMP_FACES_COPY
 #define IS_AVAILABLE_BUFFER_FACES_TO_BE_REMOVED
@@ -78,11 +79,22 @@ void main() {
     face_offset = offset_to_relocated_leading_faces+lID;
     Face face_to_relocate = faces[TOTAL_CHUNKS*2+face_offset];
     i=-1;
+//    debugPrintfEXT("%d!%d,%d,%d<",lID,part,face_offset,i,ending[part],beginning[part]);
     while(true){
-        while(face_offset>=ending[part]){
+//        debugPrintfEXT("%d:%d,%d,%d<",lID,part,face_offset,i,ending[part],beginning[part]);
+        while(face_offset >= ending[part]){
             part++;
             if(part>=2){
-                break;
+                for(uint i=0;i<inserted_face_count;i+=GROUP_SIZE){
+                    uint offset = 3*atomicAdd(copied_faces_idx,1);
+                    face_to_relocate = faces_to_be_inserted[chunk_offset*FACES_TO_BE_INSERTED_CHUNK_CAPACITY + i];
+                    tmp_faces_copy[tmp_faces_copy_chunk_offset+offset+1] = face_to_relocate.x;
+                    tmp_faces_copy[tmp_faces_copy_chunk_offset+offset+2] = face_to_relocate.y;
+                }
+                if(lID==0){
+                    set_copied_face_count(chunk_offset, copied_faces_idx);
+                }
+                return;
             }
             face_offset = beginning[part] + lID;
         }
@@ -98,15 +110,7 @@ void main() {
             i=-1;
         }
     }
-    for(uint i=0;i<inserted_face_count;i+=GROUP_SIZE){
-        uint offset = 3*atomicAdd(copied_faces_idx,1);
-        face_to_relocate = faces_to_be_inserted[chunk_offset*FACES_TO_BE_INSERTED_CHUNK_CAPACITY + i];
-        tmp_faces_copy[tmp_faces_copy_chunk_offset+offset+1] = face_to_relocate.x;
-        tmp_faces_copy[tmp_faces_copy_chunk_offset+offset+2] = face_to_relocate.y;
-    }
-    if(lID==0){
-        set_copied_face_count(chunk_offset, copied_faces_idx);
-    }
+
 
 
 }

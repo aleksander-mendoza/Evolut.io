@@ -56,7 +56,7 @@ void main() {
             );
             for (int neighbour=0; neighbour<6;neighbour++){
                 const uvec3 neighbour_pos = block_pos + neighbours[neighbour];
-                if (is_in_world_borders(neighbour_pos)){ //if pos.x==0 then pox.x-1==MAX_INT which obviously must be greater than world border
+                if (is_in_world_borders(neighbour_pos)) { //if pos.x==0 then pox.x-1==MAX_INT which obviously must be greater than world border
                     neighbours_to_update[neighbours_to_update_len++] = block_pos_into_world_idx( neighbour_pos);
                 }
             }

@@ -70,7 +70,7 @@ fn run() -> Result<(),failure::Error>{
     let mut input = Input::new(event_pump);
     let mut fps_counter = FpsCounter::new(timer, 60);
 
-    let mut run_simulation = true;
+    let mut run_simulation = false;
     player.resize(&display);
     display.rerecord_all_graphics_cmd_buffers()?;
     display.record_compute_cmd_buffer()?;

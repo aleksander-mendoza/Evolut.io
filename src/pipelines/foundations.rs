@@ -40,6 +40,8 @@ pub struct Indirect {
     per_bone: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
     agent_sensory_input_update: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
     feed_forward_net: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
+    update_ambience: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
+    per_blocks_to_be_inserted_or_removed: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
     draw_bones: SubBuffer<vk::DrawIndirectCommand, GpuIndirect>,
     draw_blocks: SubBuffer<vk::DrawIndirectCommand, GpuIndirect>,
     draw_particles: SubBuffer<vk::DrawIndirectCommand, GpuIndirect>,
@@ -52,6 +54,9 @@ impl Indirect {
         let per_bone = indirect_dispatch.gpu().element(1);
         let agent_sensory_input_update = indirect_dispatch.gpu().element(2);
         let feed_forward_net = indirect_dispatch.gpu().element(3);
+        let update_ambience = indirect_dispatch.gpu().element(4);
+        let per_blocks_to_be_inserted_or_removed = indirect_dispatch.gpu().element(5);
+
         let draw_bones = indirect_draw.gpu().element(0);
         let draw_blocks = indirect_draw.gpu().element(1);
         let draw_particles = indirect_draw.gpu().element(2);
@@ -64,7 +69,18 @@ impl Indirect {
             draw_bones,
             draw_blocks,
             draw_particles,
+            update_ambience,
+            per_blocks_to_be_inserted_or_removed,
         }
+    }
+    pub fn update_ambience(&self)->&SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>{
+        &self.update_ambience
+    }
+    pub fn update_ambience_faces(&self)->&SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>{
+        &self.per_blocks_to_be_inserted_or_removed
+    }
+    pub fn update_ambience_flush_world_copy(&self)->&SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>{
+        &self.per_blocks_to_be_inserted_or_removed
     }
     pub fn super_buffer(&self) -> &SubBuffer<u8, GpuIndirect> {
         &self.super_indirect_buffer
@@ -414,7 +430,7 @@ impl FoundationInitializer {
     }
 
     pub fn new(cmd_pool: &CommandPool) -> Result<Self, failure::Error> {
-        let cap = FoundationsCapacity::new(2, 2);
+        let cap = FoundationsCapacity::new(1,1);
         let mut data = FoundationsData::new(&cap);
         let heights = HeightMap::new(cap.world_size, 100., 32.);
         data.setup_world_blocks(&heights, 112);
@@ -555,8 +571,8 @@ impl FoundationInitializer {
                 y: 1,
                 z: 1,
             },
-            dispatch_indirect(data.world_blocks_to_update.len()),// update_ambience.comp
-            dispatch_indirect(0),// update_ambience_faces.comp
+            dispatch_indirect(0),// update_ambience.comp
+            dispatch_indirect(0),// update_ambience_faces.comp, update_ambience_flush_world_copy.comp
         ];
         let indirect_draw_data = vec![
             draw_indirect(36, data.bone_data.len() as u32),// bones.vert

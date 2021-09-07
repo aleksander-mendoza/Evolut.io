@@ -21,6 +21,7 @@ pub struct AmbienceResources {
     update_ambience_flush_insertions: ShaderModule<Compute>,
     update_ambience_prepare_face_offsets: ShaderModule<Compute>,
     update_ambience_prepare_insertions: ShaderModule<Compute>,
+    update_ambience_flush_world_copy: ShaderModule<Compute>,
 }
 
 
@@ -32,6 +33,7 @@ impl AmbienceResources {
         let update_ambience_flush_insertions = ShaderModule::new(include_glsl!("assets/shaders/update_ambience_flush_insertions.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let update_ambience_prepare_face_offsets = ShaderModule::new(include_glsl!("assets/shaders/update_ambience_prepare_face_offsets.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let update_ambience_prepare_insertions = ShaderModule::new(include_glsl!("assets/shaders/update_ambience_prepare_insertions.comp", kind: comp) as &[u32], cmd_pool.device())?;
+        let update_ambience_flush_world_copy = ShaderModule::new(include_glsl!("assets/shaders/update_ambience_flush_world_copy.comp", kind: comp) as &[u32], cmd_pool.device())?;
         Ok(Self {
             update_player_events,
             update_ambience,
@@ -39,6 +41,7 @@ impl AmbienceResources {
             update_ambience_flush_insertions,
             update_ambience_prepare_face_offsets,
             update_ambience_prepare_insertions,
+            update_ambience_flush_world_copy
         })
     }
 }
@@ -54,6 +57,7 @@ impl ComputeResources for AmbienceResources {
             update_ambience_flush_insertions,
             update_ambience_prepare_face_offsets,
             update_ambience_prepare_insertions,
+            update_ambience_flush_world_copy
         } = self;
         let mut descriptors = ComputeDescriptorsBuilder::new();
         let uniform_binding = descriptors.uniform_buffer(foundations.player_event_uniform().buffer());
@@ -76,6 +80,7 @@ impl ComputeResources for AmbienceResources {
         let update_ambience_flush_insertions = descriptors.build("main", update_ambience_flush_insertions,&sc)?;
         let update_ambience_prepare_face_offsets = descriptors.build("main", update_ambience_prepare_face_offsets,&sc)?;
         let update_ambience_prepare_insertions = descriptors.build("main", update_ambience_prepare_insertions,&sc)?;
+        let update_ambience_flush_world_copy = descriptors.build("main", update_ambience_flush_world_copy,&sc)?;
         Ok(Ambience {
             update_player_events,
             update_ambience,
@@ -83,6 +88,7 @@ impl ComputeResources for AmbienceResources {
             update_ambience_flush_insertions,
             update_ambience_prepare_face_offsets,
             update_ambience_prepare_insertions,
+            update_ambience_flush_world_copy
         })
     }
 }
@@ -95,6 +101,7 @@ pub struct Ambience {
     update_ambience_flush_insertions: ComputePipeline,
     update_ambience_prepare_face_offsets: ComputePipeline,
     update_ambience_prepare_insertions: ComputePipeline,
+    update_ambience_flush_world_copy: ComputePipeline,
 }
 
 impl Computable for Ambience {
@@ -104,7 +111,17 @@ impl Computable for Ambience {
             .bind_compute_pipeline(&self.update_player_events)
             .dispatch_1d(1)
             .bind_compute_pipeline(&self.update_ambience)
+            .dispatch_indirect(foundations.indirect().update_ambience(),0)
+            .bind_compute_pipeline(&self.update_ambience_faces)
+            .dispatch_indirect(foundations.indirect().update_ambience_faces(),0)
+            .bind_compute_pipeline(&self.update_ambience_prepare_face_offsets)
             .dispatch_1d(1)
+            .bind_compute_pipeline(&self.update_ambience_prepare_insertions)
+            .dispatch_1d(foundations.world_size().total_chunks() as u32*2)
+            .bind_compute_pipeline(&self.update_ambience_flush_insertions)
+            .dispatch_1d(foundations.world_size().total_chunks() as u32*2)
+            .bind_compute_pipeline(&self.update_ambience_flush_world_copy)
+            .dispatch_indirect(foundations.indirect().update_ambience_flush_world_copy(),0)
         ;
         Ok(())
     }
