@@ -65,7 +65,6 @@ impl ComputeResources for AmbienceResources {
         descriptors.storage_buffer(foundations.tmp_faces_copy());
         descriptors.storage_buffer(foundations.world());
         descriptors.storage_buffer(foundations.faces());
-        descriptors.storage_buffer(foundations.world_blocks_to_update_copy());
         descriptors.storage_buffer(foundations.world_copy());
         descriptors.storage_buffer(foundations.blocks_to_be_inserted_or_removed());
         let descriptors = descriptors.build(cmd_pool.device())?;
@@ -103,6 +102,8 @@ impl Computable for Ambience {
         cmd
             .bind_compute_descriptors(&self.update_player_events)
             .bind_compute_pipeline(&self.update_player_events)
+            .dispatch_1d(1)
+            .bind_compute_pipeline(&self.update_ambience)
             .dispatch_1d(1)
         ;
         Ok(())

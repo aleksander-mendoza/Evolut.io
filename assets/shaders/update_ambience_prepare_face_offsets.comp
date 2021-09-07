@@ -44,5 +44,9 @@ void main() {
     for (uint chunk_offset=lID;chunk_offset <= TOTAL_CHUNKS*2;chunk_offset+=GROUP_SIZE){
         //now face_counts_per_chunk[offset + chunk_offset] holds information about total number of faces in all chunks from 0 up to chunk_offset (inclusive).
         set_faces_beginning_offset(chunk_offset, face_offset_per_chunk[offset + chunk_offset]);
+        //the following data is no longer needed and we can conveniently take advantage of this loop to also
+        //reset it here, so that we don't need to spawn any new shader just to clear it
+        set_inserted_face_count(chunk_offset, 0);
+        set_removed_face_count(chunk_offset, 0);
     }
 }

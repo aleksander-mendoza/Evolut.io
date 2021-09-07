@@ -113,7 +113,6 @@ pub struct FoundationInitializer {
     faces_to_be_inserted: SubBuffer<Face, Storage>,
     faces_to_be_removed: SubBuffer<u32, Storage>,
     world_blocks_to_update: SubBuffer<u32, Storage>,
-    world_blocks_to_update_copy: SubBuffer<u32, Storage>,
     player_event_uniform: HostBuffer<PlayerEvent, Uniform>,
     collision_grid: SubBuffer<u32, Storage>,
     bones: Submitter<StageSubBuffer<Bone, Cpu, Storage>>,
@@ -261,6 +260,7 @@ struct ZombieBrain<X: Num> {
 
 struct FoundationsData {
     world_blocks: WorldBlocks,
+    world_blocks_to_update: Vec<u32>,
     world_faces: WorldFaces,
     constraints_data: Vec<Constraint>,
     bone_data: Vec<Bone>,
@@ -316,6 +316,7 @@ impl FoundationsData {
             world_faces: WorldFaces::with_capacity(cap.world_size.clone(), cap.max_faces as usize),
             // particles_data: std::iter::repeat_with(Particle::random).take((cap.solid_particles+cap.phantom_particles) as usize).collect(),
             constraints_data: vec![],
+            world_blocks_to_update: vec![],
             bone_data: vec![],
             sensor_data: vec![],
             muscle_data: vec![],
@@ -353,12 +354,11 @@ impl FoundationsData {
         GlobalMutables {
             blocks_to_be_inserted_or_removed: 0,
             bones: bone_data.len() as u32,
-            dummy1: 0,
+            world_blocks_to_update_even: 0,
             dummy2: 0,
             held_bone_idx: 0,
-            world_blocks_to_update: 0,
+            world_blocks_to_update: [0,0],
             ambience_tick: 0,
-            new_world_blocks_to_update: 0,
         }
     }
 }
@@ -447,8 +447,7 @@ impl FoundationInitializer {
         let grid_in_bytes = std::mem::size_of::<CollisionCell>() as u64 * cap.grid_size();
         let world_in_bytes = (std::mem::size_of::<Block>() * cap.world_size.world_volume()) as u64;
         let world_copy_in_bytes = world_in_bytes;
-        let world_blocks_to_update_in_bytes = std::mem::size_of::<u32>() as u64 * cap.max_world_blocks_to_update;
-        let world_blocks_to_update_copy_in_bytes = world_blocks_to_update_in_bytes;
+        let world_blocks_to_update_in_bytes = std::mem::size_of::<u32>() as u64 * 2 * cap.max_world_blocks_to_update;
         let blocks_to_be_inserted_or_removed_in_bytes = std::mem::size_of::<u32>() as u64 * cap.max_blocks_to_be_inserted_or_removed;
         let global_mutables_in_bytes = std::mem::size_of_val(&mutables) as u64;
         let persistent_floats_in_bytes = std::mem::size_of::<f32>() as u64 * cap.max_persistent_floats;
@@ -464,7 +463,6 @@ impl FoundationInitializer {
                                                                                 world_in_bytes +
                                                                                 world_copy_in_bytes +
                                                                                 world_blocks_to_update_in_bytes +
-                                                                                world_blocks_to_update_copy_in_bytes +
                                                                                 blocks_to_be_inserted_or_removed_in_bytes +
                                                                                 global_mutables_in_bytes +
                                                                                 persistent_floats_in_bytes +
@@ -493,9 +491,6 @@ impl FoundationInitializer {
         assert_eq!(offset % 16, 0);
         let world_blocks_to_update_buffer = super_buffer.sub(offset..offset + world_blocks_to_update_in_bytes).reinterpret_into::<u32>();
         let offset = offset + world_blocks_to_update_in_bytes;
-        assert_eq!(offset % 16, 0);
-        let world_blocks_to_update_copy_buffer = super_buffer.sub(offset..offset + world_blocks_to_update_copy_in_bytes).reinterpret_into::<u32>();
-        let offset = offset + world_blocks_to_update_copy_in_bytes;
         assert_eq!(offset % 16, 0);
         let blocks_to_be_inserted_or_removed_buffer = super_buffer.sub(offset..offset + blocks_to_be_inserted_or_removed_in_bytes).reinterpret_into::<u32>();
         let offset = offset + blocks_to_be_inserted_or_removed_in_bytes;
@@ -559,7 +554,9 @@ impl FoundationInitializer {
                 x: (data.neural_net_layer_data.len() / 3) as u32,
                 y: 1,
                 z: 1,
-            }
+            },
+            dispatch_indirect(data.world_blocks_to_update.len()),// update_ambience.comp
+            dispatch_indirect(0),// update_ambience_faces.comp
         ];
         let indirect_draw_data = vec![
             draw_indirect(36, data.bone_data.len() as u32),// bones.vert
@@ -622,7 +619,6 @@ impl FoundationInitializer {
             world_size: cap.world_size.clone(),
             sampler,
             world_blocks_to_update: world_blocks_to_update_buffer,
-            world_blocks_to_update_copy: world_blocks_to_update_copy_buffer,
             player_event_uniform,
             persistent_floats,
             neural_net_layers,
@@ -651,7 +647,6 @@ impl FoundationInitializer {
             blocks_to_be_inserted_or_removed,
             player_event_uniform,
             world_blocks_to_update,
-            world_blocks_to_update_copy,
             indirect_dispatch,
             indirect_draw,
             world_size,
@@ -685,7 +680,6 @@ impl FoundationInitializer {
             world_copy,
             world_blocks_to_update,
             persistent_floats,
-            world_blocks_to_update_copy,
             world,
             world_size,
             bones,
@@ -711,7 +705,6 @@ pub struct Foundations {
     blocks_to_be_inserted_or_removed: SubBuffer<u32, Storage>,
     player_event_uniform: HostBuffer<PlayerEvent, Uniform>,
     world_blocks_to_update: SubBuffer<u32, Storage>,
-    world_blocks_to_update_copy: SubBuffer<u32, Storage>,
     world: SubBuffer<Block, Storage>,
     bones: SubBuffer<Bone, Storage>,
     neural_net_layers: SubBuffer<NeuralNetLayer, Storage>,
@@ -761,9 +754,6 @@ impl Foundations {
     }
     pub fn faces_to_be_removed(&self) -> &SubBuffer<u32, Storage> {
         &self.faces_to_be_removed
-    }
-    pub fn world_blocks_to_update_copy(&self) -> &SubBuffer<u32, Storage> {
-        &self.world_blocks_to_update_copy
     }
     pub fn blocks_to_be_inserted_or_removed(&self) -> &SubBuffer<u32, Storage> {
         &self.blocks_to_be_inserted_or_removed

@@ -37,12 +37,12 @@ void main()
     }
     const int ambience_tick = global_mutables.ambience_tick;
     global_mutables.ambience_tick = ambience_tick < AMBIENCE_MAX_TIME_TICK-1 ? ambience_tick+1 : 0;
-    global_mutables.new_world_blocks_to_update_copy = 0;
     global_mutables.blocks_to_be_inserted_or_removed = 0;
-//    constants.faces_to_be_inserted = 0;
-//    constants.faces_to_be_removed = 0;
-//    for(int i=0;i<c.total_chunks*2;i++){
-//        tmp_faces_copy[i] = uvec2(0,0);
-//    }
+    const uint world_blocks_to_update_even = global_mutables.world_blocks_to_update_even;
+    const uint world_blocks_to_update_odd = 1 - world_blocks_to_update_even;
+    global_mutables.world_blocks_to_update[world_blocks_to_update_even] = 0;
+    const uint world_blocks_to_update_count = global_mutables.world_blocks_to_update[world_blocks_to_update_odd];
+    global_mutables.world_blocks_to_update_even = world_blocks_to_update_odd;
+    set_indirect_dispatch(DISPATCH_INDIRECT_UPDATE_AMBIENCE, world_blocks_to_update_count);
 }
 

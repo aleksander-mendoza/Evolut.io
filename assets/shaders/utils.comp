@@ -326,11 +326,17 @@ uint get_inserted_face_count(uint chunk_offset){
 uint atomic_increment_inserted_face_count(uint chunk_offset){
     return atomicAdd(tmp_faces_copy[offset_of_face_copy_face_count(chunk_offset)],1);
 }
+void set_inserted_face_count(uint chunk_offset, uint face_count){
+    tmp_faces_copy[offset_of_face_copy_face_count(chunk_offset)] = face_count;
+}
 uint get_removed_face_count(uint chunk_offset){
     return tmp_faces_copy[offset_of_face_copy_face_count(chunk_offset)+1];
 }
 uint atomic_increment_removed_face_count(uint chunk_offset){
     return atomicAdd(tmp_faces_copy[offset_of_face_copy_face_count(chunk_offset)+1],1);
+}
+void set_removed_face_count(uint chunk_offset, uint face_count){
+    tmp_faces_copy[offset_of_face_copy_face_count(chunk_offset)+1] = face_count;
 }
 uint get_copied_face_count(uint chunk_offset){
     return tmp_faces_copy[offset_of_face_copy_face_count(chunk_offset)+2];
@@ -377,6 +383,21 @@ uvec2 get_face_copy(uint face_idx){
     return uvec2(face_coords, tex_id);
 }
 #endif // IS_AVAILABLE_BUFFER_TMP_FACES_COPY
+
+#ifdef IS_AVAILABLE_BUFFER_WORLD_BLOCKS_TO_UPDATE
+void set_world_blocks_to_update(uint offset, uint world_blocks_to_update_even, uint block_idx){
+    world_blocks_to_update[2*offset+world_blocks_to_update_even] = block_idx;
+}
+uint get_world_blocks_to_update(uint offset, uint world_blocks_to_update_even){
+    return world_blocks_to_update[2*offset+world_blocks_to_update_even];
+}
+#endif // IS_AVAILABLE_BUFFER_WORLD_BLOCKS_TO_UPDATE
+
+#ifdef IS_AVAILABLE_BUFFER_INDIRECT
+void set_indirect_dispatch(uint compute_shader_idx, uint invokations_count){
+    dispatch_indirect[compute_shader_idx].x = invokation_count_to_group_count(invokations_count);
+}
+#endif // IS_AVAILABLE_BUFFER_INDIRECT
 
 #endif // UTILS_COMP
 

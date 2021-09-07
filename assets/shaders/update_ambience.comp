@@ -1,22 +1,24 @@
 #version 450
 #define IS_AVAILABLE_BUFFER_GLOBAL_MUTABLES
-#define IS_AVAILABLE_BUFFER_BONES
+#define IS_AVAILABLE_BUFFER_INDIRECT
 #define IS_AVAILABLE_BUFFER_WORLD
 #define IS_AVAILABLE_BUFFER_WORLD_BLOCKS_TO_UPDATE
 #define IS_AVAILABLE_BUFFER_WORLD_BLOCKS_TO_UPDATE_COPY
 #define IS_AVAILABLE_BUFFER_WORLD_COPY
 #define IS_AVAILABLE_BUFFER_BLOCKS_TO_BE_INSERTED_OR_REMOVED
 
+
 #include "descriptors_ambience.comp"
 layout (local_size_x_id = GROUP_SIZE_CONST_ID) in;
 #include "utils.comp"
 
 void main() {
-
-    uint gID = gl_GlobalInvocationID.x;
-    const int world_blocks_to_update_count = global_mutables.world_blocks_to_update;
+    const uint gID = gl_GlobalInvocationID.x;
+    const uint world_blocks_to_update_even = global_mutables.world_blocks_to_update_even;
+    const uint world_blocks_to_update_odd = 1 - world_blocks_to_update_even;
+    const uint world_blocks_to_update_count = global_mutables.world_blocks_to_update[world_blocks_to_update_even];
     if (gID < world_blocks_to_update_count){
-        const uint block_idx = world_blocks_to_update[gID];
+        const uint block_idx = get_world_blocks_to_update(gID, world_blocks_to_update_even);
         const uint block_id = world[block_idx];
         const uvec3 block_pos = world_idx_into_block_pos(block_idx);
         const BlockProp p = BLOCK_PROPS[block_id];
@@ -58,10 +60,16 @@ void main() {
                     neighbours_to_update[neighbours_to_update_len++] = block_pos_into_world_idx( neighbour_pos);
                 }
             }
-            int neighbours_to_update_offset = atomicAdd(global_mutables.new_world_blocks_to_update_copy,neighbours_to_update_len);
+
+            uint neighbours_to_update_offset = atomicAdd(global_mutables.world_blocks_to_update[world_blocks_to_update_odd],neighbours_to_update_len);
+
             for(int i=0;i<neighbours_to_update_len;i++){
-                world_blocks_to_update_copy[neighbours_to_update_offset + i] = neighbours_to_update[i];
+                set_world_blocks_to_update(neighbours_to_update_offset + i, world_blocks_to_update_odd, neighbours_to_update[i]);
             }
         }
+    }
+    const uint lID = gl_LocalInvocationID.x;
+    if(lID==0){
+        set_indirect_dispatch(DISPATCH_INDIRECT_UPDATE_AMBIENCE_FACES, global_mutables.blocks_to_be_inserted_or_removed);
     }
 }

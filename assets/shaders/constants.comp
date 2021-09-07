@@ -146,12 +146,11 @@ struct Entity{
 struct GlobalMutables{
     int blocks_to_be_inserted_or_removed;
     uint bones;
-    uint dummy1;
+    uint world_blocks_to_update_even; //
     int dummy2;
     int held_bone_idx; // player can grab a bone and pull it somewhere
-    int world_blocks_to_update;
     int ambience_tick; // this number indefinitely loops over the range 0..AMBIENCE_MAX_TIME_TICK
-    int new_world_blocks_to_update_copy;
+    uint[2] world_blocks_to_update;
 };
 
 struct FaceRelocation{
@@ -252,12 +251,18 @@ uvec2 new_face(uvec3 block_position_relative_to_chunk, uint orientation, uint ch
 #define DISPATCH_INDIRECT_PER_BONE 1
 #define DISPATCH_INDIRECT_AGENT_SENSORY_INPUT_UPDATE 2
 #define DISPATCH_INDIRECT_FEED_FORWARD_NET 3
-#define DISPATCH_INDIRECT_LEN 4
+#define DISPATCH_INDIRECT_UPDATE_AMBIENCE 4
+#define DISPATCH_INDIRECT_UPDATE_AMBIENCE_FACES 5
+#define DISPATCH_INDIRECT_LEN 6
 #define DRAW_INDIRECT_BONES 0
 #define DRAW_INDIRECT_BLOCK 1
 #define DRAW_INDIRECT_PARTICLES 2
 #define DRAW_INDIRECT_LEN 3
 
+const uint GROUP_SIZE_MINUS_ONE = GROUP_SIZE-1;
+uint invokation_count_to_group_count(uint invokations){
+    return (invokations+GROUP_SIZE_MINUS_ONE)/GROUP_SIZE;
+}
 struct DispatchIndirectCommand{
     uint    x;
     uint    y;
