@@ -1,5 +1,6 @@
 #version 450
 #extension GL_KHR_shader_subgroup_basic : enable
+#extension GL_EXT_debug_printf : enable
 #define IS_AVAILABLE_BUFFER_TMP_FACES_COPY
 #define IS_AVAILABLE_BUFFER_FACES_TO_BE_REMOVED
 #define IS_AVAILABLE_BUFFER_FACES_TO_BE_INSERTED
@@ -9,7 +10,15 @@
 layout (local_size_x_id = GROUP_SIZE_CONST_ID) in;
 #include "utils.comp"
 
-shared uvec2 face_offset_per_chunk[TOTAL_CHUNKS*4];
+
+// The array needs to store offset to each chunk faces (both opaque and transparent),
+// so there must be 2*TOTAL_CHUNKS elements.
+// We also need one extra element at the beginning, whose value is always set to 0.
+// This extra element is there only for convenience so that we can use
+// face_offset_per_chunk[chunk_offset] to query chunk beginning offset
+// and also use face_offset_per_chunk[chunk_offset+1] to query the ending offset.
+const uint ARR_LEN = 2*TOTAL_CHUNKS+1;
+shared uvec2 face_offset_per_chunk[ARR_LEN];
 
 void main() {
 
@@ -21,29 +30,26 @@ void main() {
         uint inserted_count = get_inserted_face_count(chunk_offset);
         uint removed_count = get_removed_face_count(chunk_offset);
         uint original_face_count = get_chunk_face_count_at(chunk_offset);
-        face_offset_per_chunk[chunk_offset+1] = uvec2(original_face_count + inserted_count - removed_count, original_face_count);
+        uvec2 face_counts = uvec2(original_face_count + inserted_count - removed_count, original_face_count);
+        face_offset_per_chunk[ARR_LEN + chunk_offset+1] = face_offset_per_chunk[chunk_offset+1] = face_counts;
+        debugPrintfEXT("%d=%v2d",chunk_offset+1, face_counts);
         //face_counts_per_chunk[0].x contains the offset to the beginning of first chunk
         //face_counts_per_chunk[1].x contains the offset to the beginning of second chunk (and ending of first one)
         //...and so on...
         //
     }
-    uint offset = 0;
-    for(int shift=1;shift<=TOTAL_CHUNKS*2;shift*=2){
-        for (uint i=lID;i+shift <= TOTAL_CHUNKS*2;i+=GROUP_SIZE){
-            face_offset_per_chunk[TOTAL_CHUNKS*2 + i+shift] = face_offset_per_chunk[i] + face_offset_per_chunk[i+shift];
-        }
-        shift*=2;
-        if(shift>TOTAL_CHUNKS*2){
-            offset = TOTAL_CHUNKS*2;
-            break;
-        }
-        for (uint i=lID;i+shift <= TOTAL_CHUNKS*2;i+=GROUP_SIZE){
-            face_offset_per_chunk[i+shift] = face_offset_per_chunk[TOTAL_CHUNKS*2 + i] + face_offset_per_chunk[TOTAL_CHUNKS*2 + i+shift];
+    for(int shift=1;shift<ARR_LEN;shift*=2){
+        for (uint i=lID;i+shift < ARR_LEN;i+=GROUP_SIZE){
+            const uvec2 sum = face_offset_per_chunk[i] + face_offset_per_chunk[i+shift];
+            subgroupBarrier();
+            face_offset_per_chunk[i+shift] = sum;
         }
     }
-    for (uint chunk_offset=lID;chunk_offset <= TOTAL_CHUNKS*2;chunk_offset+=GROUP_SIZE){
+    for (uint chunk_offset=lID;chunk_offset < ARR_LEN;chunk_offset+=GROUP_SIZE){
         //now face_counts_per_chunk[offset + chunk_offset] holds information about total number of faces in all chunks from 0 up to chunk_offset (inclusive).
-        set_faces_beginning_offset(chunk_offset, face_offset_per_chunk[offset + chunk_offset]);
+        uvec2 face_offsets = face_offset_per_chunk[chunk_offset];
+        set_faces_beginning_offset(chunk_offset, face_offsets);
+        debugPrintfEXT("%d<%v2d",chunk_offset, face_offsets);
         //the following data is no longer needed and we can conveniently take advantage of this loop to also
         //reset it here, so that we don't need to spawn any new shader just to clear it
         set_inserted_face_count(chunk_offset, 0);

@@ -1,9 +1,8 @@
 #version 450
+#extension GL_EXT_debug_printf : enable
 #define IS_AVAILABLE_BUFFER_GLOBAL_MUTABLES
 #define IS_AVAILABLE_BUFFER_TMP_FACES_COPY
 #define IS_AVAILABLE_BUFFER_WORLD
-#define IS_AVAILABLE_BUFFER_WORLD_BLOCKS_TO_UPDATE
-#define IS_AVAILABLE_BUFFER_WORLD_BLOCKS_TO_UPDATE_COPY
 #define IS_AVAILABLE_BUFFER_WORLD_COPY
 #define IS_AVAILABLE_BUFFER_FACES_TO_BE_REMOVED
 #define IS_AVAILABLE_BUFFER_FACES_TO_BE_INSERTED
@@ -49,6 +48,7 @@ void main() {
             uvec3(0, 0, 1),
             uvec3(0, 0, -1)
         );
+        debugPrintfEXT("%v3d]%d->%d", block_pos, block_old_id, block_new_id);
         for (int face_orientation=0; face_orientation<6;face_orientation++){
             const uvec3 neighbour_pos = block_pos + neighbours[face_orientation];
             const uint neighbour_chunk_x = neighbour_pos.x / CHUNK_WIDTH;
@@ -61,26 +61,38 @@ void main() {
                 const uint neighbour_block_new_id = world_copy[neighbour_idx];
                 const float neighbour_old_opacity = BLOCK_PROPS[neighbour_block_old_id].opacity;
                 const float neighbour_new_opacity = BLOCK_PROPS[neighbour_block_new_id].opacity;
+                const bool is_neighbour_unchanged = neighbour_block_old_id == neighbour_block_new_id;
                 const bool neighbour_had_face = block_old_opacity < neighbour_old_opacity;
                 const bool neighbour_has_face = block_new_opacity < neighbour_new_opacity;
                 const bool i_had_face = block_old_opacity > neighbour_old_opacity;
                 const bool i_have_face = block_new_opacity > neighbour_new_opacity;
-                if(neighbour_had_face && !neighbour_has_face){
+                // Now, here we have to check for is_neighbour_unchanged.
+                // Notice that if the neighbour has not changed, then we are safe to add or remove it's faces.
+                // However, if the neighbour did change, then it must be
+                // somewhere among blocks_to_be_inserted_or_removed, and so
+                // there must be some other parallel thread running just for it.
+                // That thread will take care of adding and removing its own faces.
+                // This way we avoid duplicate removals/additions of the same face twice.
+                if(neighbour_had_face && !neighbour_has_face && is_neighbour_unchanged){
                     const uint face_coords = block_pos_relative_to_chunk_and_orientation_into_face_coords(uvec4(neighbour_pos,face_orientation));
+                    debugPrintfEXT("%dR%v4d",gID, face_coords_into_block_pos_relative_to_chunk_and_orientation(face_coords));
                     remove_face(face_coords,neighbour_chunk_idx,neighbour_old_opacity);
                 }
-                if(!neighbour_had_face && neighbour_has_face){
+                if(!neighbour_had_face && neighbour_has_face && is_neighbour_unchanged){
                     const uint neighbour_new_texture = BLOCK_PROPS[neighbour_block_new_id].texture_ids[face_orientation];
                     const uint face_coords = block_pos_relative_to_chunk_and_orientation_into_face_coords(uvec4(neighbour_pos,face_orientation));
+                    debugPrintfEXT("%dI%v4d",gID, face_coords_into_block_pos_relative_to_chunk_and_orientation(face_coords));
                     insert_face(face_coords,neighbour_new_texture,neighbour_chunk_x,neighbour_chunk_z,neighbour_chunk_idx,neighbour_new_opacity);
                 }
                 if(i_had_face && !i_have_face){
                     const uint face_coords = block_pos_relative_to_chunk_and_orientation_into_face_coords(uvec4(block_pos,face_orientation));
+                    debugPrintfEXT("%dR%v4d",gID, face_coords_into_block_pos_relative_to_chunk_and_orientation(face_coords));
                     remove_face(face_coords,chunk_idx,block_old_opacity);
                 }
                 if(!i_had_face && i_have_face){
                     const uint my_new_texture = BLOCK_PROPS[block_new_id].texture_ids[face_orientation];
                     const uint face_coords = block_pos_relative_to_chunk_and_orientation_into_face_coords(uvec4(block_pos,face_orientation));
+                    debugPrintfEXT("%dI%v4d",gID, face_coords_into_block_pos_relative_to_chunk_and_orientation(face_coords));
                     insert_face(face_coords,my_new_texture,chunk_x,chunk_z,chunk_idx,block_new_opacity);
                 }
             }

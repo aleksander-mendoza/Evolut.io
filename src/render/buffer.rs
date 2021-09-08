@@ -1,4 +1,4 @@
-use crate::render::buffer_type::{BufferType, AsDescriptor, CpuWriteable, AsStorage};
+use crate::render::buffer_type::{BufferType, AsDescriptor, CpuWriteable, AsStorage, GpuIndirect};
 use crate::render::device::Device;
 use ash::vk;
 use ash::version::DeviceV1_0;
@@ -74,6 +74,10 @@ unsafe fn unsafe_map_unmap<V: Copy, T: CpuWriteable>(buff: &mut impl Buffer<V, T
 
 pub fn make_shader_buffer_barrier<V: Copy, T: AsStorage>(buff: &impl Buffer<V, T>) -> vk::BufferMemoryBarrier {
     make_buffer_barrier(buff, vk::AccessFlags::SHADER_WRITE, vk::AccessFlags::SHADER_READ)
+}
+
+pub fn make_shader_dispatch_buffer_barrier<V: Copy>(buff: &impl Buffer<V, GpuIndirect>) -> vk::BufferMemoryBarrier {
+    make_buffer_barrier(buff, vk::AccessFlags::SHADER_WRITE, vk::AccessFlags::SHADER_READ | vk::AccessFlags::INDIRECT_COMMAND_READ)
 }
 
 pub fn make_buffer_barrier<V: Copy, T: AsStorage>(buff: &impl Buffer<V, T>, src_access_mask: vk::AccessFlags, dst_access_mask: vk::AccessFlags) -> vk::BufferMemoryBarrier {

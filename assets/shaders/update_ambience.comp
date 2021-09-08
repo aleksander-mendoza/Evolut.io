@@ -1,4 +1,5 @@
 #version 450
+#extension GL_EXT_debug_printf : enable
 #define IS_AVAILABLE_BUFFER_GLOBAL_MUTABLES
 #define IS_AVAILABLE_BUFFER_INDIRECT
 #define IS_AVAILABLE_BUFFER_WORLD
@@ -21,6 +22,7 @@ void main() {
         const uint block_idx = get_world_blocks_to_update(gID, world_blocks_to_update_even);
         const uint block_id = world[block_idx];
         const uvec3 block_pos = world_idx_into_block_pos(block_idx);
+        debugPrintfEXT("%v3d:%d", block_pos, block_id);
         const BlockProp p = BLOCK_PROPS[block_id];
         bool update_neighbours = false;
         if (p.falls_down && block_pos.y > 0){

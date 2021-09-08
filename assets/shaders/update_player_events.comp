@@ -1,20 +1,28 @@
 #version 450
-//#extension GL_EXT_debug_printf : enable
+#extension GL_EXT_debug_printf : enable
 #define IS_AVAILABLE_BUFFER_GLOBAL_MUTABLES
 #define IS_AVAILABLE_BUFFER_WORLD
 #define IS_AVAILABLE_BUFFER_PLAYER_EVENT
 #define IS_AVAILABLE_BUFFER_INDIRECT
 #define IS_AVAILABLE_BUFFER_FACES
-
+#define IS_AVAILABLE_BUFFER_WORLD_BLOCKS_TO_UPDATE
 layout (local_size_x = 1) in;
 
-#include "descriptors_compute.comp"
+#include "descriptors_ambience.comp"
 #include "utils.comp"
 
 void main()
 {
 
     uint gID = gl_GlobalInvocationID.x;
+    const int ambience_tick = global_mutables.ambience_tick;
+    global_mutables.ambience_tick = ambience_tick < AMBIENCE_MAX_TIME_TICK-1 ? ambience_tick+1 : 0;
+    global_mutables.blocks_to_be_inserted_or_removed = 0;
+    const uint world_blocks_to_update_even = global_mutables.world_blocks_to_update_even;
+    const uint world_blocks_to_update_odd = 1 - world_blocks_to_update_even;
+    global_mutables.world_blocks_to_update[world_blocks_to_update_even] = 0;
+    global_mutables.world_blocks_to_update_even = world_blocks_to_update_odd;
+    uint world_blocks_to_update_count = global_mutables.world_blocks_to_update[world_blocks_to_update_odd];
 
     if (player_event.event_type == PLAYER_EVENT_SET_BLOCK){
         // vec3_slot0 holds current player position
@@ -33,16 +41,13 @@ void main()
                 const uint number_of_faces = add_block_faces(hit_pos, player_event.u32_slot0);
                 draw_indirect[DRAW_INDIRECT_BLOCK].instance_count = number_of_faces;
             }
+            debugPrintfEXT("%d",world_blocks_to_update_count);
+            set_world_blocks_to_update(world_blocks_to_update_count++, world_blocks_to_update_odd, hit_idx);
+            global_mutables.world_blocks_to_update[world_blocks_to_update_odd] = world_blocks_to_update_count;
+
         }
     }
-    const int ambience_tick = global_mutables.ambience_tick;
-    global_mutables.ambience_tick = ambience_tick < AMBIENCE_MAX_TIME_TICK-1 ? ambience_tick+1 : 0;
-    global_mutables.blocks_to_be_inserted_or_removed = 0;
-    const uint world_blocks_to_update_even = global_mutables.world_blocks_to_update_even;
-    const uint world_blocks_to_update_odd = 1 - world_blocks_to_update_even;
-    global_mutables.world_blocks_to_update[world_blocks_to_update_even] = 0;
-    const uint world_blocks_to_update_count = global_mutables.world_blocks_to_update[world_blocks_to_update_odd];
-    global_mutables.world_blocks_to_update_even = world_blocks_to_update_odd;
+    set_indirect_dispatch(DISPATCH_INDIRECT_UPDATE_AMBIENCE_FACES, 0);
     set_indirect_dispatch(DISPATCH_INDIRECT_UPDATE_AMBIENCE, world_blocks_to_update_count);
 }
 

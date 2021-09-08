@@ -365,7 +365,7 @@ void set_faces_beginning_offset(uint chunk_offset, uvec2 new_and_original_faces_
 }
 
 uint offset_of_face_copy(uint face_idx){
-    return offset_of_face_copy_chunk_offset(TOTAL_CHUNKS+1) + 3*face_idx;
+    return offset_of_face_copy_chunk_offset(TOTAL_CHUNKS) + 1 + 3*face_idx;
 }
 uint get_face_copy_destination(uint face_idx){
     return tmp_faces_copy[offset_of_face_copy(face_idx)];
