@@ -79,12 +79,12 @@ void main() {
     const uint tmp_faces_copy_chunk_offset = offset_of_face_copy(new_faces_beginning_offset);
 
     for(uint i=lID;i<number_of_assignable_leading_faces;i+=GROUP_SIZE){
-        debugPrintfEXT("L%d>%d", tmp_faces_copy_chunk_offset+3*i, offset_to_assignable_leading_faces + i);
+//        debugPrintfEXT("L%d>%d", tmp_faces_copy_chunk_offset+3*i, offset_to_assignable_leading_faces + i);
         tmp_faces_copy[tmp_faces_copy_chunk_offset+3*i] = offset_to_assignable_leading_faces + i; //after relocation, some faces will need to be prepended. Here we populate assignable_face_indices
         // with offsets of all those leading faces that will have to be populated
     }
     for(uint i=lID;i<number_of_assignable_trailing_faces;i+=GROUP_SIZE){
-        debugPrintfEXT("T%d>%d", tmp_faces_copy_chunk_offset+3*(number_of_assignable_leading_faces+i), offset_to_assignable_trailing_faces + i);
+//        debugPrintfEXT("T%d>%d", tmp_faces_copy_chunk_offset+3*(number_of_assignable_leading_faces+i), offset_to_assignable_trailing_faces + i);
         tmp_faces_copy[tmp_faces_copy_chunk_offset+3*(number_of_assignable_leading_faces+i)] = offset_to_assignable_trailing_faces + i; //after relocation, some faces will need to be appended. Here we populate assignable_face_indices
         // with offsets of all those trailing faces that will have to be populated
     }
@@ -100,7 +100,7 @@ void main() {
         if(i==removed_face_count||shared_faces_to_be_removed[i]==face_coords){
             if(i<removed_face_count) {
                 uint face_copy_offset = tmp_faces_copy_chunk_offset+3*atomicAdd(removed_faces_index_from_common_part,1);
-                debugPrintfEXT("C%d>%d",face_copy_offset, face_offset);
+//                debugPrintfEXT("C%d>%d",face_copy_offset, face_offset);
                 tmp_faces_copy[face_copy_offset] = face_offset;
             }
             face_offset+=GROUP_SIZE;
@@ -116,7 +116,8 @@ void main() {
     const uint[2] beginning = uint[2](offset_to_relocated_leading_faces, offset_to_relocated_trailing_faces);
     if(lID==0){
         debugPrintfEXT(
-            "%dR%dI%d[%d.%d]%d.%d<%d.%d>%d.%d#%d",chunk_offset, removed_face_count, inserted_face_count,
+            "%dR%dI%d[%d.%d]%d.%d<%d.%d>%d.%d#%d",
+            chunk_offset, removed_face_count, inserted_face_count,
             offset_to_assignable_leading_faces, number_of_assignable_leading_faces,
             offset_to_assignable_trailing_faces, number_of_assignable_trailing_faces,
             offset_to_relocated_leading_faces, number_of_relocated_leading_faces,
@@ -136,7 +137,7 @@ void main() {
                 for(uint i=lID;i<inserted_face_count;i+=GROUP_SIZE){
                     uint offset = 3*atomicAdd(copied_faces_idx,1);
                     face_to_relocate = faces_to_be_inserted[chunk_offset*FACES_TO_BE_INSERTED_CHUNK_CAPACITY + i];
-                    debugPrintfEXT("I%d=%v4d",tmp_faces_copy_chunk_offset+offset,face_coords_into_block_pos_relative_to_chunk_and_orientation(face_to_relocate.x));
+//                    debugPrintfEXT("I%d=%v4d",tmp_faces_copy_chunk_offset+offset,face_coords_into_block_pos_relative_to_chunk_and_orientation(face_to_relocate.x));
                     tmp_faces_copy[tmp_faces_copy_chunk_offset+offset+1] = face_to_relocate.x;
                     tmp_faces_copy[tmp_faces_copy_chunk_offset+offset+2] = face_to_relocate.y;
                 }
@@ -152,12 +153,13 @@ void main() {
                 // All threads will eventually reach this point.
             }
             face_offset = beginning[part] + lID;
+            face_to_relocate = faces[TOTAL_CHUNKS*2+face_offset];
         }
         i++;
         if(i==removed_face_count||shared_faces_to_be_removed[i]==face_to_relocate.x){
             if(i==removed_face_count) {
                 uint offset = 3*atomicAdd(copied_faces_idx,1);
-                debugPrintfEXT("R%d=%v4d", tmp_faces_copy_chunk_offset+offset,face_coords_into_block_pos_relative_to_chunk_and_orientation(face_to_relocate.x));
+//                debugPrintfEXT("R%d=%v4d", tmp_faces_copy_chunk_offset+offset,face_coords_into_block_pos_relative_to_chunk_and_orientation(face_to_relocate.x));
                 tmp_faces_copy[tmp_faces_copy_chunk_offset+offset+1] = face_to_relocate.x;
                 tmp_faces_copy[tmp_faces_copy_chunk_offset+offset+2] = face_to_relocate.y;
             }

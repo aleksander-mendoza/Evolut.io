@@ -22,24 +22,28 @@ void main() {
         const uint block_idx = get_world_blocks_to_update(gID, world_blocks_to_update_even);
         const uint block_id = world[block_idx];
         const uvec3 block_pos = world_idx_into_block_pos(block_idx);
-        debugPrintfEXT("%v3d:%d", block_pos, block_id);
+
         const BlockProp p = BLOCK_PROPS[block_id];
         bool update_neighbours = false;
         if (p.falls_down && block_pos.y > 0){
             const uint block_below_idx = block_pos_into_world_idx(block_pos-uvec3(0, 1, 0));
             const uint block_below = world[block_below_idx];
             if (block_below==BLOCK_ID_AIR){
+                debugPrintfEXT("%dA%d<%d",block_below_idx, world_copy[block_below_idx], block_id);
                 const uint block_below_semaphore = atomicCompSwap(world_copy[block_below_idx], BLOCK_ID_AIR, block_id);// this makes sure that
                 // no two threads concurrently place a block in the same place
                 if (block_below_semaphore==0){
+                    debugPrintfEXT("%dB%d<%d",block_idx, world_copy[block_idx], BLOCK_ID_AIR);
                     const uint block_semaphore = atomicCompSwap(world_copy[block_idx], block_id, BLOCK_ID_AIR);// this makes sure that
                     // no two threads concurrently remove a block from the same place (or remove and insert something in the same place)
-                    if(block_semaphore==0){
+                    if(block_semaphore==block_id){
+                        debugPrintfEXT("%v3d:%d=%d_%d", block_pos, block_id, block_idx, block_below_idx);
                         int offset = atomicAdd(global_mutables.blocks_to_be_inserted_or_removed, 2);
                         blocks_to_be_inserted_or_removed[offset] = block_idx;//remove this one
                         blocks_to_be_inserted_or_removed[offset+1] = block_below_idx;//insert this one
                         update_neighbours = true;
                     }else{
+                        debugPrintfEXT("%dC%d<%d",block_below_idx, world_copy[block_below_idx], BLOCK_ID_AIR);
                         world_copy[block_below_idx] = BLOCK_ID_AIR;
                     }
                 }

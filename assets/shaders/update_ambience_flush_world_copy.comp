@@ -3,6 +3,7 @@
 #define IS_AVAILABLE_BUFFER_WORLD
 #define IS_AVAILABLE_BUFFER_WORLD_COPY
 #define IS_AVAILABLE_BUFFER_BLOCKS_TO_BE_INSERTED_OR_REMOVED
+#extension GL_EXT_debug_printf : enable
 
 #include "descriptors_ambience.comp"
 layout (local_size_x_id = GROUP_SIZE_CONST_ID) in;
@@ -13,6 +14,7 @@ void main() {
     uint blocks_to_be_inserted_or_removed_count = global_mutables.blocks_to_be_inserted_or_removed;
     if (gID < blocks_to_be_inserted_or_removed_count){
         const uint block_idx = blocks_to_be_inserted_or_removed[gID];
+        debugPrintfEXT("%d=%v3d:%d<-%d",block_idx,world_idx_into_block_pos(block_idx),world[block_idx],world_copy[block_idx]);
         world[block_idx] = world_copy[block_idx];
     }
 }

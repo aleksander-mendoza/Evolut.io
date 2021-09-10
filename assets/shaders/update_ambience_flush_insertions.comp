@@ -14,9 +14,9 @@ void main() {
     const uint copied_face_count = get_copied_face_count(chunk_offset);
     const uint new_faces_beginning_offset = get_new_faces_beginning_offset(chunk_offset);
     const uint tmp_faces_copy_chunk_offset = offset_of_face_copy(new_faces_beginning_offset);
-    if(lID<9){
-        debugPrintfEXT("%d/%v4d",chunk_offset*9+lID,face_coords_into_block_pos_relative_to_chunk_and_orientation(faces[2*TOTAL_CHUNKS + chunk_offset*9+lID].x));
-    }
+//    if(lID<9){
+//        debugPrintfEXT("%d/%v4d",chunk_offset*9+lID,face_coords_into_block_pos_relative_to_chunk_and_orientation(faces[2*TOTAL_CHUNKS + chunk_offset*9+lID].x));
+//    }
 //    if(lID==0){
 //        debugPrintfEXT("%d:%d>%d*%d",chunk_offset,new_faces_beginning_offset,tmp_faces_copy_chunk_offset,copied_face_count);
 //    }
@@ -30,5 +30,6 @@ void main() {
     }
     if(LAST_CHUNK_OFFSET==chunk_offset && lID==0){
         draw_indirect[DRAW_INDIRECT_BLOCK].instance_count = get_new_faces_ending_offset(chunk_offset);
+//        debugPrintfEXT("E%d",get_new_faces_ending_offset(chunk_offset));
     }
 }

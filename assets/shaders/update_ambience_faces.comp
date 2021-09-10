@@ -78,6 +78,13 @@ void main() {
                     debugPrintfEXT("%dR%v4d",gID, face_coords_into_block_pos_relative_to_chunk_and_orientation(face_coords));
                     remove_face(face_coords,neighbour_chunk_idx,neighbour_old_opacity);
                 }
+                if(block_pos==uvec3(7, 127, 5)&&neighbour_pos==uvec3(7, 127, 4)){
+                    debugPrintfEXT("%d)%d==%d %d)%d==%d %f<%f %d&&%d&&%d",
+                        block_idx,block_old_id,block_new_id,
+                        neighbour_idx,neighbour_block_old_id, neighbour_block_new_id,
+                        block_new_opacity, neighbour_new_opacity,
+                        neighbour_had_face, neighbour_has_face, is_neighbour_unchanged);
+                }
                 if(!neighbour_had_face && neighbour_has_face && is_neighbour_unchanged){
                     const uint neighbour_new_texture = BLOCK_PROPS[neighbour_block_new_id].texture_ids[face_orientation];
                     const uint face_coords = block_pos_relative_to_chunk_and_orientation_into_face_coords(uvec4(neighbour_pos,opposite_orientation(face_orientation)));

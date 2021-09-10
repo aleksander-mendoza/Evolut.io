@@ -124,7 +124,7 @@ pub struct FoundationInitializer {
     face_count_per_chunk_buffer: SubBuffer<Face, Storage>,
     opaque_and_transparent_face_buffer: SubBuffer<Face, Storage>,
     world_copy: Submitter<StageSubBuffer<Block, Cpu, Storage>>,
-    tmp_faces_copy: SubBuffer<u32, Storage>,
+    tmp_faces_copy: Submitter<SubBuffer<u32, Storage>>,
     blocks_to_be_inserted_or_removed: SubBuffer<u32, Storage>,
     faces_to_be_inserted: SubBuffer<Face, Storage>,
     faces_to_be_removed: SubBuffer<u32, Storage>,
@@ -434,8 +434,8 @@ impl FoundationInitializer {
         let mut data = FoundationsData::new(&cap);
         let heights = HeightMap::new(cap.world_size, 100., 32.);
         data.world_blocks.set_block(8,128,4,DIRT);
-        data.world_blocks.set_block(9,127,5,WATER);
-        // data.world_blocks.set_block(8,113,4,DIRT);
+        data.world_blocks.set_block(8,127,4,DIRT);
+        data.world_blocks.set_block(9,126,4,STONE);
         // data.setup_world_blocks(&heights, 112);
         data.setup_world_faces();
         // data.particle_data.extend((0..64).map(|_| Particle::random()));
@@ -531,6 +531,9 @@ impl FoundationInitializer {
         assert_eq!(offset % 16, 0);
 
         println!("{:?}",data.bone_data[0]);
+
+        let mut tmp_faces_copy = Submitter::new(tmp_faces_copy_buffer, cmd_pool)?;
+        fill_zeros_submit(&mut tmp_faces_copy)?;
 
         let global_mutables = StageBuffer::wrap(cmd_pool, &[mutables], global_mutables_buffer)?;
 
@@ -645,7 +648,7 @@ impl FoundationInitializer {
             global_mutables,
             indirect_dispatch,
             indirect_draw,
-            tmp_faces_copy: tmp_faces_copy_buffer,
+            tmp_faces_copy,
             blocks_to_be_inserted_or_removed: blocks_to_be_inserted_or_removed_buffer,
             faces_to_be_inserted: faces_to_be_inserted_buffer,
             faces_to_be_removed: faces_to_be_removed_buffer,
@@ -686,6 +689,7 @@ impl FoundationInitializer {
         let faces = faces.take()?.take_gpu();
         let world_copy = world_copy.take()?.take_gpu();
         let world = world.take()?.take_gpu(); //wait for completion and then dispose of the staging buffer
+        let tmp_faces_copy = tmp_faces_copy.take()?;
         Ok(Foundations {
             specialization_constants,
             faces_to_be_inserted,

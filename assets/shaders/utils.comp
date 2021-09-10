@@ -359,13 +359,18 @@ uint get_new_faces_ending_offset(uint chunk_offset){
 uint get_original_faces_ending_offset(uint chunk_offset){
     return get_original_faces_beginning_offset(chunk_offset+1);
 }
-void set_faces_beginning_offset(uint chunk_offset, uvec2 new_and_original_faces_beginning_offset){
-    tmp_faces_copy[offset_of_face_copy_chunk_offset(chunk_offset)] = new_and_original_faces_beginning_offset.x;
-    tmp_faces_copy[offset_of_face_copy_chunk_offset(chunk_offset) + 1] = new_and_original_faces_beginning_offset.y;
+void set_faces_ending_offset(uint chunk_offset, uvec2 new_and_original_faces_ending_offset){
+    uint offset = offset_of_face_copy_chunk_offset(chunk_offset + 1); // notice this +1
+    //It leaves one zeroed-out cell at the very beginning (tmp_faces_copy initialized with zeros at the beginning
+    // and the update_ambience_prepare_face_offsets.comp never mutates that value, so it stays zero).
+    // Hence by querying get_new_faces_beginning_offset(0) we will always get zero.
+    // Same goes for get_original_faces_beginning_offset(0)
+    tmp_faces_copy[offset] = new_and_original_faces_ending_offset.x;
+    tmp_faces_copy[offset + 1] = new_and_original_faces_ending_offset.y;
 }
 
 uint offset_of_face_copy(uint face_idx){
-    return offset_of_face_copy_chunk_offset(TOTAL_CHUNKS) + 1 + 3*face_idx;
+    return offset_of_face_copy_chunk_offset(2*TOTAL_CHUNKS+1) + 3*face_idx;
 }
 uint get_face_copy_destination(uint face_idx){
     return tmp_faces_copy[offset_of_face_copy(face_idx)];
