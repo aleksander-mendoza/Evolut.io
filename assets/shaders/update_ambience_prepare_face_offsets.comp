@@ -39,10 +39,10 @@ void main() {
         //
     }
     for(int shift=1;shift<ARR_LEN;shift*=2){
-        for (uint i=lID;i+shift < ARR_LEN;i+=GROUP_SIZE){
-            const uvec2 sum = face_offset_per_chunk[i] + face_offset_per_chunk[i+shift];
+        for (int i=int(ARR_LEN)-1-int(lID);i-shift >= 0;i-=int(GROUP_SIZE)){
+            const uvec2 sum = face_offset_per_chunk[i] + face_offset_per_chunk[i-shift];
             subgroupBarrier();
-            face_offset_per_chunk[i+shift] = sum;
+            face_offset_per_chunk[i] = sum;
         }
     }
     for (uint chunk_offset=lID;chunk_offset < ARR_LEN;chunk_offset+=GROUP_SIZE){
@@ -50,9 +50,5 @@ void main() {
         uvec2 face_offsets = face_offset_per_chunk[chunk_offset];
         set_faces_beginning_offset(chunk_offset, face_offsets);
         debugPrintfEXT("%d<%v2d",chunk_offset, face_offsets);
-        //the following data is no longer needed and we can conveniently take advantage of this loop to also
-        //reset it here, so that we don't need to spawn any new shader just to clear it
-        set_inserted_face_count(chunk_offset, 0);
-        set_removed_face_count(chunk_offset, 0);
     }
 }

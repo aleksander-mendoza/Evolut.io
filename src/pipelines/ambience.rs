@@ -32,7 +32,7 @@ impl AmbienceResources {
         let update_ambience_faces = ShaderModule::new(include_glsl!("assets/shaders/update_ambience_faces.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let update_ambience_flush_insertions = ShaderModule::new(include_glsl!("assets/shaders/update_ambience_flush_insertions.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let update_ambience_prepare_face_offsets = ShaderModule::new(include_glsl!("assets/shaders/update_ambience_prepare_face_offsets.comp", kind: comp, target: vulkan1_1) as &[u32], cmd_pool.device())?;
-        let update_ambience_prepare_insertions = ShaderModule::new(include_glsl!("assets/shaders/update_ambience_prepare_insertions.comp", kind: comp) as &[u32], cmd_pool.device())?;
+        let update_ambience_prepare_insertions = ShaderModule::new(include_glsl!("assets/shaders/update_ambience_prepare_insertions.comp", kind: comp, target: vulkan1_1) as &[u32], cmd_pool.device())?;
         let update_ambience_flush_world_copy = ShaderModule::new(include_glsl!("assets/shaders/update_ambience_flush_world_copy.comp", kind: comp) as &[u32], cmd_pool.device())?;
         Ok(Self {
             update_player_events,
@@ -113,7 +113,6 @@ impl Computable for Ambience {
             .buffer_barriers(vk::PipelineStageFlags::COMPUTE_SHADER, vk::PipelineStageFlags::COMPUTE_SHADER | vk::PipelineStageFlags::DRAW_INDIRECT, &[
                 make_shader_buffer_barrier(foundations.faces()),
                 make_shader_dispatch_buffer_barrier(foundations.indirect().update_ambience()),
-                make_shader_dispatch_buffer_barrier(foundations.indirect().update_ambience_faces()),
                 make_shader_buffer_barrier(foundations.global_mutables())
             ])
             .bind_compute_pipeline(&self.update_ambience)

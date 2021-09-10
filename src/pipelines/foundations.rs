@@ -176,8 +176,8 @@ impl FoundationsCapacity {
             max_tmp_faces_copy: world_size.world_volume() as u64 / 4,
             max_world_blocks_to_update: world_size.world_volume() as u64 / 4,
             max_blocks_to_be_inserted_or_removed: world_size.world_volume() as u64 / 16,
-            max_faces_to_be_inserted: faces_to_be_inserted_chunk_capacity as u64 * world_size.total_chunks() as u64,
-            max_faces_to_be_removed: faces_to_be_removed_chunk_capacity as u64 * world_size.total_chunks() as u64,
+            max_faces_to_be_inserted: faces_to_be_inserted_chunk_capacity as u64 * 2 * world_size.total_chunks() as u64,
+            max_faces_to_be_removed: faces_to_be_removed_chunk_capacity as u64 * 2 * world_size.total_chunks() as u64,
             max_sensors: 0u64,
             max_faces_copy: 1024u64 * world_size.total_chunks() as u64,
             world_size,
@@ -433,7 +433,10 @@ impl FoundationInitializer {
         let cap = FoundationsCapacity::new(1,1);
         let mut data = FoundationsData::new(&cap);
         let heights = HeightMap::new(cap.world_size, 100., 32.);
-        data.setup_world_blocks(&heights, 112);
+        data.world_blocks.set_block(8,128,4,DIRT);
+        data.world_blocks.set_block(9,127,5,WATER);
+        // data.world_blocks.set_block(8,113,4,DIRT);
+        // data.setup_world_blocks(&heights, 112);
         data.setup_world_faces();
         // data.particle_data.extend((0..64).map(|_| Particle::random()));
         for _ in 0..8 {
