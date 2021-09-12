@@ -1,6 +1,6 @@
 #version 450
 #extension GL_KHR_shader_subgroup_basic : enable
-#extension GL_EXT_debug_printf : enable
+//#extension GL_EXT_debug_printf : enable
 #define IS_AVAILABLE_BUFFER_FACES
 #define IS_AVAILABLE_BUFFER_TMP_FACES_COPY
 #define IS_AVAILABLE_BUFFER_FACES_TO_BE_REMOVED
@@ -16,6 +16,37 @@ shared uint copied_faces_idx;
 
 uint positive_sub(uint x,uint y){
     return x>y?x-y:0;
+}
+
+void relocate_common(const uint[2] beginning, const uint[2] ending, const uint removed_face_count,
+                     const uint chunk_offset, const uint lID, const uint offset_to_relocated_leading_faces,
+                     const uint tmp_faces_copy_chunk_offset){
+    uint part = 0;
+    uint face_offset = offset_to_relocated_leading_faces+lID;
+    Face face_to_relocate = faces[TOTAL_CHUNKS*2+face_offset];
+    int i=-1;
+
+    while(true){
+        while(face_offset >= ending[part]){
+            part++;
+            if(part>=2){
+                return;
+            }
+            face_offset = beginning[part] + lID;
+            face_to_relocate = faces[TOTAL_CHUNKS*2+face_offset];
+        }
+        i++;
+        if(i==removed_face_count||shared_faces_to_be_removed[i]==face_to_relocate.x){
+            if(i==removed_face_count) {
+                uint offset = 3*atomicAdd(copied_faces_idx,1);
+                tmp_faces_copy[tmp_faces_copy_chunk_offset+offset+1] = face_to_relocate.x;
+                tmp_faces_copy[tmp_faces_copy_chunk_offset+offset+2] = face_to_relocate.y;
+            }
+            face_offset+=GROUP_SIZE;
+            face_to_relocate = faces[TOTAL_CHUNKS*2+face_offset];
+            i=-1;
+        }
+    }
 }
 
 void main() {
@@ -79,12 +110,10 @@ void main() {
     const uint tmp_faces_copy_chunk_offset = offset_of_face_copy(new_faces_beginning_offset);
 
     for(uint i=lID;i<number_of_assignable_leading_faces;i+=GROUP_SIZE){
-//        debugPrintfEXT("L%d>%d", tmp_faces_copy_chunk_offset+3*i, offset_to_assignable_leading_faces + i);
         tmp_faces_copy[tmp_faces_copy_chunk_offset+3*i] = offset_to_assignable_leading_faces + i; //after relocation, some faces will need to be prepended. Here we populate assignable_face_indices
         // with offsets of all those leading faces that will have to be populated
     }
     for(uint i=lID;i<number_of_assignable_trailing_faces;i+=GROUP_SIZE){
-//        debugPrintfEXT("T%d>%d", tmp_faces_copy_chunk_offset+3*(number_of_assignable_leading_faces+i), offset_to_assignable_trailing_faces + i);
         tmp_faces_copy[tmp_faces_copy_chunk_offset+3*(number_of_assignable_leading_faces+i)] = offset_to_assignable_trailing_faces + i; //after relocation, some faces will need to be appended. Here we populate assignable_face_indices
         // with offsets of all those trailing faces that will have to be populated
     }
@@ -100,7 +129,6 @@ void main() {
         if(i==removed_face_count||shared_faces_to_be_removed[i]==face_coords){
             if(i<removed_face_count) {
                 uint face_copy_offset = tmp_faces_copy_chunk_offset+3*atomicAdd(removed_faces_index_from_common_part,1);
-//                debugPrintfEXT("C%d>%d",face_copy_offset, face_offset);
                 tmp_faces_copy[face_copy_offset] = face_offset;
             }
             face_offset+=GROUP_SIZE;
@@ -114,61 +142,19 @@ void main() {
     const uint relocated_trailing_faces_ending = offset_to_relocated_trailing_faces+number_of_relocated_trailing_faces;
     const uint[2] ending = uint[2](relocated_leading_faces_ending, relocated_trailing_faces_ending);
     const uint[2] beginning = uint[2](offset_to_relocated_leading_faces, offset_to_relocated_trailing_faces);
+    relocate_common(beginning,ending,removed_face_count,chunk_offset, lID, offset_to_relocated_leading_faces, tmp_faces_copy_chunk_offset);
+    for(uint i=lID;i<inserted_face_count;i+=GROUP_SIZE){
+        uint offset = 3*atomicAdd(copied_faces_idx,1);
+        Face face_to_relocate = faces_to_be_inserted[chunk_offset*FACES_TO_BE_INSERTED_CHUNK_CAPACITY + i];
+        tmp_faces_copy[tmp_faces_copy_chunk_offset+offset+1] = face_to_relocate.x;
+        tmp_faces_copy[tmp_faces_copy_chunk_offset+offset+2] = face_to_relocate.y;
+    }
+    faces[chunk_offset].x = new_faces_count_in_chunk;// We should be ready to update the chunk size now.
+    // Notice that in the end, if everything was correct, we will have
+    // copied_faces_idx == removed_faces_index_from_common_part+number_of_assignable_leading_faces+number_of_assignable_trailing_faces
+    subgroupBarrier(); // Let's make sure that copied_faces_idx has been incremented by all threads.
     if(lID==0){
-        debugPrintfEXT(
-            "%dR%dI%d[%d.%d]%d.%d<%d.%d>%d.%d#%d",
-            chunk_offset, removed_face_count, inserted_face_count,
-            offset_to_assignable_leading_faces, number_of_assignable_leading_faces,
-            offset_to_assignable_trailing_faces, number_of_assignable_trailing_faces,
-            offset_to_relocated_leading_faces, number_of_relocated_leading_faces,
-            offset_to_relocated_trailing_faces, number_of_relocated_trailing_faces,
-            removed_faces_index_from_common_part
-            );
+        set_copied_face_count(chunk_offset, copied_faces_idx);
     }
-    uint part = 0;
-    face_offset = offset_to_relocated_leading_faces+lID;
-    Face face_to_relocate = faces[TOTAL_CHUNKS*2+face_offset];
-    i=-1;
-
-    while(true){
-        while(face_offset >= ending[part]){
-            part++;
-            if(part>=2){
-                for(uint i=lID;i<inserted_face_count;i+=GROUP_SIZE){
-                    uint offset = 3*atomicAdd(copied_faces_idx,1);
-                    face_to_relocate = faces_to_be_inserted[chunk_offset*FACES_TO_BE_INSERTED_CHUNK_CAPACITY + i];
-//                    debugPrintfEXT("I%d=%v4d",tmp_faces_copy_chunk_offset+offset,face_coords_into_block_pos_relative_to_chunk_and_orientation(face_to_relocate.x));
-                    tmp_faces_copy[tmp_faces_copy_chunk_offset+offset+1] = face_to_relocate.x;
-                    tmp_faces_copy[tmp_faces_copy_chunk_offset+offset+2] = face_to_relocate.y;
-                }
-                faces[chunk_offset].x = new_faces_count_in_chunk;// We should be ready to update the chunk size now.
-                // Notice that in the end, if everything was correct, we will have
-                // copied_faces_idx == removed_faces_index_from_common_part+number_of_assignable_leading_faces+number_of_assignable_trailing_faces
-                subgroupBarrier(); // Let's make sure that copied_faces_idx has been incremented by all threads.
-                if(lID==0){
-                    debugPrintfEXT("%d)%d=%d+%d+%d",chunk_offset,copied_faces_idx,removed_faces_index_from_common_part,number_of_assignable_leading_faces,number_of_assignable_trailing_faces);
-                    set_copied_face_count(chunk_offset, copied_faces_idx);
-                }
-                return; // notice that this return statement is the only way out.
-                // All threads will eventually reach this point.
-            }
-            face_offset = beginning[part] + lID;
-            face_to_relocate = faces[TOTAL_CHUNKS*2+face_offset];
-        }
-        i++;
-        if(i==removed_face_count||shared_faces_to_be_removed[i]==face_to_relocate.x){
-            if(i==removed_face_count) {
-                uint offset = 3*atomicAdd(copied_faces_idx,1);
-//                debugPrintfEXT("R%d=%v4d", tmp_faces_copy_chunk_offset+offset,face_coords_into_block_pos_relative_to_chunk_and_orientation(face_to_relocate.x));
-                tmp_faces_copy[tmp_faces_copy_chunk_offset+offset+1] = face_to_relocate.x;
-                tmp_faces_copy[tmp_faces_copy_chunk_offset+offset+2] = face_to_relocate.y;
-            }
-            face_offset+=GROUP_SIZE;
-            face_to_relocate = faces[TOTAL_CHUNKS*2+face_offset];
-            i=-1;
-        }
-    }
-
-
 
 }

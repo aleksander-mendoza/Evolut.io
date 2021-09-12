@@ -11,14 +11,16 @@ use ash::prelude::VkResult;
 use std::sync::Arc;
 
 
-const DEBUG_DEVICE_EXTENSIONS:[*const i8;3] = [
+const DEBUG_DEVICE_EXTENSIONS:[*const i8;4] = [
     b"VK_KHR_swapchain\0".as_ptr() as *const i8,
     b"VK_KHR_shader_non_semantic_info\0".as_ptr() as *const i8,
+    b"VK_KHR_vulkan_memory_model\0".as_ptr() as *const i8,
     b"VK_EXT_shader_atomic_float\0".as_ptr() as *const i8,
 ];
 
-const DEVICE_EXTENSIONS:[*const i8;2] = [
+const DEVICE_EXTENSIONS:[*const i8;3] = [
     b"VK_KHR_swapchain\0".as_ptr() as *const i8,
+    b"VK_KHR_vulkan_memory_model\0".as_ptr() as *const i8,
     b"VK_EXT_shader_atomic_float\0".as_ptr() as *const i8,
 ];
 

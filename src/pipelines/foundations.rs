@@ -430,13 +430,14 @@ impl FoundationInitializer {
     }
 
     pub fn new(cmd_pool: &CommandPool) -> Result<Self, failure::Error> {
-        let cap = FoundationsCapacity::new(1,1);
+        let cap = FoundationsCapacity::new(2,2);
         let mut data = FoundationsData::new(&cap);
         let heights = HeightMap::new(cap.world_size, 100., 32.);
-        data.world_blocks.set_block(8,128,4,DIRT);
-        data.world_blocks.set_block(8,127,4,DIRT);
-        data.world_blocks.set_block(9,126,4,STONE);
-        // data.setup_world_blocks(&heights, 112);
+        // data.world_blocks.set_block(15,128,15,DIRT);
+        // data.world_blocks.set_block(8,127,4,DIRT);
+        // data.world_blocks.set_block(15,127,15,STONE);
+        // data.world_blocks.set_block(15,126,14,STONE);
+        data.setup_world_blocks(&heights, 112);
         data.setup_world_faces();
         // data.particle_data.extend((0..64).map(|_| Particle::random()));
         for _ in 0..8 {

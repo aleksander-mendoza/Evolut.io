@@ -3,7 +3,7 @@
 #define IS_AVAILABLE_BUFFER_FACES
 #define IS_AVAILABLE_BUFFER_TMP_FACES_COPY
 #define IS_AVAILABLE_BUFFER_INDIRECT
-#extension GL_EXT_debug_printf : enable
+//#extension GL_EXT_debug_printf : enable
 #include "descriptors_ambience.comp"
 layout (local_size_x_id = GROUP_SIZE_CONST_ID) in;
 #include "utils.comp"
@@ -14,18 +14,11 @@ void main() {
     const uint copied_face_count = get_copied_face_count(chunk_offset);
     const uint new_faces_beginning_offset = get_new_faces_beginning_offset(chunk_offset);
     const uint tmp_faces_copy_chunk_offset = offset_of_face_copy(new_faces_beginning_offset);
-//    if(lID<9){
-//        debugPrintfEXT("%d/%v4d",chunk_offset*9+lID,face_coords_into_block_pos_relative_to_chunk_and_orientation(faces[2*TOTAL_CHUNKS + chunk_offset*9+lID].x));
-//    }
-//    if(lID==0){
-//        debugPrintfEXT("%d:%d>%d*%d",chunk_offset,new_faces_beginning_offset,tmp_faces_copy_chunk_offset,copied_face_count);
-//    }
     for(uint i=lID; i < copied_face_count;i+=GROUP_SIZE){
         uint face_copy_offset = tmp_faces_copy_chunk_offset+3*i;
         uint dst_offset = tmp_faces_copy[face_copy_offset];
         uint face_coords = tmp_faces_copy[face_copy_offset+1];
         uint tex_id = tmp_faces_copy[face_copy_offset+2];
-        debugPrintfEXT("%d<%v4d",dst_offset,face_coords_into_block_pos_relative_to_chunk_and_orientation(face_coords) );
         faces[2*TOTAL_CHUNKS + dst_offset] = uvec2(face_coords,tex_id);
     }
     if(LAST_CHUNK_OFFSET==chunk_offset && lID==0){

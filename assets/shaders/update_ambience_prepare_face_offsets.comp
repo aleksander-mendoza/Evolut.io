@@ -1,6 +1,6 @@
 #version 450
 #extension GL_KHR_shader_subgroup_basic : enable
-#extension GL_EXT_debug_printf : enable
+//#extension GL_EXT_debug_printf : enable
 #define IS_AVAILABLE_BUFFER_TMP_FACES_COPY
 #define IS_AVAILABLE_BUFFER_FACES_TO_BE_REMOVED
 #define IS_AVAILABLE_BUFFER_FACES_TO_BE_INSERTED
@@ -25,7 +25,6 @@ void main() {
         uint original_face_count = get_chunk_face_count_at(chunk_offset);
         uvec2 face_counts = uvec2(original_face_count + inserted_count - removed_count, original_face_count);
         face_offset_per_chunk[chunk_offset] = face_counts;
-        debugPrintfEXT("%d=%v2d",chunk_offset, face_counts);
     }
     // parallel summation algorithm, that sums up all entries to the left of each array cell (inclusive)
     for(int shift=1;shift<ARR_LEN;shift*=2){
@@ -39,6 +38,5 @@ void main() {
         //now face_offset_per_chunk[chunk_offset] holds information about total number of faces in all chunks from 0 up to chunk_offset (inclusive).
         uvec2 face_offsets = face_offset_per_chunk[chunk_offset];
         set_faces_ending_offset(chunk_offset, face_offsets);
-        debugPrintfEXT("%d<%v2d",chunk_offset, face_offsets);
     }
 }

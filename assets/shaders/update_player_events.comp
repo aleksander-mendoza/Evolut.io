@@ -1,5 +1,5 @@
 #version 450
-#extension GL_EXT_debug_printf : enable
+//#extension GL_EXT_debug_printf : enable
 #define IS_AVAILABLE_BUFFER_GLOBAL_MUTABLES
 #define IS_AVAILABLE_BUFFER_WORLD
 #define IS_AVAILABLE_BUFFER_WORLD_COPY
@@ -32,15 +32,15 @@ void main()
         if (ray.found){
             const uvec3 hit_pos = uvec3(player_event.u32_slot0>0?ray.prev_v:ray.v);
             const uint hit_idx = block_pos_into_world_idx(hit_pos);
-            uint prev_block = world[hit_idx];
             world_copy[hit_idx] = player_event.u32_slot0;
             blocks_to_be_inserted_or_removed[blocks_to_be_inserted_or_removed_count++] = hit_idx;
             set_world_blocks_to_update(world_blocks_to_update_count_next++, world_blocks_to_update_next, hit_idx);
         }
     }
+    global_mutables.world_blocks_to_update[world_blocks_to_update_curr] = world_blocks_to_update_count_curr;
     global_mutables.world_blocks_to_update[world_blocks_to_update_next] = world_blocks_to_update_count_next;
     global_mutables.blocks_to_be_inserted_or_removed = blocks_to_be_inserted_or_removed_count;
-    set_indirect_dispatch(DISPATCH_INDIRECT_UPDATE_AMBIENCE_FACES, 0);
+    set_indirect_dispatch(DISPATCH_INDIRECT_UPDATE_AMBIENCE_FACES, blocks_to_be_inserted_or_removed_count);
     set_indirect_dispatch(DISPATCH_INDIRECT_UPDATE_AMBIENCE, world_blocks_to_update_count_curr);
 }
 

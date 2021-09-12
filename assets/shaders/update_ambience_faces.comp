@@ -1,5 +1,5 @@
 #version 450
-#extension GL_EXT_debug_printf : enable
+//#extension GL_EXT_debug_printf : enable
 #define IS_AVAILABLE_BUFFER_GLOBAL_MUTABLES
 #define IS_AVAILABLE_BUFFER_TMP_FACES_COPY
 #define IS_AVAILABLE_BUFFER_WORLD
@@ -48,7 +48,6 @@ void main() {
             uvec3(0, 0, 1),
             uvec3(0, 0, -1)
         );
-        debugPrintfEXT("%v3d]%d->%d", block_pos, block_old_id, block_new_id);
         for (int face_orientation=0; face_orientation<6;face_orientation++){
             const uvec3 neighbour_pos = block_pos + neighbours[face_orientation];
             const uint neighbour_chunk_x = neighbour_pos.x / CHUNK_WIDTH;
@@ -74,32 +73,21 @@ void main() {
                 // That thread will take care of adding and removing its own faces.
                 // This way we avoid duplicate removals/additions of the same face twice.
                 if(neighbour_had_face && !neighbour_has_face && is_neighbour_unchanged){
-                    const uint face_coords = block_pos_relative_to_chunk_and_orientation_into_face_coords(uvec4(neighbour_pos,opposite_orientation(face_orientation)));
-                    debugPrintfEXT("%dR%v4d",gID, face_coords_into_block_pos_relative_to_chunk_and_orientation(face_coords));
+                    const uint face_coords = block_pos_relative_to_chunk_and_orientation_into_face_coords(uvec4(neighbour_block_pos_relative_to_chunk,opposite_orientation(face_orientation)));
                     remove_face(face_coords,neighbour_chunk_idx,neighbour_old_opacity);
-                }
-                if(block_pos==uvec3(7, 127, 5)&&neighbour_pos==uvec3(7, 127, 4)){
-                    debugPrintfEXT("%d)%d==%d %d)%d==%d %f<%f %d&&%d&&%d",
-                        block_idx,block_old_id,block_new_id,
-                        neighbour_idx,neighbour_block_old_id, neighbour_block_new_id,
-                        block_new_opacity, neighbour_new_opacity,
-                        neighbour_had_face, neighbour_has_face, is_neighbour_unchanged);
                 }
                 if(!neighbour_had_face && neighbour_has_face && is_neighbour_unchanged){
                     const uint neighbour_new_texture = BLOCK_PROPS[neighbour_block_new_id].texture_ids[face_orientation];
-                    const uint face_coords = block_pos_relative_to_chunk_and_orientation_into_face_coords(uvec4(neighbour_pos,opposite_orientation(face_orientation)));
-                    debugPrintfEXT("%dI%v4d",gID, face_coords_into_block_pos_relative_to_chunk_and_orientation(face_coords));
+                    const uint face_coords = block_pos_relative_to_chunk_and_orientation_into_face_coords(uvec4(neighbour_block_pos_relative_to_chunk,opposite_orientation(face_orientation)));
                     insert_face(face_coords,neighbour_new_texture,neighbour_chunk_x,neighbour_chunk_z,neighbour_chunk_idx,neighbour_new_opacity);
                 }
                 if(i_had_face && !i_have_face){
-                    const uint face_coords = block_pos_relative_to_chunk_and_orientation_into_face_coords(uvec4(block_pos,face_orientation));
-                    debugPrintfEXT("%dr%v4d",gID, face_coords_into_block_pos_relative_to_chunk_and_orientation(face_coords));
+                    const uint face_coords = block_pos_relative_to_chunk_and_orientation_into_face_coords(uvec4(block_pos_relative_to_chunk,face_orientation));
                     remove_face(face_coords,chunk_idx,block_old_opacity);
                 }
                 if(!i_had_face && i_have_face){
                     const uint my_new_texture = BLOCK_PROPS[block_new_id].texture_ids[face_orientation];
-                    const uint face_coords = block_pos_relative_to_chunk_and_orientation_into_face_coords(uvec4(block_pos,face_orientation));
-                    debugPrintfEXT("%di%v4d",gID, face_coords_into_block_pos_relative_to_chunk_and_orientation(face_coords));
+                    const uint face_coords = block_pos_relative_to_chunk_and_orientation_into_face_coords(uvec4(block_pos_relative_to_chunk,face_orientation));
                     insert_face(face_coords,my_new_texture,chunk_x,chunk_z,chunk_idx,block_new_opacity);
                 }
             }
