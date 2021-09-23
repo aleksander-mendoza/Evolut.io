@@ -20,3 +20,4 @@ pub mod sensor;
 pub mod neural_net_layer;
 pub mod muscle;
 pub mod ambience;
+pub mod perlin_noise_map;

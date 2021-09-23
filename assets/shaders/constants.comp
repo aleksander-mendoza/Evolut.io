@@ -20,7 +20,7 @@ layout (constant_id = 3) const uint CHUNKS_Z = 0;
 layout (constant_id = 4) const uint FACES_TO_BE_INSERTED_CHUNK_CAPACITY = 128;
 layout (constant_id = 5) const uint FACES_TO_BE_REMOVED_CHUNK_CAPACITY = 128;
 layout (constant_id = 6) const uint BROAD_PHASE_CELL_SIZE = 2; // how many blocks make up the side of one cell. Each cell may then hold multiple bones
-layout (constant_id = 7) const uint BROAD_PHASE_CELL_CAPACITY = 8; // maximum number of bones that can be placed in one cell
+const uint BROAD_PHASE_CELL_CAPACITY = 8; // maximum number of bones that can be placed in one cell
 const uint WORLD_WIDTH = CHUNKS_X*CHUNK_WIDTH;
 const uint WORLD_DEPTH = CHUNKS_Z*CHUNK_DEPTH;
 const uint WORLD_AREA = WORLD_WIDTH*WORLD_DEPTH;
@@ -49,6 +49,8 @@ layout (constant_id = 306) const uint MAX_WORLD_BLOCKS_TO_UPDATE = 128;
 layout (constant_id = 307) const uint MAX_BLOCKS_TO_BE_INSERTED_OR_REMOVED = 128;
 layout (constant_id = 308) const uint MAX_FACES_TO_BE_INSERTED = 128 ;
 layout (constant_id = 309) const uint MAX_FACES_TO_BE_REMOVED = 128 ;
+layout (constant_id = 310) const uint MAX_ENTITIES = 128;
+layout (constant_id = 311) const uint MAX_LIDARS = 128;
 #define AMBIENCE_MAX_TIME_TICK 360 // this should be some anti-prime number, because BlockProp.change_rate is specified as a ratio
 
 bool is_in_world_borders(uvec3 pos){
@@ -82,99 +84,56 @@ struct Bone{
     vec4 texture_coords;//xy components hold text UV coordinates. zw components hold width and height
 };
 
+
+bool is_ray_intersecting_axis_aligned_box(vec3 start, vec3 distance_and_direction, const vec3 left_bottom_front_corner, const vec3 box_size) {
+    const mat3x2 start_mat = mat3x2(start.yz,start.xz,start.xy);
+    const vec3 right_top_back_corner = left_bottom_front_corner + box_size;
+    const vec3 ratioLBF = (left_bottom_front_corner - start)/distance_and_direction;
+    const vec3 ratioRTB = (right_top_back_corner - start)/distance_and_direction;
+    const mat3x2 intersection_point_LBF_box_plane = start_mat + mat3x2(distance_and_direction.yz*ratioLBF.x,distance_and_direction.xz*ratioLBF.y,distance_and_direction.xy*ratioLBF.z);
+    const mat3x2 intersection_point_RTB_box_plane = start_mat + mat3x2(distance_and_direction.yz*ratioRTB.x,distance_and_direction.xz*ratioRTB.y,distance_and_direction.xy*ratioRTB.z);
+    return
+        (all(lessThan(left_bottom_front_corner.yz, intersection_point_LBF_box_plane[0])) && all(greaterThan(intersection_point_LBF_box_plane[0], right_top_back_corner.yz)) ) ||
+        (all(lessThan(left_bottom_front_corner.xz, intersection_point_LBF_box_plane[1])) && all(greaterThan(intersection_point_LBF_box_plane[1], right_top_back_corner.xz)) ) ||
+        (all(lessThan(left_bottom_front_corner.xy, intersection_point_LBF_box_plane[2])) && all(greaterThan(intersection_point_LBF_box_plane[2], right_top_back_corner.xy)) ) ||
+        (all(lessThan(left_bottom_front_corner.yz, intersection_point_RTB_box_plane[0])) && all(greaterThan(intersection_point_RTB_box_plane[0], right_top_back_corner.yz)) ) ||
+        (all(lessThan(left_bottom_front_corner.xz, intersection_point_RTB_box_plane[1])) && all(greaterThan(intersection_point_RTB_box_plane[1], right_top_back_corner.xz)) ) ||
+        (all(lessThan(left_bottom_front_corner.xy, intersection_point_RTB_box_plane[2])) && all(greaterThan(intersection_point_RTB_box_plane[2], right_top_back_corner.xy)) )
+    ;
+}
+
+bool is_ray_intersecting_bone(vec3 start, vec3 distance_and_direction, const Bone bone) {
+    const vec3 half_size = vec3(bone.half_side_length,bone.half_height,bone.half_side_length);
+    return is_ray_intersecting_axis_aligned_box(start,distance_and_direction,bone.new_center - half_size, 2*half_size);
+}
+
 struct CollisionCell{
     uint len;
     uint contents[BROAD_PHASE_CELL_CAPACITY];
 };
 
-struct NeuralNetLayerHidden{
-    uint input_offset;
-    uint input_length;
-    uint weights_offset;
-    uint output_offset;
-    uint output_length;
-    uint next_layer_and_overwrite;
-};
 
-uint neural_net_layer_next_layer(const NeuralNetLayerHidden l){
-    return l.next_layer_and_overwrite/2;
-}
-bool neural_net_layer_overwrite(const NeuralNetLayerHidden l){
-    return bool(l.next_layer_and_overwrite & 1u);
-}
-bool neural_net_layer_has_next_layer(const NeuralNetLayerHidden l){
-    return l.next_layer_and_overwrite<65536;
-}
-uint neural_net_layer_weights_length(const NeuralNetLayerHidden l){
-    return l.input_length*l.output_length;
-}
 
-struct NeuralNetLayerInput{
-    uint region0_offset;
-    uint region1_offset;
-    uint region2_offset;
-    uint region0_length;
-    uint region1_length;
-    uint region2_length;
-};
-
-struct NeuralNetLayerOutput{
-    uint muscle_internal_offset;
-    uint muscle_external_offset;
-    uint muscle_length;
-    uint recurrent_internal_offset;
-    uint recurrent_external_offset;
-    uint recurrent_length;
-};
-
-#define ENTITY_LIDAR_COUNT 8
-#define ENTITY_MAX_EATEN_BONES 4
-
-struct EntityLidar {
-    vec3 relative_position;
-    float max_length;
-};
-
-struct Entity{
-    EntityLidar[ENTITY_LIDAR_COUNT] lidars;
-    uint bone_idx;
-    uint lidars_used;
-    float stamina;
-    float strength;
-};
 
 struct GlobalMutables{
     int blocks_to_be_inserted_or_removed;
     uint bones;
-    uint world_blocks_to_update_even; //
-    int dummy2;
+    uint world_blocks_to_update_even;
+    uint lidars;
     int held_bone_idx; // player can grab a bone and pull it somewhere
     int ambience_tick; // this number indefinitely loops over the range 0..AMBIENCE_MAX_TIME_TICK
     uint[2] world_blocks_to_update;
+    uint entities;
+    uint dummy1;
+    uint dummy2;
+    uint dummy3;
 };
 
 struct FaceRelocation{
     uint dst_offset;
     Face face;
 };
-//
-//struct Superbuffer{
-//    Bone bones[MAX_BONES];
-//    uint face_count_per_chunk[TOTAL_CHUNKS*2];
-//    uvec2 contiguous_faces[MAX_FACES];
-//    FaceRelocation tmp_faces_copy[MAX_TMP_FACES_COPY];
-//    CollisionCell collision_grid[BROAD_PHASE_WORLD_VOLUME_IN_CELLS];
-//    uint world[WORLD_VOLUME];
-//    uint world_copy[WORLD_VOLUME];
-//    uint world_blocks_to_update[MAX_WORLD_BLOCKS_TO_UPDATE];
-//    uint world_blocks_to_update_copy[MAX_WORLD_BLOCKS_TO_UPDATE];
-//    uint blocks_to_be_inserted_or_removed[MAX_BLOCKS_TO_BE_INSERTED_OR_REMOVED];
-//    GlobalMutables global_mutables;
-//    float persistent_floats[MAX_PERSISTENT_FLOATS];
-//    NeuralNetLayerHidden neural_net_layers[MAX_NEURAL_NET_LAYERS];
-//    Face faces_to_be_inserted[MAX_FACES_TO_BE_INSERTED];
-//    uint faces_to_be_removed[MAX_FACES_TO_BE_REMOVED];
-//};
+
 
 uint chunk_pos_into_chunk_idx(uint x, uint z) {
     return z * CHUNKS_X + x;
@@ -254,8 +213,10 @@ uvec2 new_face(uvec3 block_position_relative_to_chunk, uint orientation, uint ch
 #define DISPATCH_INDIRECT_UPDATE_AMBIENCE 4
 #define DISPATCH_INDIRECT_UPDATE_AMBIENCE_FACES 5
 #define DISPATCH_INDIRECT_UPDATE_AMBIENCE_FLUSH_WORLD_COPY 5
-#define DISPATCH_INDIRECT_UPDATE_PER_BLOCKS_TO_BE_INSERTED_OR_REMOVED 5
-#define DISPATCH_INDIRECT_LEN 6
+#define DISPATCH_INDIRECT_PER_BLOCKS_TO_BE_INSERTED_OR_REMOVED 5
+#define DISPATCH_INDIRECT_PER_LIDAR 6
+#define DISPATCH_INDIRECT_UPDATE_ENTITY_LIDARS 6
+#define DISPATCH_INDIRECT_LEN 7
 #define DRAW_INDIRECT_BONES 0
 #define DRAW_INDIRECT_BLOCK 1
 #define DRAW_INDIRECT_PARTICLES 2
@@ -364,6 +325,64 @@ bool is_block_active(const BlockProp block_prop){
 #define NO_OF_TRAVERSABLE_BLOCKS 3 // every traversable block (mobs can pass through it without colliding) is transparent but the opposite may not necessarily hold
 #define NO_OF_TRANSPARENT_BLOCKS 7 // The blocks are aligned in such a way that transparent blocks come first. Hence in
 // order to check whether a block is transparent or not, it's enough to just check if its ID is below this value
+
+#define ENTITY_LIDAR_COUNT 32
+#define HTM_INPUT_SIZE (ENTITY_LIDAR_COUNT)*(BLOCKS_LEN)
+#define HTM_MINICOLUMNS 64
+#define HTM_POTENTIAL_POOL_SPARSITY 0.4 // the fraction of input that constitutes potential pool of a minicolumn
+#define HTM_TOTAL_FEEDFORWARD_CONNECTIONS uint(HTM_INPUT_SIZE*HTM_POTENTIAL_POOL_SPARSITY)
+#define HTM_FEEDFORWARD_CONNECTIONS_PER_MINICOLUMN 32
+#define ENTITY_BLOCK_SLOTS 8
+#define HTM_MINICOLUMN_LAYERS 6
+#define HTM_PERMANENCE_THRESHOLD 0.1
+#define HTM_LIMIT_OF_MINICOLUMNS_TO_ACTIVATE HTM_MINICOLUMNS/8
+#define HTM_PERMAMENCE_DECREMENT -0.04
+#define HTM_PERMAMENCE_INCREMENT 0.08
+#define HTM_MAX_SEGMENTS 4
+#define HTM_CONTEXT_CONNECTIONS_PER_MINICOLUMN 16
+struct Lidar {
+    vec3 direction;//maximal length of lidar is equal to the magnitude of this vector
+    uint prev_block_idx;
+    uint hit_block_idx;
+    uint hit_block_id;
+    uint hit_entity_id;
+    uint parent_entity_id; // entity that this lidar belongs to
+};
+
+
+
+struct HtmFeedforwardConnection{
+    uint minicolumn_id;
+    float permanence;
+    uint input_id;
+};
+struct HtmContextConnection{
+    uint minicolumn_id;
+    float permanence;
+    uint segment_id;
+};
+struct HtmMinicolumn{
+    uint active_layer; // there can be only one active neuron in each minicolumns, except when the columns is bursting.
+    // Bursting is represented with number HTM_MINICOLUMN_LAYERS. If the minicolumn is not active then the value is HTM_MINICOLUMN_LAYERS+1
+    HtmContextConnection[HTM_CONTEXT_CONNECTIONS_PER_MINICOLUMN] context_connections;
+    uint[HTM_FEEDFORWARD_CONNECTIONS_PER_MINICOLUMN] feedforward_connection_indices;
+};
+struct HtmInput{
+    bool is_active;
+    uint feedforward_connections_offset;
+    uint feedforward_connections_len;
+};
+struct Entity{
+    uint[ENTITY_LIDAR_COUNT] lidars;
+    HtmFeedforwardConnection[HTM_TOTAL_FEEDFORWARD_CONNECTIONS] htm_feedforward_connections;
+    HtmMinicolumn[HTM_MINICOLUMNS] htm_minicolumns;
+    HtmInput[HTM_INPUT_SIZE] htm_inputs;
+    uint bone_idx;
+    uint main;
+    float energy;
+    float speed;
+    float max_speed;
+};
 
 #define new_block_prop_regular_changing_transparent(texture_id, opacity, mass, falls_down, falls_adjacent, change_rate) BlockProp(uint[6](texture_id,texture_id,texture_id,texture_id,texture_id,texture_id),opacity,mass, falls_down, falls_adjacent, change_rate)
 #define new_block_prop_regular_transparent(texture_id, opacity, mass) BlockProp(uint[6](texture_id,texture_id,texture_id,texture_id,texture_id,texture_id),opacity,mass, false, false, AMBIENCE_MAX_TIME_TICK)

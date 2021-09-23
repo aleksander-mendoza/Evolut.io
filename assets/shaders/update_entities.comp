@@ -1,0 +1,142 @@
+#version 450
+#extension GL_EXT_debug_printf : enable
+#extension GL_KHR_shader_subgroup_basic : enable
+
+#define IS_AVAILABLE_BUFFER_LIDARS
+#define IS_AVAILABLE_BUFFER_ENTITIES
+#define IS_AVAILABLE_BUFFER_GLOBAL_MUTABLES
+#define IS_AVAILABLE_BUFFER_BONES
+#define IS_AVAILABLE_BUFFER_WORLD
+#define IS_AVAILABLE_BUFFER_COLLISION_GRID
+
+#include "descriptors_compute.comp"
+
+layout (local_size_x_id = GROUP_SIZE_CONST_ID) in;
+
+#include "utils.comp"
+
+shared int[HTM_MINICOLUMNS] htm_overlap_per_minicolumn;
+/*This array holds the number of minicolumns per each overlap level.
+More precisely
+minicolumns_per_overlap[overlap_value] = number_of_columns_with_overlap_greater_than_the_overlap_value
+Notice that the maximum number of connections is HTM_FEEDFORWARD_CONNECTIONS_PER_MINICOLUMN,
+which puts a hard cap on the maximum value of overlap.*/
+shared int[HTM_FEEDFORWARD_CONNECTIONS_PER_MINICOLUMN+1] minicolumns_per_overlap;
+const uint INPUTS_PER_THREAD = (ENTITY_LIDAR_COUNT+GROUP_SIZE-1)/GROUP_SIZE;
+shared uint[HTM_LIMIT_OF_MINICOLUMNS_TO_ACTIVATE] active_minicolumns;
+shared uint active_minicolumns_idx;
+void main() {
+    const uint entity_id = gl_WorkGroupID.x;
+    const uint lID = gl_LocalInvocationID.x;
+    const uint entities_count = global_mutables.entities;
+    if (entity_id < entities_count){
+        for(uint i=lID;i<=HTM_FEEDFORWARD_CONNECTIONS_PER_MINICOLUMN;i+=GROUP_SIZE){
+            minicolumns_per_overlap[i] = 0;
+        }
+        for(uint i=lID;i<HTM_MINICOLUMNS;i+=GROUP_SIZE) {
+            htm_overlap_per_minicolumn[i] = 0;
+        }
+        const Entity entity = entities[entity_id];
+        const Bone bone = bones[entity.bone_idx];
+        uint[INPUTS_PER_THREAD] input_indices;
+        const int inputs_per_this_thread = (ENTITY_LIDAR_COUNT+GROUP_SIZE-1-lID)/GROUP_SIZE;
+        for(uint i=0;i<inputs_per_this_thread;i++){
+            const uint j=i*GROUP_SIZE+lID;
+            //@assert j < ENTITY_LIDAR_COUNT;
+            const Lidar lidar = lidars[entity.lidars[j]];
+            input_indices[i] = j*BLOCKS_LEN + lidar.hit_block_id;
+        }
+        for(int i = 0;i<inputs_per_this_thread;i++){
+            const uint htm_input_idx = input_indices[i];
+            const HtmInput htm_input = entity.htm_inputs[htm_input_idx];
+            entities[entity_id].htm_inputs[htm_input_idx].is_active = true;
+            for(int j=0;j<htm_input.feedforward_connections_len;j++){
+                const uint connection_idx = htm_input.feedforward_connections_offset+j;
+                const HtmFeedforwardConnection connection = entity.htm_feedforward_connections[connection_idx];
+                if(connection.permanence>HTM_PERMANENCE_THRESHOLD){
+                    uint overlap_value_minus_one = atomicAdd(htm_overlap_per_minicolumn[connection.minicolumn_id],1);
+                    atomicAdd(minicolumns_per_overlap[overlap_value_minus_one], 1);
+                }
+            }
+        }
+        subgroupBarrier(); // notice that on most graphics cards the threads within one subgroup will all share the same instruction pointer
+        // hence they will never get out of sync and the subgroupBarrier(); will have no effect. This barrier is only
+        // necessary on RTX and similar cards, that allow all threads to diverge.
+        uint max_overlap=0;
+        for(uint i=lID;i<HTM_FEEDFORWARD_CONNECTIONS_PER_MINICOLUMN && minicolumns_per_overlap[i]>0;i+=GROUP_SIZE){
+            max_overlap = i;
+        }
+        max_overlap = subgroupMax(max_overlap)+1; // implicit subgroupBarrier();
+        // up until this point we had
+        // minicolumns_per_overlap[overlap_value] = number_of_columns_with_overlap_greater_than_the_overlap_value
+        // now we are going to change it to
+        // minicolumns_per_overlap[overlap_value] = number_of_columns_with_overlap_equal_to_this_value
+        for(int i=int(max_overlap)-int(lID);i>0;i-=GROUP_SIZE){
+            const int number_of_columns_with_overlap_equal_to_this_value = minicolumns_per_overlap[i-1] - minicolumns_per_overlap[i];
+            subgroupBarrier();
+            minicolumns_per_overlap[i] = number_of_columns_with_overlap_equal_to_this_value;
+        }
+        subgroupBarrier();
+        //notice that now querying minicolumns_per_overlap[0] makes no sense
+        int smallest_overlap_value_included_among_top=int(max_overlap);
+        if(lID==0){
+            for(int sum=0;smallest_overlap_value_included_among_top>0;smallest_overlap_value_included_among_top--){
+                int minicolumns = minicolumns_per_overlap[smallest_overlap_value_included_among_top];
+                int new_sum = sum+minicolumns;
+                if(new_sum>=HTM_LIMIT_OF_MINICOLUMNS_TO_ACTIVATE){
+                    minicolumns_per_overlap[smallest_overlap_value_included_among_top] = HTM_LIMIT_OF_MINICOLUMNS_TO_ACTIVATE-sum;
+                    break;
+                }
+                sum = new_sum;
+            }
+            active_minicolumns_idx = 0; // initialize it, because we will use it in a moment
+        }
+        subgroupBarrier();
+        for(uint i=lID;i<smallest_overlap_value_included_among_top;i+=GROUP_SIZE){
+            minicolumns_per_overlap[i] = 0; // HTM neurons are activated by some input signal.
+            // The policy is to always only activate a certain number of the neurons with highest
+            // overlap value. Hence at this point minicolumns_per_overlap will hold information
+            // about the number of minicolumns to include from each overlap level.
+            // minicolumns_per_overlap[overlap_value] = number_of_minicolumns_that_have_this_overlap_and_qualify_to_the_top_X_activated_minicolumns
+        }
+        subgroupBarrier();
+        for(int i = 0;i<inputs_per_this_thread;i++){
+            const uint htm_input_idx = input_indices[i];
+            const HtmInput htm_input = entity.htm_inputs[htm_input_idx];
+            for(int j=0;j<htm_input.feedforward_connections_len;j++){
+                const uint connection_idx = htm_input.feedforward_connections_offset+j;
+                const HtmFeedforwardConnection connection = entity.htm_feedforward_connections[connection_idx];
+                if(connection.permanence>HTM_PERMANENCE_THRESHOLD){
+                    const int overlap_value = htm_overlap_per_minicolumn[connection.minicolumn_id];
+                    if(minicolumns_per_overlap[overlap_value]>0){
+                        if(overlap_value==atomicCompSwap(htm_overlap_per_minicolumn[connection.minicolumn_id], overlap_value, 0)){
+                            atomicSub(minicolumns_per_overlap[overlap_value],1);
+                            const uint active_idx = atomicAdd(active_minicolumns_idx, 1);
+                            active_minicolumns[active_idx] = connection.minicolumn_id;
+                        }
+                    }
+                }
+            }
+        }
+        subgroupBarrier();
+        const uint number_of_active_minicolumns = active_minicolumns_idx; //cache this value
+        // At this point htm_top_minicolumns[0..HTM_LIMIT_OF_MINICOLUMNS_TO_ACTIVATE] will hold the minicolumns with most overlap with input
+        // Now we need to determine which of the active minicolumns were in predictive state
+        for(uint i=lID;number_of_active_minicolumns;i+=GROUP_SIZE){
+            const uint active_minicolumn_id = htm_top_minicolumns[i];
+            const HtmMinicolumn active_minicolumn = entity.htm_minicolumns[active_minicolumn_id];
+
+            for(uint j=0;j<active_minicolumn.feedforward_connections_len;j++){
+                const uint conn_id = active_minicolumn.feedforward_connections_offset + j;
+                const HtmFeedforwardConnection conn = entity.htm_feedforward_connections[conn_id];
+                const bool is_input_active = entities[entity_id].htm_inputs[conn.input_id].is_active;
+                const float permamence_change = is_input_active ? HTM_PERSISTENCE_INCREMENT : HTM_PERSISTENCE_DECREMENT;
+                entities[entity_id].htm_feedforward_connections[conn_id].permamence = clamp(conn.permamence+permamence_change,0,1);
+            }
+        }
+
+        for(int i = 0;i<inputs_per_this_thread;i++){
+            entities[entity_id].htm_inputs[input_indices[i]].is_active = false;
+        }
+    }
+}

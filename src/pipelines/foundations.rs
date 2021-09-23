@@ -18,7 +18,7 @@ use crate::render::subbuffer::SubBuffer;
 use crate::pipelines::constraint::Constraint;
 use crate::render::buffer::Buffer;
 use crate::pipelines::global_mutables::GlobalMutables;
-use crate::blocks::{WorldSize, Block, Face, WorldBlocks, WorldFaces};
+use crate::blocks::{WorldSize, Block, Face, WorldBlocks, WorldFaces, HeightMap};
 use crate::render::sampler::Sampler;
 use crate::pipelines::bone::Bone;
 use crate::blocks::block_properties::{BLOCKS, BlockProp, BEDROCK, DIRT, GRASS, GLASS, PLANK, AIR, STONE, WATER};
@@ -34,6 +34,8 @@ use crate::render::host_buffer::HostBuffer;
 use crate::pipelines::player_event::PlayerEvent;
 use crate::render::compute::{ComputeDescriptorsBuilder, ComputeDescriptors};
 use crate::render::specialization_constants::SpecializationConstants;
+use crate::neat::entity::{Entity, ENTITY_MAX_LIDAR_COUNT};
+use crate::neat::lidar::Lidar;
 
 pub struct Indirect {
     update_particles: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
@@ -42,6 +44,7 @@ pub struct Indirect {
     feed_forward_net: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
     update_ambience: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
     per_blocks_to_be_inserted_or_removed: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
+    per_lidar: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
     draw_bones: SubBuffer<vk::DrawIndirectCommand, GpuIndirect>,
     draw_blocks: SubBuffer<vk::DrawIndirectCommand, GpuIndirect>,
     draw_particles: SubBuffer<vk::DrawIndirectCommand, GpuIndirect>,
@@ -56,11 +59,13 @@ impl Indirect {
         let feed_forward_net = indirect_dispatch.gpu().element(3);
         let update_ambience = indirect_dispatch.gpu().element(4);
         let per_blocks_to_be_inserted_or_removed = indirect_dispatch.gpu().element(5);
+        let per_lidar = indirect_dispatch.gpu().element(6);
 
         let draw_bones = indirect_draw.gpu().element(0);
         let draw_blocks = indirect_draw.gpu().element(1);
         let draw_particles = indirect_draw.gpu().element(2);
         Self {
+            per_lidar,
             super_indirect_buffer,
             update_particles,
             per_bone,
@@ -72,6 +77,9 @@ impl Indirect {
             update_ambience,
             per_blocks_to_be_inserted_or_removed,
         }
+    }
+    pub fn update_entity_lidars(&self)->&SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>{
+        &self.per_lidar
     }
     pub fn update_ambience(&self)->&SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>{
         &self.update_ambience
@@ -122,6 +130,8 @@ pub struct FoundationInitializer {
     world: Submitter<StageSubBuffer<Block, Cpu, Storage>>,
     faces: Submitter<StageSubBuffer<Face, Cpu, Storage>>,
     face_count_per_chunk_buffer: SubBuffer<Face, Storage>,
+    entities_buffer: SubBuffer<Entity, Storage>,
+    lidars_buffer: SubBuffer<Lidar, Storage>,
     opaque_and_transparent_face_buffer: SubBuffer<Face, Storage>,
     world_copy: Submitter<StageSubBuffer<Block, Cpu, Storage>>,
     tmp_faces_copy: Submitter<SubBuffer<u32, Storage>>,
@@ -157,6 +167,8 @@ struct FoundationsCapacity {
     max_faces_to_be_inserted: u64,
     max_faces_to_be_removed: u64,
     max_sensors: u64,
+    max_entities: u64,
+    max_lidars: u64,
 }
 
 impl FoundationsCapacity {
@@ -164,6 +176,7 @@ impl FoundationsCapacity {
         let world_size = WorldSize::new(x, z);
         let faces_to_be_inserted_chunk_capacity = 128;
         let faces_to_be_removed_chunk_capacity = 128;
+        let max_entities = 128u64;
         Self {
             faces_to_be_inserted_chunk_capacity,
             faces_to_be_removed_chunk_capacity,
@@ -179,6 +192,8 @@ impl FoundationsCapacity {
             max_faces_to_be_inserted: faces_to_be_inserted_chunk_capacity as u64 * 2 * world_size.total_chunks() as u64,
             max_faces_to_be_removed: faces_to_be_removed_chunk_capacity as u64 * 2 * world_size.total_chunks() as u64,
             max_sensors: 0u64,
+            max_entities,
+            max_lidars: max_entities*ENTITY_MAX_LIDAR_COUNT as u64,
             max_faces_copy: 1024u64 * world_size.total_chunks() as u64,
             world_size,
         }
@@ -188,91 +203,6 @@ impl FoundationsCapacity {
     }
 }
 
-const SUBSTRATE_IN_DIM: usize = 2;
-const SUBSTRATE_OUT_DIM: usize = 2;
-const SUBSTRATE_WEIGHT_DIM: usize = 1;
-
-struct ZombieNeat<X: Num> {
-    substrate_in_positions: Vec<[X; SUBSTRATE_IN_DIM]>,
-    substrate_out_positions: Vec<[X; SUBSTRATE_OUT_DIM]>,
-    neat: Neat<X>,
-    population: Vec<ZombieBrain<X>>,
-}
-
-impl<X: Num> ZombieNeat<X> {
-    fn into_brain(zombie: Zombie, cppn: CPPN<X>,
-                  cmd_pool: &CommandPool,
-                  substrate_in_positions: &Vec<[X; SUBSTRATE_IN_DIM]>,
-                  substrate_out_positions: &Vec<[X; SUBSTRATE_OUT_DIM]>,
-                  persistent_floats_buffer: &SubBuffer<X, Storage>) -> Result<ZombieBrain<X>, vk::Result> {
-        let net = cppn.build_feed_forward_net();
-        let mut weights = Vec::with_capacity(zombie.weights_len as usize);
-        for i in 0..(zombie.sensors_len + zombie.recurrent_len) as usize {
-            for o in 0..(zombie.muscles_constraints_len + zombie.recurrent_len) as usize {
-                let mut weight = [X::zero()];
-                net.run(&[substrate_in_positions[i][0], substrate_in_positions[i][1],
-                    substrate_out_positions[o][0], substrate_out_positions[o][1]], &mut weight);
-                weights.push(weight[0]);
-            }
-        }
-
-        let buff = StageBuffer::wrap(cmd_pool, weights.as_slice(), persistent_floats_buffer.sub_elem(zombie.weights_offset as u64, zombie.weights_len as u64))?;
-        Ok(ZombieBrain { zombie, cppn, buff })
-    }
-    fn new(zombies: Vec<Zombie>, cmd_pool: &CommandPool, persistent_floats: &SubBuffer<X, Storage>) -> Result<Self, vk::Result> {
-        let substrate_in_positions = (0..zombies[0].sensors_len + zombies[0].recurrent_len).map(|_| {
-            let mut arr = [X::zero(); SUBSTRATE_IN_DIM];
-            for a in &mut arr { *a = X::random() }
-            arr
-        }).collect::<Vec<[X; SUBSTRATE_IN_DIM]>>();
-        let substrate_out_positions = (0..zombies[0].muscles_constraints_len + zombies[0].recurrent_len).map(|_| {
-            let mut arr = [X::zero(); SUBSTRATE_IN_DIM];
-            for a in &mut arr { *a = X::random() }
-            arr
-        }).collect::<Vec<[X; SUBSTRATE_OUT_DIM]>>();
-        let mut neat = Neat::new(vec![X::ACT_FN_ABS, X::ACT_FN_SIN, X::ACT_FN_CONST_1, X::ACT_FN_TANH, X::ACT_FN_GAUSSIAN, X::ACT_FN_SQUARE], SUBSTRATE_IN_DIM + SUBSTRATE_OUT_DIM, SUBSTRATE_WEIGHT_DIM);
-        let mut cppns = neat.new_cppns(zombies.len());
-        for _ in 0..32 {
-            for cppn in &mut cppns {
-                neat.mutate(cppn, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1);
-            }
-        }
-        // println!("{}",cppns[0]);
-        let zombies: Result<Vec<ZombieBrain<X>>, vk::Result> = zombies.into_iter().zip(cppns.into_iter()).map(|(z, c)| Self::into_brain(z, c,
-                                                                                                                                        cmd_pool,
-                                                                                                                                        &substrate_in_positions,
-                                                                                                                                        &substrate_out_positions,
-                                                                                                                                        persistent_floats,
-        )).collect();
-        let population = zombies?;
-        // println!("{:?}",(&population[0]).buff.as_slice());
-        Ok(Self {
-            substrate_in_positions,
-            substrate_out_positions,
-            neat,
-            population,
-        })
-    }
-}
-
-struct Zombie {
-    solid_offset: u32,
-    phantom_offset: u32,
-    weights_offset: u32,
-    weights_len: u32,
-    sensors_offset: u32,
-    sensors_len: u32,
-    recurrent_offset: u32,
-    recurrent_len: u32,
-    muscles_constraints_offset: u32,
-    muscles_constraints_len: u32,
-}
-
-struct ZombieBrain<X: Num> {
-    zombie: Zombie,
-    cppn: CPPN<X>,
-    buff: Submitter<StageSubBuffer<X, Cpu, Storage>>,
-}
 
 struct FoundationsData {
     world_blocks: WorldBlocks,
@@ -280,6 +210,7 @@ struct FoundationsData {
     world_faces: WorldFaces,
     constraints_data: Vec<Constraint>,
     bone_data: Vec<Bone>,
+    entity_data: Vec<Entity>,
     sensor_data: Vec<Sensor>,
     muscle_data: Vec<Muscle>,
     block_properties_data: Vec<BlockProp>,
@@ -287,43 +218,8 @@ struct FoundationsData {
     persistent_floats_len: u32,
 }
 
-struct HeightMap {
-    heights: Vec<usize>,
-    world_size: WorldSize,
-}
 
-impl HeightMap {
-    pub fn new(world_size: WorldSize, mean: f32, variance: f32) -> Self {
-        let mut heights = Vec::with_capacity(world_size.world_area());
-        unsafe {
-            heights.set_len(world_size.world_area());
-        }
-        let size_with_margins = WorldSize::new(world_size.width() + 2, world_size.depth() + 2);
-        let chunk_heights: Vec<f32> = (0..size_with_margins.total_chunks()).map(|_| mean + f32::random() * variance).collect();
-        for x in 0..world_size.world_width() {
-            for z in 0..world_size.world_depth() {
-                let pos_with_margins_x = x + CHUNK_WIDTH;
-                let pos_with_margins_z = z + CHUNK_DEPTH;
-                let radius_x = CHUNK_WIDTH / 2 - 1;
-                let radius_z = CHUNK_DEPTH / 2 - 1;
-                let fraction_x = ((pos_with_margins_x as f32 + 0.5 - CHUNK_WIDTH as f32 / 2f32) / (CHUNK_WIDTH as f32)).fract();
-                let fraction_z = ((pos_with_margins_z as f32 + 0.5 - CHUNK_DEPTH as f32 / 2f32) / (CHUNK_DEPTH as f32)).fract();
-                let neighbour_height_right_top = chunk_heights[size_with_margins.block_pos_into_chunk_idx(pos_with_margins_x + radius_x, pos_with_margins_z + radius_z)];
-                let neighbour_height_right_bottom = chunk_heights[size_with_margins.block_pos_into_chunk_idx(pos_with_margins_x + radius_x, pos_with_margins_z - radius_z)];
-                let neighbour_height_left_top = chunk_heights[size_with_margins.block_pos_into_chunk_idx(pos_with_margins_x - radius_x, pos_with_margins_z + radius_z)];
-                let neighbour_height_left_bottom = chunk_heights[size_with_margins.block_pos_into_chunk_idx(pos_with_margins_x - radius_x, pos_with_margins_z - radius_z)];
-                let height_left = fraction_z.smoothstep_between(neighbour_height_left_bottom, neighbour_height_left_top);
-                let height_right = fraction_z.smoothstep_between(neighbour_height_right_bottom, neighbour_height_right_top);
-                let height = fraction_x.smoothstep_between(height_left, height_right) as usize;
-                heights[world_size.block_pos_xz_into_world_idx(x, z)] = height;
-            }
-        }
-        Self { heights, world_size }
-    }
-    pub fn height(&self, x: usize, z: usize) -> usize {
-        self.heights[self.world_size.block_pos_xz_into_world_idx(x, z)]
-    }
-}
+
 
 impl FoundationsData {
     pub fn new(cap: &FoundationsCapacity) -> Self {
@@ -334,6 +230,7 @@ impl FoundationsData {
             constraints_data: vec![],
             world_blocks_to_update: vec![],
             bone_data: vec![],
+            entity_data: vec![],
             sensor_data: vec![],
             muscle_data: vec![],
             neural_net_layer_data: vec![],
@@ -343,22 +240,7 @@ impl FoundationsData {
     }
 
 
-    fn setup_world_blocks(&mut self, heights: &HeightMap, sea_level: usize) {
-        let size_with_margins = WorldSize::new(self.world_blocks.size().width() + 2, self.world_blocks.size().depth() + 2);
-        for x in 0..self.world_blocks.size().world_width() {
-            for z in 0..self.world_blocks.size().world_depth() {
-                let height = heights.height(x, z);
-                self.world_blocks.fill_column_to(x, 1, z, height - 4, STONE);
-                self.world_blocks.fill_column_to(x, height - 4, z, height, DIRT);
-                if height < sea_level {
-                    self.world_blocks.fill_column_to(x, height, z, sea_level + 1, WATER);
-                } else {
-                    self.world_blocks.set_block(x, height, z, GRASS);
-                }
-            }
-        }
-        self.world_blocks.fill_level(0, 1, BEDROCK);
-    }
+
     fn setup_world_faces(&mut self) {
         let Self { world_blocks, world_faces, .. } = self;
         world_faces.generate_faces(world_blocks);
@@ -374,7 +256,11 @@ impl FoundationsData {
             dummy2: 0,
             held_bone_idx: 0,
             world_blocks_to_update: [0,0],
+            entities: 0,
             ambience_tick: 0,
+            lidars: 0,
+            dummy1: 0,
+            dummy3: 0
         }
     }
 }
@@ -430,14 +316,14 @@ impl FoundationInitializer {
     }
 
     pub fn new(cmd_pool: &CommandPool) -> Result<Self, failure::Error> {
-        let cap = FoundationsCapacity::new(2,2);
+        let cap = FoundationsCapacity::new(3,3);
         let mut data = FoundationsData::new(&cap);
-        let heights = HeightMap::new(cap.world_size, 100., 32.);
+        let heights = HeightMap::new(cap.world_size);
         // data.world_blocks.set_block(15,128,15,DIRT);
         // data.world_blocks.set_block(8,127,4,DIRT);
         // data.world_blocks.set_block(15,127,15,STONE);
         // data.world_blocks.set_block(15,126,14,STONE);
-        data.setup_world_blocks(&heights, 112);
+        heights.setup_world_blocks(&mut data.world_blocks);
         data.setup_world_faces();
         // data.particle_data.extend((0..64).map(|_| Particle::random()));
         for _ in 0..8 {
@@ -472,6 +358,8 @@ impl FoundationInitializer {
         let global_mutables_in_bytes = std::mem::size_of_val(&mutables) as u64;
         let persistent_floats_in_bytes = std::mem::size_of::<f32>() as u64 * cap.max_persistent_floats;
         let neural_net_layers_in_bytes = std::mem::size_of::<NeuralNetLayer>() as u64 * cap.max_neural_net_layers;
+        let entities_in_bytes = std::mem::size_of::<Entity>() as u64 * cap.max_entities;
+        let lidars_in_bytes = std::mem::size_of::<Lidar>() as u64 * cap.max_lidars;
         let faces_to_be_inserted_in_bytes = std::mem::size_of::<Face>() as u64 * cap.max_faces_to_be_inserted;
         let faces_to_be_removed_in_bytes = std::mem::size_of::<u32>() as u64 * cap.max_faces_to_be_removed;
 
@@ -488,7 +376,9 @@ impl FoundationInitializer {
                                                                                 persistent_floats_in_bytes +
                                                                                 neural_net_layers_in_bytes +
                                                                                 faces_to_be_inserted_in_bytes +
-                                                                                faces_to_be_removed_in_bytes,
+                                                                                faces_to_be_removed_in_bytes +
+                                                                                entities_in_bytes +
+                                                                                lidars_in_bytes
         )?;
         let offset = 0;
         let bones_buffer = super_buffer.sub(offset..offset + bones_in_bytes).reinterpret_into::<Bone>();
@@ -530,8 +420,12 @@ impl FoundationInitializer {
         let faces_to_be_removed_buffer = super_buffer.sub(offset..offset + faces_to_be_removed_in_bytes).reinterpret_into::<u32>();
         let offset = offset + faces_to_be_removed_in_bytes;
         assert_eq!(offset % 16, 0);
-
-        println!("{:?}",data.bone_data[0]);
+        let entities_buffer = super_buffer.sub(offset..offset + entities_in_bytes).reinterpret_into::<Entity>();
+        let offset = offset + entities_in_bytes;
+        assert_eq!(offset % 16, 0);
+        let lidars_buffer = super_buffer.sub(offset..offset + lidars_in_bytes).reinterpret_into::<Lidar>();
+        let offset = offset + lidars_in_bytes;
+        assert_eq!(offset % 16, 0);
 
         let mut tmp_faces_copy = Submitter::new(tmp_faces_copy_buffer, cmd_pool)?;
         fill_zeros_submit(&mut tmp_faces_copy)?;
@@ -580,6 +474,7 @@ impl FoundationInitializer {
             },
             dispatch_indirect(0),// update_ambience.comp
             dispatch_indirect(0),// update_ambience_faces.comp, update_ambience_flush_world_copy.comp
+            dispatch_indirect(0),// update_entity_lidars.comp
         ];
         let indirect_draw_data = vec![
             draw_indirect(36, data.bone_data.len() as u32),// bones.vert
@@ -618,7 +513,7 @@ impl FoundationInitializer {
         specialization_constants.entry_float(102,1.0);//PHYSICS_SIMULATION_DELTA_TIME_PER_STEP
         specialization_constants.entry_float(103,0.01);//BONE_COLLISION_FORCE_PER_AREA_UNIT
         specialization_constants.entry_float(104,0.2);//IMPULSE_AVERAGING_OVER_TIMESETP
-        specialization_constants.entry_float(105,0f32);//GRAVITY
+        specialization_constants.entry_float(105,0.001f32);//GRAVITY
         specialization_constants.entry_float(106,0.99);//DAMPING_COEFFICIENT
 
         specialization_constants.entry_uint(300,cap.max_bones as u32);//MAX_BONES
@@ -631,7 +526,8 @@ impl FoundationInitializer {
         specialization_constants.entry_uint(307,cap.max_blocks_to_be_inserted_or_removed as u32);//MAX_BLOCKS_TO_BE_INSERTED_OR_REMOVED
         specialization_constants.entry_uint(308,cap.max_faces_to_be_inserted as u32);//MAX_FACES_TO_BE_INSERTED
         specialization_constants.entry_uint(309,cap.max_faces_to_be_removed as u32);//MAX_FACES_TO_BE_REMOVED
-
+        specialization_constants.entry_uint(310,cap.max_entities as u32);//MAX_ENTITIES
+        specialization_constants.entry_uint(311,cap.max_lidars as u32);//MAX_LIDARS
         Ok(Self {
             specialization_constants,
             face_count_per_chunk_buffer,
@@ -643,6 +539,8 @@ impl FoundationInitializer {
             sampler,
             world_blocks_to_update: world_blocks_to_update_buffer,
             player_event_uniform,
+            entities_buffer,
+            lidars_buffer,
             persistent_floats,
             neural_net_layers,
             collision_grid: grid_buffer,
@@ -661,6 +559,8 @@ impl FoundationInitializer {
         let Self {
             specialization_constants,
             face_count_per_chunk_buffer,
+            entities_buffer ,
+            lidars_buffer,
             opaque_and_transparent_face_buffer,
             faces,
             world_copy,
@@ -712,11 +612,15 @@ impl FoundationInitializer {
             global_mutables,
             indirect,
             sampler,
+            entities_buffer ,
+            lidars_buffer,
         })
     }
 }
 
 pub struct Foundations {
+    entities_buffer: SubBuffer<Entity, Storage>,
+    lidars_buffer: SubBuffer<Lidar, Storage>,
     specialization_constants: SpecializationConstants,
     faces: SubBuffer<Face, Storage>,
     face_count_per_chunk_buffer: SubBuffer<Face, Storage>,
@@ -740,6 +644,12 @@ pub struct Foundations {
 }
 
 impl Foundations {
+    pub fn entities_buffer(&self)-> &SubBuffer<Entity, Storage>{
+        &self.entities_buffer
+    }
+    pub fn lidars_buffer(&self)-> &SubBuffer<Lidar, Storage>{
+        &self.lidars_buffer
+    }
     pub fn specialization_constants(&self) -> &SpecializationConstants{
         &self.specialization_constants
     }

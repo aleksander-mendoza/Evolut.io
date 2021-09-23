@@ -6,7 +6,9 @@ mod face_orientation;
 pub mod world_size;
 mod raycast;
 mod world_faces;
+mod height_map;
 
+pub use height_map::HeightMap;
 pub use block::Block;
 pub use face::Face;
 pub use face_orientation::FaceOrientation;

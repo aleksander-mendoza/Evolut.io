@@ -41,6 +41,53 @@ RayCastResult ray_cast(vec3 start, vec3 distance_and_direction) {
 #endif //IS_AVAILABLE_BUFFER_WORLD
 
 
+#ifdef IS_AVAILABLE_BUFFER_BONES
+#ifdef IS_AVAILABLE_BUFFER_COLLISION_GRID
+
+uint ray_intersect_any_bone_in_cell(vec3 start, vec3 distance_and_direction, const CollisionCell cell) {
+    for(uint i=0;i<cell.len;i++){
+        const uint bone_idx = cell.contents[i];
+        if(is_ray_intersecting_bone(start,distance_and_direction,bones[bone_idx])){
+            return bone_idx;
+        }
+    }
+    return 0xFFFFFFFF;
+}
+
+uint ray_bone_intersect(vec3 start, vec3 distance_and_direction) {
+    //First we perform linear transformation from the world-space to collision-grid-space
+    start /= BROAD_PHASE_CELL_SIZE;
+    distance_and_direction /= BROAD_PHASE_CELL_SIZE;
+    //current voxel boundary
+    vec3 v = floor(start);
+    uint intersected_bone_idx = ray_intersect_any_bone_in_cell(start,distance_and_direction,collision_grid[broad_phase_cell_pos_to_cell_idx( uvec3(v))]);
+    if(intersected_bone_idx < 0xFFFFFFFF) {
+        return intersected_bone_idx;
+    }
+    //final voxel boundary B
+    vec3 b = start + distance_and_direction;
+    vec3 bv = floor(b);
+    vec3 step = sign(distance_and_direction);
+    vec3 t_max = (max(step, 0) + v - start) / distance_and_direction; //notice that the signs will cancel out and the result will be positive
+    vec3 t_delta = step / distance_and_direction;//notice that the signs will cancel out. Division by zero will yield +inf
+
+    while(v != bv){
+        uint min_dim = min_vec3_component(t_max);
+        vec3 new_v = v;
+        new_v[min_dim] += step[min_dim];
+        intersected_bone_idx = ray_intersect_any_bone_in_cell(start,distance_and_direction,collision_grid[broad_phase_cell_pos_to_cell_idx( uvec3(new_v))]);
+        if(intersected_bone_idx < 0xFFFFFFFF) {
+            return intersected_bone_idx;
+        }
+        v = new_v;
+        t_max[min_dim] += t_delta[min_dim];
+    }
+    return 0xFFFFFFFF;
+}
+
+#endif //IS_AVAILABLE_BUFFER_COLLISION_GRID
+#endif //IS_AVAILABLE_BUFFER_BONES
+
 #ifdef IS_AVAILABLE_BUFFER_FACES
 #ifdef IS_AVAILABLE_BUFFER_WORLD
 uint remove_block_faces(const BlockProp p, uvec3 block_pos){

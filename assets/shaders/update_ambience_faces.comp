@@ -77,8 +77,9 @@ void main() {
                     remove_face(face_coords,neighbour_chunk_idx,neighbour_old_opacity);
                 }
                 if(!neighbour_had_face && neighbour_has_face && is_neighbour_unchanged){
-                    const uint neighbour_new_texture = BLOCK_PROPS[neighbour_block_new_id].texture_ids[face_orientation];
-                    const uint face_coords = block_pos_relative_to_chunk_and_orientation_into_face_coords(uvec4(neighbour_block_pos_relative_to_chunk,opposite_orientation(face_orientation)));
+                    const uint op_face = opposite_orientation(face_orientation);
+                    const uint neighbour_new_texture = BLOCK_PROPS[neighbour_block_new_id].texture_ids[op_face];
+                    const uint face_coords = block_pos_relative_to_chunk_and_orientation_into_face_coords(uvec4(neighbour_block_pos_relative_to_chunk,op_face));
                     insert_face(face_coords,neighbour_new_texture,neighbour_chunk_x,neighbour_chunk_z,neighbour_chunk_idx,neighbour_new_opacity);
                 }
                 if(i_had_face && !i_have_face){

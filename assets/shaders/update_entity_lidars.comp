@@ -1,0 +1,41 @@
+#version 450
+//#extension GL_EXT_debug_printf : enable
+
+#define IS_AVAILABLE_BUFFER_LIDARS
+#define IS_AVAILABLE_BUFFER_ENTITIES
+#define IS_AVAILABLE_BUFFER_GLOBAL_MUTABLES
+#define IS_AVAILABLE_BUFFER_BONES
+#define IS_AVAILABLE_BUFFER_WORLD
+#define IS_AVAILABLE_BUFFER_COLLISION_GRID
+
+
+#include "descriptors_compute.comp"
+
+layout (local_size_x_id = GROUP_SIZE_CONST_ID) in;
+
+#include "utils.comp"
+
+void main() {
+    uint gID = gl_GlobalInvocationID.x;
+    const uint lidar_count = global_mutables.lidars;
+    if (gID < lidar_count){
+        const Lidar lidar = lidars[gID];
+        const Entity parent = entities[lidar.parent_entity_id];
+        const Bone bone = bones[parent.bone_idx];
+        // bone.direction == new_z_axis
+        const vec3 new_x_axis = normalize(vec3(bone.direction.z,0,-bone.direction.x));
+        const vec3 new_y_axis = cross(bone.direction,new_x_axis);
+        const mat3 rotation = mat3(new_x_axis,new_y_axis,bone.direction);
+        const vec3 rotate_lidar_direction = rotation * lidar.direction;
+        const RayCastResult ray = ray_cast(bone.new_center, rotate_lidar_direction);
+        const uvec3 prev_block_pos = ray.found?uvec3(ray.prev_v):WORLD_BORDERS;
+        const uvec3 hit_block_pos = ray.found?uvec3(ray.v):WORLD_BORDERS;
+        const uint prev_block_idx = block_pos_into_world_idx(prev_block_pos);
+        const uint hit_block_idx = block_pos_into_world_idx(hit_block_pos);
+        const uint hit_block_id = world[hit_block_idx];
+        lidars[gID].prev_block_idx = prev_block_idx;
+        lidars[gID].hit_block_idx = hit_block_idx;
+        lidars[gID].hit_block_id = hit_block_id;
+        lidars[gID].hit_entity_id = ray_bone_intersect(bone.new_center, rotate_lidar_direction);
+    }
+}
