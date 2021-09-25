@@ -1,0 +1,67 @@
+#version 450
+#extension GL_EXT_debug_printf : enable
+#extension GL_KHR_shader_subgroup_basic : enable
+
+#define IS_AVAILABLE_BUFFER_LIDARS
+#define IS_AVAILABLE_BUFFER_ANN_ENTITIES
+#define IS_AVAILABLE_BUFFER_GLOBAL_MUTABLES
+#define IS_AVAILABLE_BUFFER_BONES
+#define IS_AVAILABLE_BUFFER_WORLD
+#define IS_AVAILABLE_BUFFER_COLLISION_GRID
+
+#include "descriptors_compute.comp"
+
+layout (local_size_x_id = GROUP_SIZE_CONST_ID) in;
+
+#include "utils.comp"
+
+shared float[ANN_MAX_SIZE] tmp1;
+shared float[ANN_MAX_SIZE] tmp2;
+
+void main() {
+    const uint entity_id = gl_WorkGroupID.x;
+    const uint lID = gl_LocalInvocationID.x;
+    const uint entities_count = global_mutables.ann_entities;
+    if (entity_id < entities_count){
+        const AnnEntity entity = ann_entities[entity_id];
+        const Bone bone = bones[entity.bone_idx];
+        const mat3 rotation = normal_vec3_to_rotation_matrix(bone.direction);
+
+        for(uint i=lID;i<entity.lidars.length;i+=GROUP_SIZE){
+            const vec3 rotated_lidar_direction = rotation * entity.lidars[i].direction;
+            const RayCastResult ray = ray_cast(bone.new_center, rotate_lidar_direction);
+            tmp1[i] = ray.ratio_of_traversed_length;
+        }
+        for(uint i = lID;i<entity.ann_hidden.length;i+=GROUP_SIZE){
+            const AnnSparseHiddenNeuron neuron = entity.ann_hidden[i];
+            float sum = neuron.bias;
+            for(uint j=0;j<neuron.incoming.length;j++){
+                sum += tmp1[neuron.incoming[j].src_neuron] * neuron.incoming[j].weight;
+            }
+            tmp2[i] = max(0,sum);//ReLU activation
+        }
+        for(uint i = lID;i<entity.ann_latent.length;i+=GROUP_SIZE){
+            const AnnSparseLatentNeuron neuron = entity.ann_latent[i];
+            float sum = neuron.bias;
+            for(uint j=0;j<neuron.incoming_from_hidden.length;j++){
+                sum += tmp2[neuron.incoming_from_hidden[j].src_neuron] * neuron.incoming_from_hidden[j].weight;
+            }
+            for(uint j=0;j<neuron.recurrent_from_latent.length;j++){
+                sum += entity.latent[neuron.recurrent_from_latent[j].src_neuron] * neuron.recurrent_from_latent[j].weight;
+            }
+            tmp1[i] = max(sum,0);//ReLU activation
+        }
+        for(uint i=lID;i<entity.latent.length;i+=GROUP_SIZE){
+            entity.latent[i] = tmp1[i];
+        }
+        for(uint i = lID;i<entity.ann_output.length;i+=GROUP_SIZE){
+            const AnnSparseHiddenNeuron neuron = entity.ann_output[i];
+            float sum = neuron.bias;
+            for(uint j=0;j<neuron.incoming.length;j++){
+                sum += tmp1[neuron.incoming[j].src_neuron] * neuron.incoming[j].weight;
+            }
+            tmp2[i] = max(0,sum);//ReLU activation
+        }
+
+    }
+}

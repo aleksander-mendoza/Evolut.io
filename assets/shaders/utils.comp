@@ -7,6 +7,7 @@
 
 struct RayCastResult{
     vec3 v;
+    float ratio_of_traversed_length; // traversed_length == length(distance_and_direction) * ratio_of_traversed_length
     vec3 prev_v;
     bool found;
 };
@@ -16,7 +17,7 @@ RayCastResult ray_cast(vec3 start, vec3 distance_and_direction) {
     //current voxel boundary
     vec3 v = floor(start);
     if(world[block_pos_into_world_idx( uvec3(v))]!=0) {
-        return RayCastResult(v,v,true);
+        return RayCastResult(v,0,v,true);
     }
     //final voxel boundary B
     vec3 b = start + distance_and_direction;
@@ -30,12 +31,12 @@ RayCastResult ray_cast(vec3 start, vec3 distance_and_direction) {
         vec3 new_v = v;
         new_v[min_dim] += step[min_dim];
         if(world[block_pos_into_world_idx(uvec3(new_v))]!=0){
-            return RayCastResult(new_v,v,true);
+            return RayCastResult(new_v,t_max[min_dim],v,true);
         }
-        v = new_v;
         t_max[min_dim] += t_delta[min_dim];
+        v = new_v;
     }
-    return RayCastResult(v,v,false);
+    return RayCastResult(v,1,v,false);
 }
 
 #endif //IS_AVAILABLE_BUFFER_WORLD

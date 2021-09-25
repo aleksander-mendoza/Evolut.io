@@ -1,7 +1,7 @@
 pub const ENTITY_MAX_LIDAR_COUNT: usize = 32;
 #[derive(Copy, Clone, PartialEq, Debug)]
 #[repr(C, packed)]
-pub struct Entity{
+pub struct AnnEntity {
     lidars:[u32;ENTITY_MAX_LIDAR_COUNT],
     lidars_used:u32,
     bone_idx:u32,

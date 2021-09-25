@@ -3,7 +3,7 @@
 #extension GL_KHR_shader_subgroup_basic : enable
 
 #define IS_AVAILABLE_BUFFER_LIDARS
-#define IS_AVAILABLE_BUFFER_ENTITIES
+#define IS_AVAILABLE_BUFFER_HTM_ENTITIES
 #define IS_AVAILABLE_BUFFER_GLOBAL_MUTABLES
 #define IS_AVAILABLE_BUFFER_BONES
 #define IS_AVAILABLE_BUFFER_WORLD
@@ -28,7 +28,7 @@ shared uint active_minicolumns_idx;
 void main() {
     const uint entity_id = gl_WorkGroupID.x;
     const uint lID = gl_LocalInvocationID.x;
-    const uint entities_count = global_mutables.entities;
+    const uint entities_count = global_mutables.htm_entities;
     if (entity_id < entities_count){
         for(uint i=lID;i<=HTM_FEEDFORWARD_CONNECTIONS_PER_MINICOLUMN;i+=GROUP_SIZE){
             minicolumns_per_overlap[i] = 0;
@@ -36,7 +36,7 @@ void main() {
         for(uint i=lID;i<HTM_MINICOLUMNS;i+=GROUP_SIZE) {
             htm_overlap_per_minicolumn[i] = 0;
         }
-        const Entity entity = entities[entity_id];
+        const HtmEntity entity = htm_entities[entity_id];
         const Bone bone = bones[entity.bone_idx];
         uint[INPUTS_PER_THREAD] input_indices;
         const int inputs_per_this_thread = (ENTITY_LIDAR_COUNT+GROUP_SIZE-1-lID)/GROUP_SIZE;

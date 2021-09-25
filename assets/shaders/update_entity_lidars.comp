@@ -23,9 +23,7 @@ void main() {
         const Entity parent = entities[lidar.parent_entity_id];
         const Bone bone = bones[parent.bone_idx];
         // bone.direction == new_z_axis
-        const vec3 new_x_axis = normalize(vec3(bone.direction.z,0,-bone.direction.x));
-        const vec3 new_y_axis = cross(bone.direction,new_x_axis);
-        const mat3 rotation = mat3(new_x_axis,new_y_axis,bone.direction);
+
         const vec3 rotate_lidar_direction = rotation * lidar.direction;
         const RayCastResult ray = ray_cast(bone.new_center, rotate_lidar_direction);
         const uvec3 prev_block_pos = ray.found?uvec3(ray.prev_v):WORLD_BORDERS;

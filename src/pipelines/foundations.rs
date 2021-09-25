@@ -34,8 +34,8 @@ use crate::render::host_buffer::HostBuffer;
 use crate::pipelines::player_event::PlayerEvent;
 use crate::render::compute::{ComputeDescriptorsBuilder, ComputeDescriptors};
 use crate::render::specialization_constants::SpecializationConstants;
-use crate::neat::entity::{Entity, ENTITY_MAX_LIDAR_COUNT};
-use crate::neat::lidar::Lidar;
+use crate::neat::htm_entity::{HtmEntity, ENTITY_MAX_LIDAR_COUNT};
+use crate::neat::ann_entity::AnnEntity;
 
 pub struct Indirect {
     update_particles: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
@@ -44,7 +44,8 @@ pub struct Indirect {
     feed_forward_net: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
     update_ambience: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
     per_blocks_to_be_inserted_or_removed: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
-    per_lidar: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
+    per_htm_entity: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
+    per_ann_entity: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
     draw_bones: SubBuffer<vk::DrawIndirectCommand, GpuIndirect>,
     draw_blocks: SubBuffer<vk::DrawIndirectCommand, GpuIndirect>,
     draw_particles: SubBuffer<vk::DrawIndirectCommand, GpuIndirect>,
@@ -59,13 +60,15 @@ impl Indirect {
         let feed_forward_net = indirect_dispatch.gpu().element(3);
         let update_ambience = indirect_dispatch.gpu().element(4);
         let per_blocks_to_be_inserted_or_removed = indirect_dispatch.gpu().element(5);
-        let per_lidar = indirect_dispatch.gpu().element(6);
+        let per_htm_entity = indirect_dispatch.gpu().element(6);
+        let per_ann_entity = indirect_dispatch.gpu().element(7);
 
         let draw_bones = indirect_draw.gpu().element(0);
         let draw_blocks = indirect_draw.gpu().element(1);
         let draw_particles = indirect_draw.gpu().element(2);
         Self {
-            per_lidar,
+            per_htm_entity,
+            per_ann_entity,
             super_indirect_buffer,
             update_particles,
             per_bone,
@@ -78,8 +81,11 @@ impl Indirect {
             per_blocks_to_be_inserted_or_removed,
         }
     }
-    pub fn update_entity_lidars(&self)->&SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>{
-        &self.per_lidar
+    pub fn update_htm_entities(&self)->&SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>{
+        &self.per_htm_entity
+    }
+    pub fn update_ann_entities(&self)->&SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>{
+        &self.per_ann_entity
     }
     pub fn update_ambience(&self)->&SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>{
         &self.update_ambience
@@ -130,8 +136,8 @@ pub struct FoundationInitializer {
     world: Submitter<StageSubBuffer<Block, Cpu, Storage>>,
     faces: Submitter<StageSubBuffer<Face, Cpu, Storage>>,
     face_count_per_chunk_buffer: SubBuffer<Face, Storage>,
-    entities_buffer: SubBuffer<Entity, Storage>,
-    lidars_buffer: SubBuffer<Lidar, Storage>,
+    htm_entities_buffer: SubBuffer<HtmEntity, Storage>,
+    ann_entities_buffer: SubBuffer<AnnEntity, Storage>,
     opaque_and_transparent_face_buffer: SubBuffer<Face, Storage>,
     world_copy: Submitter<StageSubBuffer<Block, Cpu, Storage>>,
     tmp_faces_copy: Submitter<SubBuffer<u32, Storage>>,
@@ -167,8 +173,8 @@ struct FoundationsCapacity {
     max_faces_to_be_inserted: u64,
     max_faces_to_be_removed: u64,
     max_sensors: u64,
-    max_entities: u64,
-    max_lidars: u64,
+    max_htm_entities: u64,
+    max_ann_entities: u64,
 }
 
 impl FoundationsCapacity {
@@ -176,7 +182,6 @@ impl FoundationsCapacity {
         let world_size = WorldSize::new(x, z);
         let faces_to_be_inserted_chunk_capacity = 128;
         let faces_to_be_removed_chunk_capacity = 128;
-        let max_entities = 128u64;
         Self {
             faces_to_be_inserted_chunk_capacity,
             faces_to_be_removed_chunk_capacity,
@@ -192,8 +197,8 @@ impl FoundationsCapacity {
             max_faces_to_be_inserted: faces_to_be_inserted_chunk_capacity as u64 * 2 * world_size.total_chunks() as u64,
             max_faces_to_be_removed: faces_to_be_removed_chunk_capacity as u64 * 2 * world_size.total_chunks() as u64,
             max_sensors: 0u64,
-            max_entities,
-            max_lidars: max_entities*ENTITY_MAX_LIDAR_COUNT as u64,
+            max_htm_entities: 128u64,
+            max_ann_entities: 128u64,
             max_faces_copy: 1024u64 * world_size.total_chunks() as u64,
             world_size,
         }
@@ -210,7 +215,7 @@ struct FoundationsData {
     world_faces: WorldFaces,
     constraints_data: Vec<Constraint>,
     bone_data: Vec<Bone>,
-    entity_data: Vec<Entity>,
+    entity_data: Vec<HtmEntity>,
     sensor_data: Vec<Sensor>,
     muscle_data: Vec<Muscle>,
     block_properties_data: Vec<BlockProp>,
@@ -256,10 +261,10 @@ impl FoundationsData {
             dummy2: 0,
             held_bone_idx: 0,
             world_blocks_to_update: [0,0],
-            entities: 0,
+            htm_entities: 0,
             ambience_tick: 0,
             lidars: 0,
-            dummy1: 0,
+            ann_entities: 0,
             dummy3: 0
         }
     }
@@ -316,7 +321,7 @@ impl FoundationInitializer {
     }
 
     pub fn new(cmd_pool: &CommandPool) -> Result<Self, failure::Error> {
-        let cap = FoundationsCapacity::new(3,3);
+        let cap = FoundationsCapacity::new(8,8);
         let mut data = FoundationsData::new(&cap);
         let heights = HeightMap::new(cap.world_size);
         // data.world_blocks.set_block(15,128,15,DIRT);
@@ -329,7 +334,7 @@ impl FoundationInitializer {
         for _ in 0..8 {
             let x = rand::random::<usize>() % cap.world_size.world_width();
             let z = rand::random::<usize>() % cap.world_size.world_depth();
-            data.bone_data.push(Bone::new(glm::vec3(x as f32, heights.height(x, z) as f32 + 5., z as f32), 0.5, glm::vec3(1., 0., 0.), 1., 1.0));
+            data.bone_data.push(Bone::new(glm::vec3(x as f32, heights.height(x, z) as f32 + 5., z as f32), 0.5, f32::random_vec3(), 1., 1.0));
         }
 
         data.neural_net_layer_data.append(&mut vec![
@@ -358,8 +363,8 @@ impl FoundationInitializer {
         let global_mutables_in_bytes = std::mem::size_of_val(&mutables) as u64;
         let persistent_floats_in_bytes = std::mem::size_of::<f32>() as u64 * cap.max_persistent_floats;
         let neural_net_layers_in_bytes = std::mem::size_of::<NeuralNetLayer>() as u64 * cap.max_neural_net_layers;
-        let entities_in_bytes = std::mem::size_of::<Entity>() as u64 * cap.max_entities;
-        let lidars_in_bytes = std::mem::size_of::<Lidar>() as u64 * cap.max_lidars;
+        let htm_entities_in_bytes = std::mem::size_of::<HtmEntity>() as u64 * cap.max_htm_entities;
+        let ann_entities_in_bytes = std::mem::size_of::<AnnEntity>() as u64 * cap.max_ann_entities;
         let faces_to_be_inserted_in_bytes = std::mem::size_of::<Face>() as u64 * cap.max_faces_to_be_inserted;
         let faces_to_be_removed_in_bytes = std::mem::size_of::<u32>() as u64 * cap.max_faces_to_be_removed;
 
@@ -377,8 +382,8 @@ impl FoundationInitializer {
                                                                                 neural_net_layers_in_bytes +
                                                                                 faces_to_be_inserted_in_bytes +
                                                                                 faces_to_be_removed_in_bytes +
-                                                                                entities_in_bytes +
-                                                                                lidars_in_bytes
+                                                                                htm_entities_in_bytes +
+                                                                                ann_entities_in_bytes
         )?;
         let offset = 0;
         let bones_buffer = super_buffer.sub(offset..offset + bones_in_bytes).reinterpret_into::<Bone>();
@@ -420,11 +425,11 @@ impl FoundationInitializer {
         let faces_to_be_removed_buffer = super_buffer.sub(offset..offset + faces_to_be_removed_in_bytes).reinterpret_into::<u32>();
         let offset = offset + faces_to_be_removed_in_bytes;
         assert_eq!(offset % 16, 0);
-        let entities_buffer = super_buffer.sub(offset..offset + entities_in_bytes).reinterpret_into::<Entity>();
-        let offset = offset + entities_in_bytes;
+        let htm_entities_buffer = super_buffer.sub(offset..offset + htm_entities_in_bytes).reinterpret_into::<HtmEntity>();
+        let offset = offset + htm_entities_in_bytes;
         assert_eq!(offset % 16, 0);
-        let lidars_buffer = super_buffer.sub(offset..offset + lidars_in_bytes).reinterpret_into::<Lidar>();
-        let offset = offset + lidars_in_bytes;
+        let ann_entities_buffer = super_buffer.sub(offset..offset + ann_entities_in_bytes).reinterpret_into::<AnnEntity>();
+        let offset = offset + ann_entities_in_bytes;
         assert_eq!(offset % 16, 0);
 
         let mut tmp_faces_copy = Submitter::new(tmp_faces_copy_buffer, cmd_pool)?;
@@ -474,7 +479,8 @@ impl FoundationInitializer {
             },
             dispatch_indirect(0),// update_ambience.comp
             dispatch_indirect(0),// update_ambience_faces.comp, update_ambience_flush_world_copy.comp
-            dispatch_indirect(0),// update_entity_lidars.comp
+            dispatch_indirect(0),// update_htm_entities.comp
+            dispatch_indirect(0),// update_ann_entities.comp
         ];
         let indirect_draw_data = vec![
             draw_indirect(36, data.bone_data.len() as u32),// bones.vert
@@ -526,8 +532,8 @@ impl FoundationInitializer {
         specialization_constants.entry_uint(307,cap.max_blocks_to_be_inserted_or_removed as u32);//MAX_BLOCKS_TO_BE_INSERTED_OR_REMOVED
         specialization_constants.entry_uint(308,cap.max_faces_to_be_inserted as u32);//MAX_FACES_TO_BE_INSERTED
         specialization_constants.entry_uint(309,cap.max_faces_to_be_removed as u32);//MAX_FACES_TO_BE_REMOVED
-        specialization_constants.entry_uint(310,cap.max_entities as u32);//MAX_ENTITIES
-        specialization_constants.entry_uint(311,cap.max_lidars as u32);//MAX_LIDARS
+        specialization_constants.entry_uint(310,cap.max_htm_entities as u32);//MAX_HTM_ENTITIES
+        specialization_constants.entry_uint(311,cap.max_ann_entities as u32);//MAX_ANN_ENTITIES
         Ok(Self {
             specialization_constants,
             face_count_per_chunk_buffer,
@@ -539,8 +545,8 @@ impl FoundationInitializer {
             sampler,
             world_blocks_to_update: world_blocks_to_update_buffer,
             player_event_uniform,
-            entities_buffer,
-            lidars_buffer,
+            htm_entities_buffer,
+            ann_entities_buffer,
             persistent_floats,
             neural_net_layers,
             collision_grid: grid_buffer,
@@ -559,8 +565,8 @@ impl FoundationInitializer {
         let Self {
             specialization_constants,
             face_count_per_chunk_buffer,
-            entities_buffer ,
-            lidars_buffer,
+            htm_entities_buffer ,
+            ann_entities_buffer,
             opaque_and_transparent_face_buffer,
             faces,
             world_copy,
@@ -612,15 +618,15 @@ impl FoundationInitializer {
             global_mutables,
             indirect,
             sampler,
-            entities_buffer ,
-            lidars_buffer,
+            htm_entities_buffer ,
+            ann_entities_buffer,
         })
     }
 }
 
 pub struct Foundations {
-    entities_buffer: SubBuffer<Entity, Storage>,
-    lidars_buffer: SubBuffer<Lidar, Storage>,
+    htm_entities_buffer: SubBuffer<HtmEntity, Storage>,
+    ann_entities_buffer: SubBuffer<AnnEntity, Storage>,
     specialization_constants: SpecializationConstants,
     faces: SubBuffer<Face, Storage>,
     face_count_per_chunk_buffer: SubBuffer<Face, Storage>,
@@ -644,11 +650,11 @@ pub struct Foundations {
 }
 
 impl Foundations {
-    pub fn entities_buffer(&self)-> &SubBuffer<Entity, Storage>{
-        &self.entities_buffer
+    pub fn htm_entities_buffer(&self)-> &SubBuffer<HtmEntity, Storage>{
+        &self.htm_entities_buffer
     }
-    pub fn lidars_buffer(&self)-> &SubBuffer<Lidar, Storage>{
-        &self.lidars_buffer
+    pub fn ann_entities_buffer(&self)-> &SubBuffer<AnnEntity, Storage>{
+        &self.ann_entities_buffer
     }
     pub fn specialization_constants(&self) -> &SpecializationConstants{
         &self.specialization_constants

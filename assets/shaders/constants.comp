@@ -49,8 +49,8 @@ layout (constant_id = 306) const uint MAX_WORLD_BLOCKS_TO_UPDATE = 128;
 layout (constant_id = 307) const uint MAX_BLOCKS_TO_BE_INSERTED_OR_REMOVED = 128;
 layout (constant_id = 308) const uint MAX_FACES_TO_BE_INSERTED = 128 ;
 layout (constant_id = 309) const uint MAX_FACES_TO_BE_REMOVED = 128 ;
-layout (constant_id = 310) const uint MAX_ENTITIES = 128;
-layout (constant_id = 311) const uint MAX_LIDARS = 128;
+layout (constant_id = 310) const uint MAX_HTM_ENTITIES = 128;
+layout (constant_id = 311) const uint MAX_ANN_ENTITIES = 128;
 #define AMBIENCE_MAX_TIME_TICK 360 // this should be some anti-prime number, because BlockProp.change_rate is specified as a ratio
 
 bool is_in_world_borders(uvec3 pos){
@@ -84,6 +84,20 @@ struct Bone{
     vec4 texture_coords;//xy components hold text UV coordinates. zw components hold width and height
 };
 
+mat2 normal_vec2_to_rotation_matrix(vec2 direction){
+    vec2 new_z_axis = direction;
+    vec2 new_x_axis = vec2(direction.y,-direction.x);
+    return mat2(new_x_axis,new_z_axis);
+}
+/**When you move your mouse you can rotate only in two euler angles - yaw and pitch - but you cannot rotate roll angle.
+This function works analogically. The input is the direction in which you are looking. The output is a 3D rotation matrix
+that first applies rotation around x axis (like moving your head left and right) and then around y axis (like moving your had up and down);
+*/
+mat3 normal_vec3_to_rotation_matrix(vec3 direction){
+    const vec3 new_x_axis = vec3(direction.z,0,-direction.x);
+    const vec3 new_y_axis = cross(direction,new_x_axis);
+    return mat3(new_x_axis,new_y_axis,direction);
+}
 
 bool is_ray_intersecting_axis_aligned_box(vec3 start, vec3 distance_and_direction, const vec3 left_bottom_front_corner, const vec3 box_size) {
     const mat3x2 start_mat = mat3x2(start.yz,start.xz,start.xy);
@@ -123,8 +137,8 @@ struct GlobalMutables{
     int held_bone_idx; // player can grab a bone and pull it somewhere
     int ambience_tick; // this number indefinitely loops over the range 0..AMBIENCE_MAX_TIME_TICK
     uint[2] world_blocks_to_update;
-    uint entities;
-    uint dummy1;
+    uint htm_entities;
+    uint ann_entities;
     uint dummy2;
     uint dummy3;
 };
@@ -214,9 +228,9 @@ uvec2 new_face(uvec3 block_position_relative_to_chunk, uint orientation, uint ch
 #define DISPATCH_INDIRECT_UPDATE_AMBIENCE_FACES 5
 #define DISPATCH_INDIRECT_UPDATE_AMBIENCE_FLUSH_WORLD_COPY 5
 #define DISPATCH_INDIRECT_PER_BLOCKS_TO_BE_INSERTED_OR_REMOVED 5
-#define DISPATCH_INDIRECT_PER_LIDAR 6
-#define DISPATCH_INDIRECT_UPDATE_ENTITY_LIDARS 6
-#define DISPATCH_INDIRECT_LEN 7
+#define DISPATCH_INDIRECT_PER_HTM_ENTITIES 6
+#define DISPATCH_INDIRECT_PER_ANN_ENTITIES 7
+#define DISPATCH_INDIRECT_LEN 8
 #define DRAW_INDIRECT_BONES 0
 #define DRAW_INDIRECT_BLOCK 1
 #define DRAW_INDIRECT_PARTICLES 2
@@ -291,39 +305,55 @@ bool is_block_active(const BlockProp block_prop){
 // the player could see through walls)
 #define BLOCK_ID_GLASS 3
 #define BLOCK_ID_ICE 4
-#define BLOCK_ID_SPAWNER 5
-#define BLOCK_ID_LEAVES 6
+#define BLOCK_ID_SWAMP_LEAVES 5
+#define BLOCK_ID_GOLDEN_LEAVES 6
+#define BLOCK_ID_OAK_LEAVES 7
+#define BLOCK_ID_PEACH_LEAVES 8
+#define BLOCK_ID_AETHER_LEAVES 9
+#define BLOCK_ID_FROST_LEAVES 10
 // blocks above are transparent. Blocks below are not
-#define BLOCK_ID_STONE 7
-#define BLOCK_ID_DIRT 8
-#define BLOCK_ID_GRASS 9
-#define BLOCK_ID_PLANK 10
-#define BLOCK_ID_CRAFTING 11
-#define BLOCK_ID_SLAB 12
-#define BLOCK_ID_BRICK 13
-#define BLOCK_ID_TNT 14
-#define BLOCK_ID_COBBLESTONE 15
-#define BLOCK_ID_BEDROCK 16
-#define BLOCK_ID_SAND 17
-#define BLOCK_ID_GRAVEL 18
-#define BLOCK_ID_WOOD 19
-#define BLOCK_ID_IRON 20
-#define BLOCK_ID_GOLD 21
-#define BLOCK_ID_DIAMOND 22
-#define BLOCK_ID_EMERALD 23
-#define BLOCK_ID_GOLD_ORE 24
-#define BLOCK_ID_IRON_ORE 25
-#define BLOCK_ID_COAL_ORE 26
-#define BLOCK_ID_BOOKSHELF 27
-#define BLOCK_ID_MOSS_STONE 28
-#define BLOCK_ID_OBSIDIAN 29
-#define BLOCK_ID_SPONGE 30
-#define BLOCK_ID_DIAMOND_ORE 31
-#define BLOCK_ID_REDSTONE_ORE 32
-#define BLOCK_ID_SNOW 33
-#define BLOCKS_LEN 34
+#define BLOCK_ID_STONE 11
+#define BLOCK_ID_GOLD_ORE 12
+#define BLOCK_ID_IRON_ORE 13
+#define BLOCK_ID_COAL_ORE 14
+#define BLOCK_ID_DIAMOND_ORE 15
+#define BLOCK_ID_REDSTONE_ORE 16
+#define BLOCK_ID_DIRT 17
+#define BLOCK_ID_SWAMP_DIRT 18
+#define BLOCK_ID_IRON_RICH_DIRT 19
+#define BLOCK_ID_AETHER_DIRT 20
+#define BLOCK_ID_FROST_DIRT 21
+#define BLOCK_ID_GRASS 22
+#define BLOCK_ID_BERRIES 23
+#define BLOCK_ID_STRAWBERRIES 24
+#define BLOCK_ID_WHEAT 25
+#define BLOCK_ID_SWAMP_GRASS 26
+#define BLOCK_ID_SWAMP_BERRIES 27
+#define BLOCK_ID_SWAMP_BACKBERRIES 28
+#define BLOCK_ID_FROST_GRASS 29
+#define BLOCK_ID_SNOW_CROCUS 30
+#define BLOCK_ID_SNOW_BLACKBERRIES 31
+#define BLOCK_ID_PLANK 32
+#define BLOCK_ID_SLAB 33
+#define BLOCK_ID_BRICK 34
+#define BLOCK_ID_COBBLESTONE 35
+#define BLOCK_ID_BEDROCK 36
+#define BLOCK_ID_SAND 37
+#define BLOCK_ID_RARE_SAND 38
+#define BLOCK_ID_GRAVEL 39
+#define BLOCK_ID_WET_GRAVEL 40
+#define BLOCK_ID_OAK_WOOD 41
+#define BLOCK_ID_OAK_STEM 42
+#define BLOCK_ID_PINK_WOOD 43
+#define BLOCK_ID_PINK_STEM 44
+#define BLOCK_ID_DARK_WOOD 45
+#define BLOCK_ID_DARK_STEM 46
+#define BLOCK_ID_OBSIDIAN 47
+#define BLOCK_ID_SPONGE 48
+#define BLOCK_ID_SNOW 49
+#define BLOCKS_LEN 50
 #define NO_OF_TRAVERSABLE_BLOCKS 3 // every traversable block (mobs can pass through it without colliding) is transparent but the opposite may not necessarily hold
-#define NO_OF_TRANSPARENT_BLOCKS 7 // The blocks are aligned in such a way that transparent blocks come first. Hence in
+#define NO_OF_TRANSPARENT_BLOCKS 11 // The blocks are aligned in such a way that transparent blocks come first. Hence in
 // order to check whether a block is transparent or not, it's enough to just check if its ID is below this value
 
 #define ENTITY_LIDAR_COUNT 32
@@ -340,16 +370,6 @@ bool is_block_active(const BlockProp block_prop){
 #define HTM_PERMAMENCE_INCREMENT 0.08
 #define HTM_MAX_SEGMENTS 4
 #define HTM_CONTEXT_CONNECTIONS_PER_MINICOLUMN 16
-struct Lidar {
-    vec3 direction;//maximal length of lidar is equal to the magnitude of this vector
-    uint prev_block_idx;
-    uint hit_block_idx;
-    uint hit_block_id;
-    uint hit_entity_id;
-    uint parent_entity_id; // entity that this lidar belongs to
-};
-
-
 
 struct HtmFeedforwardConnection{
     uint minicolumn_id;
@@ -372,11 +392,55 @@ struct HtmInput{
     uint feedforward_connections_offset;
     uint feedforward_connections_len;
 };
-struct Entity{
+struct HtmEntity{
     uint[ENTITY_LIDAR_COUNT] lidars;
     HtmFeedforwardConnection[HTM_TOTAL_FEEDFORWARD_CONNECTIONS] htm_feedforward_connections;
     HtmMinicolumn[HTM_MINICOLUMNS] htm_minicolumns;
     HtmInput[HTM_INPUT_SIZE] htm_inputs;
+    uint bone_idx;
+    uint main;
+    float energy;
+    float speed;
+    float max_speed;
+};
+
+#define ANN_LIDAR_COUNT
+#define ANN_INPUT_SIZE (ANN_LIDAR_COUNT)
+#define ANN_HIDDEN_SIZE 32
+#define ANN_INPUT_CONNECTIONS_PER_HIDDEN_NEURON 16
+#define ANN_LATENT_SIZE 32
+#define ANN_HIDDEN_CONNECTIONS_PER_LATENT_NEURON 4
+#define ANN_LATENT_CONNECTIONS_PER_LATENT_NEURON 4
+#define ANN_OUTPUT_SIZE 32
+#define ANN_LATENT_CONNECTIONS_PER_OUTPUT_NEURON 4
+#define ANN_MAX_SIZE max(max(max(ANN_HIDDEN_SIZE,ANN_LATENT_SIZE),ANN_OUTPUT_SIZE),ANN_INPUT_SIZE)
+struct AnnSparseConnection{
+    uint src_neuron;
+    float weight;
+};
+struct AnnLidar{
+    vec3 direction;
+    float dummy;
+};
+struct AnnSparseHiddenNeuron{
+    AnnSparseConnection[ANN_INPUT_CONNECTIONS_PER_HIDDEN_NEURON] incoming;
+    float bias;
+};
+struct AnnSparseLatentNeuron{
+    AnnSparseConnection[ANN_HIDDEN_CONNECTIONS_PER_LATENT_NEURON] incoming_from_hidden;
+    AnnSparseConnection[ANN_LATENT_CONNECTIONS_PER_LATENT_NEURON] recurrent_from_latent;
+    float bias;
+};
+struct AnnSparseOutputNeuron{
+    AnnSparseConnection[ANN_LATENT_CONNECTIONS_PER_OUTPUT_NEURON] incoming;
+    float bias;
+};
+struct AnnEntity{
+    AnnSparseHiddenNeuron[ANN_HIDDEN_SIZE] ann_hidden;
+    AnnSparseLatentNeuron[ANN_LATENT_SIZE] ann_latent;
+    AnnSparseOutputNeuron[ANN_OUTPUT_SIZE] ann_output;
+    float[ANN_LATENT_SIZE] latent;
+    AnnLidar[ENTITY_LIDAR_COUNT] lidars;
     uint bone_idx;
     uint main;
     float energy;
@@ -394,39 +458,55 @@ struct Entity{
 
 const BlockProp[BLOCKS_LEN] BLOCK_PROPS = BlockProp[BLOCKS_LEN](
     new_block_prop_regular_transparent( /*Some dummy value*/256, 0., 0.05), // air
-    new_block_prop_regular_changing_transparent( 31, 0.09, 1.0, true, true, 8), // water
-    new_block_prop_regular_changing_transparent( 36, 0.009, 3.011, true, true, 15), // lava
-    new_block_prop_regular_transparent( 28, 0.1, 0.1), // glass
-    new_block_prop_regular_transparent( 55, 0.7, 0.9167), // ice
-    new_block_prop_regular_transparent( 53, 0.1, 2.710), // spawner
-    new_block_prop_top_sides_bottom_transparent( 51,52, 51, 0.1, 0.143), // leaves
-    new_block_prop_regular( 1, 2.26796), // stone
-    new_block_prop_regular( 2, 1.3), // dirt
-    new_block_prop_top_sides_bottom( 0, 3,2, 1.4), // grass
-    new_block_prop_regular( 4, 1.5/4.), // plank
-    new_block_prop_top_sides_bottom_front( 59, 62,4, 63, 1.5), // crafting
-    new_block_prop_top_sides_bottom( 6,5,6, 2.26796), // slab
-    new_block_prop_regular( 7, 1.9), // brick
-    new_block_prop_top_sides_bottom( 9,8,10, 1.65), // tnt
-    new_block_prop_regular( 11, 2.26796), // cobblestone
-    new_block_prop_regular( 12, 3.1), // bedrock
-    new_block_prop_regular_changing( 13, 1.62, true, false, 4), // sand
-    new_block_prop_regular_changing( 14, 1.68, true, false, 4), // gravel
-    new_block_prop_top_sides_bottom( 16,15,16, 1.5), // wood
-    new_block_prop_regular( 17, 7.3), // iron
-    new_block_prop_regular( 18, 19.0), // gold
-    new_block_prop_regular( 19, 3.514), // diamond
-    new_block_prop_regular( 20, 4.), // emerald
-    new_block_prop_regular( 21, 2.9), // gold ore
-    new_block_prop_regular( 22, 2.7), // iron ore
-    new_block_prop_regular( 23, 2.0), // coal ore
-    new_block_prop_regular( 24, 1.5), // bookshelf
-    new_block_prop_regular( 25, 2.26796), // moss stone
-    new_block_prop_regular( 26, 3.1), // obsidian
-    new_block_prop_regular( 27, 0.1), // sponge
-    new_block_prop_regular( 29, 2.1), // diamond ore
-    new_block_prop_regular( 30, 2.2), // redstone ore
-    new_block_prop_regular( 54, 0.05) // snow
+    new_block_prop_regular_changing_transparent( 44, 0.09, 1.0, true, true, 8), // water
+    new_block_prop_regular_changing_transparent( 45, 0.009, 3.011, true, true, 15), // lava
+    new_block_prop_regular_transparent( 54, 0.1, 0.1), // glass
+    new_block_prop_regular_transparent( 46, 0.7, 0.9167), // ice
+    new_block_prop_regular_transparent( 47, 0.1, 0.143), // swamp_leaves
+    new_block_prop_regular_transparent( 48, 0.1, 0.143), // golden_leaves
+    new_block_prop_regular_transparent( 49, 0.1, 0.143), // oak_leaves
+    new_block_prop_regular_transparent( 50, 0.1, 0.143), // peach_leaves
+    new_block_prop_regular_transparent( 51, 0.1, 0.143), // aether_leaves
+    new_block_prop_regular_transparent( 52, 0.1, 0.143), // frost_leaves
+    new_block_prop_regular( 18, 2.26796), // stone
+    new_block_prop_regular( 19, 2.9), // gold_ore
+    new_block_prop_regular( 20, 2.7), // iron_ore
+    new_block_prop_regular( 21, 2.0), // coal_ore
+    new_block_prop_regular( 22, 2.1), // diamond_ore
+    new_block_prop_regular( 23, 2.2), // redstone_ore
+    new_block_prop_regular( 5, 1.3), // dirt
+    new_block_prop_regular( 10, 1.3), // swamp_dirt
+    new_block_prop_regular( 11, 1.3), // iron_rich_dirt
+    new_block_prop_regular( 12, 1.3), // aether_dirt
+    new_block_prop_regular( 17, 1.3), // frost_dirt
+    new_block_prop_top_sides_bottom( 3, 4,5, 1.4), // grass
+    new_block_prop_top_sides_bottom( 0, 4,5, 1.4), // berries
+    new_block_prop_top_sides_bottom( 1, 4,5, 1.4), // strawberries
+    new_block_prop_top_sides_bottom( 2, 4,5, 1.4), // wheat
+    new_block_prop_top_sides_bottom( 8,9,10, 1.4), // swamp_grass
+    new_block_prop_top_sides_bottom( 6,9,10, 1.4), // swamp_berries
+    new_block_prop_top_sides_bottom( 7,9,10, 1.4), // swamp_backberries
+    new_block_prop_top_sides_bottom( 15,16,17, 1.4), // frost_grass
+    new_block_prop_top_sides_bottom( 13,16,17, 1.4), // snow_crocus
+    new_block_prop_top_sides_bottom( 14,16,17, 1.4), // snow_blackberries
+    new_block_prop_regular( 41, 1.5/4.), // plank
+    new_block_prop_regular( 42, 2.26796), // slab
+    new_block_prop_regular( 43, 1.9), // brick
+    new_block_prop_regular( 35, 2.26796), // cobblestone
+    new_block_prop_regular( 36, 3.1), // bedrock
+    new_block_prop_regular_changing( 38, 1.62, true, false, 4), // sand
+    new_block_prop_regular_changing( 37, 1.62, true, false, 4), // rare_sand
+    new_block_prop_regular_changing( 40, 1.68, true, false, 4), // gravel
+    new_block_prop_regular_changing( 39, 1.68, true, false, 4), // wet_gravel
+    new_block_prop_top_sides_bottom( 26,25,26, 1.5), // oak_wood
+    new_block_prop_top_sides_bottom( 26,24,26, 1.5), // oak_stem
+    new_block_prop_top_sides_bottom( 29,28,29, 1.5), // pink_wood
+    new_block_prop_top_sides_bottom( 29,27,29, 1.5), // pink_stem
+    new_block_prop_top_sides_bottom( 32,31,32, 1.5), // dark_wood
+    new_block_prop_top_sides_bottom( 32,30,32, 1.5), // dark_stem
+    new_block_prop_regular( 33, 3.1), // obsidian
+    new_block_prop_regular( 34, 0.1), // sponge
+    new_block_prop_regular( 15, 0.05) // snow
 );
 
 #endif // CONSTANTS_COMP

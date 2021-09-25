@@ -58,10 +58,9 @@ void main() {
         M, L, K, M, K, N
     );
 
-    vec2 rotated_and_scaled_z_axis = direction.xz * half_side_length;
-    vec2 rotated_and_scaled_x_axis = vec2(direction.z,-direction.x) * half_side_length;
+    mat2 rotation_matrix = normal_vec2_to_rotation_matrix(direction.xz * half_side_length);
     vec3 normalized_vertex_pos = direction_per_vertex[gl_VertexIndex];
-    vec2 rotated_and_scaled_vertex_pos_xz = rotated_and_scaled_x_axis * normalized_vertex_pos.x + rotated_and_scaled_z_axis * normalized_vertex_pos.z;
+    vec2 rotated_and_scaled_vertex_pos_xz = rotation_matrix * normalized_vertex_pos.xz;
     vec3 rotated_and_scaled_vertex_pos = vec3(rotated_and_scaled_vertex_pos_xz.x,normalized_vertex_pos.y*half_height,rotated_and_scaled_vertex_pos_xz.y);
     gl_Position = MVP * vec4(center + rotated_and_scaled_vertex_pos, 1.0);
     gl_Position.y = -gl_Position.y;

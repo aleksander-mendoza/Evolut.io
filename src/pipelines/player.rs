@@ -6,7 +6,7 @@ use crate::pipelines::display::Display;
 use crate::pipelines::game::GameResources;
 use std::collections::VecDeque;
 use crate::pipelines::player_event::PlayerEvent;
-use crate::blocks::block_properties::{AIR, GLASS, DIRT, PLANK, STONE, SAND, COBBLESTONE, COAL_ORE, WOOD, GRASS, BRICK, WATER};
+use crate::blocks::block_properties::{AIR, GLASS, DIRT, PLANK, STONE, SAND, COBBLESTONE, COAL_ORE, OAK_WOOD, GRASS, BRICK, WATER};
 use crate::pipelines::physics::PhysicsResources;
 use crate::pipelines::renderable::RenderResources;
 use crate::pipelines::computable::ComputeResources;
@@ -83,7 +83,7 @@ impl Player {
         }
 
         if input.number() > -1 {
-            const BLOCK_KEY_BINDING:[Block;10] = [GLASS,GRASS,DIRT,PLANK,WOOD,STONE,SAND,COBBLESTONE,COAL_ORE,WATER];
+            const BLOCK_KEY_BINDING:[Block;10] = [GLASS,GRASS,DIRT,PLANK,OAK_WOOD,STONE,SAND,COBBLESTONE,COAL_ORE,WATER];
             self.block_in_hand = BLOCK_KEY_BINDING[input.number() as usize]
         }
         let v = glm::quat_to_mat4(&self.rotation) * glm::translation(&-self.location);

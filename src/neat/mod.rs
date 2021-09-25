@@ -5,6 +5,6 @@ pub mod num;
 pub mod util;
 pub mod cppn;
 pub mod population;
-pub mod entity;
-pub mod lidar;
+pub mod htm_entity;
+pub mod ann_entity;
 

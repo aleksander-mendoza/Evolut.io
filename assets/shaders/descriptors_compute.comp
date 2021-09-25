@@ -74,71 +74,16 @@ restrict layout(std430, set = 0, binding = 8) buffer Faces{
 };
 #endif //IS_AVAILABLE_BUFFER_FACES
 
-#ifdef IS_AVAILABLE_BUFFER_ENTITIES
-restrict layout(std430, set = 0, binding = 8) buffer Entities{
-    Entity entities[];
+#ifdef IS_AVAILABLE_BUFFER_HTM_ENTITIES
+restrict layout(std430, set = 0, binding = 9) buffer HtmEntities{
+    HtmEntity htm_entities[];
 };
 #endif
 
-#ifdef IS_AVAILABLE_BUFFER_LIDARS
-restrict layout(std430, set = 0, binding = 9) buffer Lidars{
-    Lidar lidars[];
+#ifdef IS_AVAILABLE_BUFFER_ANN_ENTITIES
+restrict layout(std430, set = 0, binding = 10) buffer AnnEntities{
+    AnnEntity ann_entities[];
 };
 #endif
-
-//#ifdef IS_AVAILABLE_BUFFER_BLOCK_PROPS
-//#include "block.comp"
-//restrict layout(std430, set = 0, binding = 9) buffer BlockProps{
-//    BlockProp block_props[];
-//};
-//#endif // IS_AVAILABLE_BUFFER_BLOCK_PROPS
-
-
-//#ifdef IS_AVAILABLE_BUFFER_PARTICLES
-//#include "particle.comp"
-//restrict layout(std430, set = 0, binding = 2) buffer Particles{
-//    Particle particles[]; // the particles at indices from 0 (inclusive) to solid_particles (exclusive) are solid. All the remaining particles are phantom.
-//};
-//#endif // IS_AVAILABLE_BUFFER_PARTICLES
-
-
-//#ifdef IS_AVAILABLE_BUFFER_PARTICLE_STACK
-//restrict layout(std430, set = 0, binding = 11) buffer ParticleStack{
-//    uint particle_stack[]; // holds indices of particles that have non-zero energy. Such particles are considered "dead" and
-//    // can be popped off this stack at any time and reused (throw by some entity etc). When you pop from this stack, just decrement constants.particles
-//};
-//#endif // IS_AVAILABLE_BUFFER_COLLISION_GRID
-/**
-#ifdef IS_AVAILABLE_BUFFER_AUXILIARY_FLOATS
-#ifdef IS_AVAILABLE_BUFFER_COLLISION_GRID
-#error It is not allowed to use both IS_AVAILABLE_BUFFER_COLLISION_GRID and IS_AVAILABLE_BUFFER_AUXILIARY_FLOATS at the same time
-#endif
-restrict layout(std430, set = 0, binding = 3) buffer AuxiliaryFloats{
-    float auxiliary_floats[];
-};
-#endif // IS_AVAILABLE_BUFFER_AUXILIARY_FLOATS
-
-#ifdef IS_AVAILABLE_BUFFER_CONSTRAINTS
-#include "constraint.comp"
-restrict layout(std430, set = 0, binding = 4) buffer Constraints{
-    Constraint constraints[];
-};
-#endif
-
-#ifdef IS_AVAILABLE_BUFFER_SENSORS
-#include "sensor.comp"
-restrict layout(std430, set = 0, binding = 10) buffer Sensors{
-    Sensor sensors[];
-};
-#endif
-
-
-#ifdef IS_AVAILABLE_BUFFER_MUSCLES
-#include "muscle.comp"
-restrict layout(std430, set = 0, binding = 13) buffer Muscles{
-     Muscle muscles[];
-};
-#endif
-*/
 
 #endif //DESCRIPTORS_COMPUTE_COMP
