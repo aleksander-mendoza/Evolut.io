@@ -6,7 +6,6 @@
 #define IS_AVAILABLE_BUFFER_PLAYER_EVENT
 #define IS_AVAILABLE_BUFFER_INDIRECT
 #define IS_AVAILABLE_BUFFER_BLOCKS_TO_BE_INSERTED_OR_REMOVED
-#define IS_AVAILABLE_BUFFER_WORLD_BLOCKS_TO_UPDATE
 layout (local_size_x = 1) in;
 
 #include "descriptors_ambience.comp"
@@ -14,16 +13,9 @@ layout (local_size_x = 1) in;
 
 void main()
 {
-
     uint gID = gl_GlobalInvocationID.x;
-    const int ambience_tick = global_mutables.ambience_tick;
-    global_mutables.ambience_tick = ambience_tick < AMBIENCE_MAX_TIME_TICK-1 ? ambience_tick+1 : 0;
+    const int tick = ++global_mutables.tick;
     int blocks_to_be_inserted_or_removed_count = 0;
-    const uint world_blocks_to_update_next = global_mutables.world_blocks_to_update_even;
-    const uint world_blocks_to_update_curr = 1 - world_blocks_to_update_next;
-    global_mutables.world_blocks_to_update_even = world_blocks_to_update_curr;
-    uint world_blocks_to_update_count_next = 0;
-    uint world_blocks_to_update_count_curr = global_mutables.world_blocks_to_update[world_blocks_to_update_curr];
     if (player_event.event_type == PLAYER_EVENT_SET_BLOCK){
         // vec3_slot0 holds current player position
         // vec3_slot1 holds ray cast direction
@@ -34,13 +26,9 @@ void main()
             const uint hit_idx = block_pos_into_world_idx(hit_pos);
             world_copy[hit_idx] = player_event.u32_slot0;
             blocks_to_be_inserted_or_removed[blocks_to_be_inserted_or_removed_count++] = hit_idx;
-            set_world_blocks_to_update(world_blocks_to_update_count_next++, world_blocks_to_update_next, hit_idx);
         }
     }
-    global_mutables.world_blocks_to_update[world_blocks_to_update_curr] = world_blocks_to_update_count_curr;
-    global_mutables.world_blocks_to_update[world_blocks_to_update_next] = world_blocks_to_update_count_next;
     global_mutables.blocks_to_be_inserted_or_removed = blocks_to_be_inserted_or_removed_count;
     set_indirect_dispatch(DISPATCH_INDIRECT_UPDATE_AMBIENCE_FACES, blocks_to_be_inserted_or_removed_count);
-    set_indirect_dispatch(DISPATCH_INDIRECT_UPDATE_AMBIENCE, world_blocks_to_update_count_curr);
 }
 

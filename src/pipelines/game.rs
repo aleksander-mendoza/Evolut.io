@@ -27,9 +27,10 @@ use crate::pipelines::physics::{PhysicsResources, Physics};
 use crate::pipelines::computable::{Computable, ComputeResources};
 use crate::pipelines::bones::{Bones, BonesBuilder, BoneResources};
 use crate::render::specialization_constants::SpecializationConstants;
+use crate::pipelines::particles::{ParticleResources, Particles};
 
 pub struct GameResources {
-    res: JointResources<BoneResources, FacesResources>,
+    res: JointResources<BoneResources, JointResources<ParticleResources,FacesResources>>,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -42,11 +43,11 @@ pub struct ThrowUniform {
 impl GameResources {
 
     pub fn new(cmd_pool: &CommandPool, foundations:&FoundationInitializer) -> Result<Self, failure::Error> {
-        // let particles = ParticleResources::new(cmd_pool, foundations)?;
+        let particles = ParticleResources::new(cmd_pool, foundations)?;
         let world = FacesResources::new(cmd_pool, foundations)?;
         let bones = BoneResources::new(cmd_pool, foundations)?;
 
-        let res = JointResources::new(bones, world );
+        let res = JointResources::new(bones, JointResources::new(particles,world ));
 
         Ok(Self { res })
     }
@@ -69,22 +70,22 @@ impl RenderResources for GameResources {
 
 
 pub struct Game {
-    global: Joint<Bones, BlockWorld>,
+    global: Joint<Bones,Joint<Particles, BlockWorld>>,
 }
 
 impl Game {
     pub fn block_world(&self) -> &BlockWorld {
-        self.global.b()
+        self.global.b().b()
     }
-    // pub fn particles(&self) -> &Particles {
-    //     self.global.a().a()
-    // }
+    pub fn particles(&self) -> &Particles {
+        self.global.b().a()
+    }
     pub fn block_world_mut(&mut self) -> &mut BlockWorld {
-        self.global.b_mut()
+        self.global.b_mut().b_mut()
     }
-    // pub fn particles_mut(&mut self) -> &mut Particles {
-    //     self.global.a_mut()
-    // }
+    pub fn particles_mut(&mut self) -> &mut Particles {
+        self.global.b_mut().a_mut()
+    }
 }
 
 impl Renderable for Game {

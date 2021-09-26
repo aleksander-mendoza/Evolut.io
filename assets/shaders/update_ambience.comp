@@ -25,7 +25,7 @@ void main() {
 
         const BlockProp p = BLOCK_PROPS[block_id];
         bool update_neighbours = false;
-        if (p.falls_down && block_pos.y > 0){
+        if (p.falls_down && block_pos.y > 0 && constants.ambience_tick & p.change_rate == p.change_rate){
             const uint block_below_idx = block_pos_into_world_idx(block_pos-uvec3(0, 1, 0));
             const uint block_below = world[block_below_idx];
             if (block_below==BLOCK_ID_AIR){

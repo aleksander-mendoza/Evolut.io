@@ -8,7 +8,7 @@ use crate::render::data::VertexAttrib;
 #[derive(Copy,Clone,Debug)]
 pub struct Particle{
     pub position:glm::Vec3,
-    pub sender_entity_idx:u32,
+    pub emitter_entity:u32,
     pub velocity:glm::Vec3,
     pub energy:f32,
 }
@@ -23,17 +23,17 @@ impl Particle{
         let position = glm::vec3(random::<f32>()*16.,3.+random::<f32>()*8.,random::<f32>()*16.);
         Self{
             position,
-            sender_entity_idx: 0,
+            emitter_entity: 0,
             velocity: Self::rand_vec3()*0.1,
-            energy: random::<f32>(),
+            energy: 0.,
         }
     }
     pub fn new(pos:glm::Vec3)->Self{
         Self{
             position: pos,
-            sender_entity_idx: 0,
+            emitter_entity: 0,
             velocity: glm::zero(),
-            energy: random::<f32>()
+            energy: 0.,
         }
     }
 }

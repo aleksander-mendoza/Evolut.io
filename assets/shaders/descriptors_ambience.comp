@@ -15,11 +15,11 @@ restrict layout (std430, set = 0, binding = 1) buffer GlobalMutablesBlock{
 };
 #endif
 
-#ifdef IS_AVAILABLE_BUFFER_WORLD_BLOCKS_TO_UPDATE
-restrict layout(std430, set = 0, binding = 2) buffer WorldBlocksToUpdate{
-    uint world_blocks_to_update[];
+#ifdef IS_AVAILABLE_BUFFER_WORLD_BLOCK_STABILITY
+restrict layout(std430, set = 0, binding = 2) buffer WorldBlockStability{
+    uint world_block_stability[];
 };
-#endif // IS_AVAILABLE_BUFFER_WORLD_BLOCKS_TO_UPDATE
+#endif // IS_AVAILABLE_BUFFER_WORLD_BLOCK_STABILITY
 
 #ifdef IS_AVAILABLE_BUFFER_FACES_TO_BE_INSERTED
 restrict layout(std430, set = 0, binding = 3) buffer FacesToBeInserted{

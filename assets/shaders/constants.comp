@@ -45,13 +45,13 @@ layout (constant_id = 302) const uint MAX_FACES = 128;
 layout (constant_id = 303) const uint MAX_PERSISTENT_FLOATS = 128;
 layout (constant_id = 304) const uint MAX_NEURAL_NET_LAYERS = 128;
 layout (constant_id = 305) const uint MAX_TMP_FACES_COPY = 128;
-layout (constant_id = 306) const uint MAX_WORLD_BLOCKS_TO_UPDATE = 128;
+//layout (constant_id = 306) const uint MAX_WORLD_BLOCKS_TO_UPDATE = 128;
 layout (constant_id = 307) const uint MAX_BLOCKS_TO_BE_INSERTED_OR_REMOVED = 128;
 layout (constant_id = 308) const uint MAX_FACES_TO_BE_INSERTED = 128 ;
 layout (constant_id = 309) const uint MAX_FACES_TO_BE_REMOVED = 128 ;
 layout (constant_id = 310) const uint MAX_HTM_ENTITIES = 128;
 layout (constant_id = 311) const uint MAX_ANN_ENTITIES = 128;
-#define AMBIENCE_MAX_TIME_TICK 360 // this should be some anti-prime number, because BlockProp.change_rate is specified as a ratio
+layout (constant_id = 312) const uint MAX_PARTICLES = 1024;
 
 bool is_in_world_borders(uvec3 pos){
     return all(lessThan(pos,WORLD_BORDERS));
@@ -127,20 +127,15 @@ struct CollisionCell{
 };
 
 
-
-
 struct GlobalMutables{
     int blocks_to_be_inserted_or_removed;
     uint bones;
-    uint world_blocks_to_update_even;
     uint lidars;
     int held_bone_idx; // player can grab a bone and pull it somewhere
-    int ambience_tick; // this number indefinitely loops over the range 0..AMBIENCE_MAX_TIME_TICK
-    uint[2] world_blocks_to_update;
+    int tick;
     uint htm_entities;
     uint ann_entities;
-    uint dummy2;
-    uint dummy3;
+    uint particles;
 };
 
 struct FaceRelocation{
@@ -148,6 +143,12 @@ struct FaceRelocation{
     Face face;
 };
 
+struct Particle{
+    vec3 position;
+    uint emitter_entity;
+    vec3 velocity;
+    float energy;
+};
 
 uint chunk_pos_into_chunk_idx(uint x, uint z) {
     return z * CHUNKS_X + x;
@@ -218,6 +219,7 @@ uvec2 new_face(uvec3 block_position_relative_to_chunk, uint orientation, uint ch
 }
 
 #define DISPATCH_INDIRECT_UPDATE_PARTICLES 0
+#define DISPATCH_INDIRECT_PER_PARTICLE 0
 #define DISPATCH_INDIRECT_BROAD_PHASE_COLLISION_DETECTION 1
 #define DISPATCH_INDIRECT_BROAD_PHASE_COLLISION_DETECTION_CLEANUP 1
 #define DISPATCH_INDIRECT_UPDATE_BONES 1
@@ -282,16 +284,7 @@ struct BlockProp{
     uint[6] texture_ids;
     float opacity; // the higher, the more opaque
     float mass;
-    bool falls_down;
-    bool falls_adjacent;
-    uint change_rate; // if constants.ambience_tick is divisible by this number, then the action happens
 };
-
-/**Active blocks are those that perform some kind of action depending on their closest surrounding or the time elapsed.
-Trees and vegetables grow, water flows, sand falls etc.*/
-bool is_block_active(const BlockProp block_prop){
-    return block_prop.change_rate != AMBIENCE_MAX_TIME_TICK;
-}
 
 #define Block uint
 
@@ -448,18 +441,16 @@ struct AnnEntity{
     float max_speed;
 };
 
-#define new_block_prop_regular_changing_transparent(texture_id, opacity, mass, falls_down, falls_adjacent, change_rate) BlockProp(uint[6](texture_id,texture_id,texture_id,texture_id,texture_id,texture_id),opacity,mass, falls_down, falls_adjacent, change_rate)
-#define new_block_prop_regular_transparent(texture_id, opacity, mass) BlockProp(uint[6](texture_id,texture_id,texture_id,texture_id,texture_id,texture_id),opacity,mass, false, false, AMBIENCE_MAX_TIME_TICK)
+#define new_block_prop_regular_transparent(texture_id, opacity, mass) BlockProp(uint[6](texture_id,texture_id,texture_id,texture_id,texture_id,texture_id),opacity,mass)
 #define new_block_prop_regular( texture_id, mass) new_block_prop_regular_transparent(texture_id,1.,mass)
-#define new_block_prop_regular_changing(texture_id, mass, falls_down, falls_adjacent, change_rate) new_block_prop_regular_changing_transparent(texture_id, 1., mass, falls_down, falls_adjacent, change_rate)
-#define new_block_prop_top_sides_bottom_transparent( texture_id_top, texture_id_side, texture_id_bottom, opacity, mass) BlockProp(uint[6](texture_id_side,texture_id_side,texture_id_top,texture_id_bottom,texture_id_side,texture_id_side),opacity, mass, false, false, 255)
-#define new_block_prop_top_sides_bottom_front( texture_id_top, texture_id_side, texture_id_bottom, texture_id_front, mass) BlockProp(uint[6](texture_id_side,texture_id_side,texture_id_top,texture_id_bottom,texture_id_side,texture_id_front),1., mass, false, false, 255)
+#define new_block_prop_top_sides_bottom_transparent( texture_id_top, texture_id_side, texture_id_bottom, opacity, mass) BlockProp(uint[6](texture_id_side,texture_id_side,texture_id_top,texture_id_bottom,texture_id_side,texture_id_side),opacity, mass)
+#define new_block_prop_top_sides_bottom_front( texture_id_top, texture_id_side, texture_id_bottom, texture_id_front, mass) BlockProp(uint[6](texture_id_side,texture_id_side,texture_id_top,texture_id_bottom,texture_id_side,texture_id_front),1., mass)
 #define new_block_prop_top_sides_bottom(texture_id_top, texture_id_side, texture_id_bottom, mass) new_block_prop_top_sides_bottom_transparent(texture_id_top,texture_id_side,texture_id_bottom,1., mass)
 
 const BlockProp[BLOCKS_LEN] BLOCK_PROPS = BlockProp[BLOCKS_LEN](
     new_block_prop_regular_transparent( /*Some dummy value*/256, 0., 0.05), // air
-    new_block_prop_regular_changing_transparent( 44, 0.09, 1.0, true, true, 8), // water
-    new_block_prop_regular_changing_transparent( 45, 0.009, 3.011, true, true, 15), // lava
+    new_block_prop_regular_transparent( 44, 0.09, 1.0), // water
+    new_block_prop_regular_transparent( 45, 0.009, 3.011), // lava
     new_block_prop_regular_transparent( 54, 0.1, 0.1), // glass
     new_block_prop_regular_transparent( 46, 0.7, 0.9167), // ice
     new_block_prop_regular_transparent( 47, 0.1, 0.143), // swamp_leaves
@@ -494,10 +485,10 @@ const BlockProp[BLOCKS_LEN] BLOCK_PROPS = BlockProp[BLOCKS_LEN](
     new_block_prop_regular( 43, 1.9), // brick
     new_block_prop_regular( 35, 2.26796), // cobblestone
     new_block_prop_regular( 36, 3.1), // bedrock
-    new_block_prop_regular_changing( 38, 1.62, true, false, 4), // sand
-    new_block_prop_regular_changing( 37, 1.62, true, false, 4), // rare_sand
-    new_block_prop_regular_changing( 40, 1.68, true, false, 4), // gravel
-    new_block_prop_regular_changing( 39, 1.68, true, false, 4), // wet_gravel
+    new_block_prop_regular( 38, 1.62), // sand
+    new_block_prop_regular( 37, 1.62), // rare_sand
+    new_block_prop_regular( 40, 1.68), // gravel
+    new_block_prop_regular( 39, 1.68), // wet_gravel
     new_block_prop_top_sides_bottom( 26,25,26, 1.5), // oak_wood
     new_block_prop_top_sides_bottom( 26,24,26, 1.5), // oak_stem
     new_block_prop_top_sides_bottom( 29,28,29, 1.5), // pink_wood

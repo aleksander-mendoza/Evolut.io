@@ -21,16 +21,16 @@ restrict layout(std430, set = 0, binding = 2) buffer CollisionGrid{
 };
 #endif // IS_AVAILABLE_BUFFER_COLLISION_GRID
 
-#ifdef IS_AVAILABLE_BUFFER_NEURAL_NET_LAYERS
-restrict layout(std430, set = 0, binding = 3) buffer NeuralNetLayers{
-    NeuralNetLayer neural_net_layers[];
+#ifdef IS_AVAILABLE_BUFFER_WORLD_BLOCK_STABILITY
+restrict layout(std430, set = 0, binding = 3) buffer WorldBlockStability{
+    uint world_block_stability[];
 };
-#endif
+#endif // IS_AVAILABLE_BUFFER_WORLD_BLOCK_STABILITY
 
 
-#ifdef IS_AVAILABLE_BUFFER_PERSISTENT_FLOATS
-restrict layout(std430, set = 0, binding = 4) buffer PersistentFloats{
-    float persistent_floats[];
+#ifdef IS_AVAILABLE_BUFFER_PARTICLES
+restrict layout(std430, set = 0, binding = 4) buffer Particles{
+    Particle particles[];
 };
 #endif
 

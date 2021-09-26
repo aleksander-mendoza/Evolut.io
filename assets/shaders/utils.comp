@@ -437,14 +437,6 @@ uvec2 get_face_copy(uint face_idx){
 }
 #endif // IS_AVAILABLE_BUFFER_TMP_FACES_COPY
 
-#ifdef IS_AVAILABLE_BUFFER_WORLD_BLOCKS_TO_UPDATE
-void set_world_blocks_to_update(uint offset, uint world_blocks_to_update_even, uint block_idx){
-    world_blocks_to_update[2*offset+world_blocks_to_update_even] = block_idx;
-}
-uint get_world_blocks_to_update(uint offset, uint world_blocks_to_update_even){
-    return world_blocks_to_update[2*offset+world_blocks_to_update_even];
-}
-#endif // IS_AVAILABLE_BUFFER_WORLD_BLOCKS_TO_UPDATE
 
 #ifdef IS_AVAILABLE_BUFFER_INDIRECT
 void set_indirect_dispatch(uint compute_shader_idx, uint invokations_count){

@@ -16,7 +16,7 @@ use crate::pipelines::player_event::{PlayerEvent, EventType};
 
 pub struct AmbienceResources {
     update_player_events: ShaderModule<Compute>,
-    update_ambience: ShaderModule<Compute>,
+    // update_ambience: ShaderModule<Compute>,
     update_ambience_faces: ShaderModule<Compute>,
     update_ambience_flush_insertions: ShaderModule<Compute>,
     update_ambience_prepare_face_offsets: ShaderModule<Compute>,
@@ -28,7 +28,7 @@ pub struct AmbienceResources {
 impl AmbienceResources {
     pub fn new(cmd_pool: &CommandPool, _foundations: &FoundationInitializer) -> Result<Self, failure::Error> {
         let update_player_events = ShaderModule::new(include_glsl!("assets/shaders/update_player_events.comp", kind: comp) as &[u32], cmd_pool.device())?;
-        let update_ambience = ShaderModule::new(include_glsl!("assets/shaders/update_ambience.comp", kind: comp) as &[u32], cmd_pool.device())?;
+        // let update_ambience = ShaderModule::new(include_glsl!("assets/shaders/update_ambience.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let update_ambience_faces = ShaderModule::new(include_glsl!("assets/shaders/update_ambience_faces.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let update_ambience_flush_insertions = ShaderModule::new(include_glsl!("assets/shaders/update_ambience_flush_insertions.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let update_ambience_prepare_face_offsets = ShaderModule::new(include_glsl!("assets/shaders/update_ambience_prepare_face_offsets.comp", kind: comp, target: vulkan1_1) as &[u32], cmd_pool.device())?;
@@ -36,7 +36,7 @@ impl AmbienceResources {
         let update_ambience_flush_world_copy = ShaderModule::new(include_glsl!("assets/shaders/update_ambience_flush_world_copy.comp", kind: comp) as &[u32], cmd_pool.device())?;
         Ok(Self {
             update_player_events,
-            update_ambience,
+            // update_ambience,
             update_ambience_faces,
             update_ambience_flush_insertions,
             update_ambience_prepare_face_offsets,
@@ -52,7 +52,7 @@ impl ComputeResources for AmbienceResources {
     fn make_computable(self, cmd_pool: &CommandPool, foundations: &Foundations) -> Result<Ambience, Error> {
         let Self {
             update_player_events,
-            update_ambience,
+            // update_ambience,
             update_ambience_faces,
             update_ambience_flush_insertions,
             update_ambience_prepare_face_offsets,
@@ -62,7 +62,7 @@ impl ComputeResources for AmbienceResources {
         let mut descriptors = ComputeDescriptorsBuilder::new();
         let uniform_binding = descriptors.uniform_buffer(foundations.player_event_uniform().buffer());
         descriptors.storage_buffer(foundations.global_mutables());
-        descriptors.storage_buffer(foundations.world_blocks_to_update());
+        descriptors.storage_buffer(foundations.world_block_stability());
         descriptors.storage_buffer(foundations.faces_to_be_inserted());
         descriptors.storage_buffer(foundations.faces_to_be_removed());
         descriptors.storage_buffer(foundations.indirect().super_buffer());
@@ -75,7 +75,7 @@ impl ComputeResources for AmbienceResources {
 
         let sc = foundations.specialization_constants().build();
         let update_player_events = descriptors.build("main", update_player_events, &sc)?;
-        let update_ambience = descriptors.build("main", update_ambience, &sc)?;
+        // let update_ambience = descriptors.build("main", update_ambience, &sc)?;
         let update_ambience_faces = descriptors.build("main", update_ambience_faces,&sc)?;
         let update_ambience_flush_insertions = descriptors.build("main", update_ambience_flush_insertions,&sc)?;
         let update_ambience_prepare_face_offsets = descriptors.build("main", update_ambience_prepare_face_offsets,&sc)?;
@@ -83,7 +83,7 @@ impl ComputeResources for AmbienceResources {
         let update_ambience_flush_world_copy = descriptors.build("main", update_ambience_flush_world_copy,&sc)?;
         Ok(Ambience {
             update_player_events,
-            update_ambience,
+            // update_ambience,
             update_ambience_faces,
             update_ambience_flush_insertions,
             update_ambience_prepare_face_offsets,
@@ -96,7 +96,7 @@ impl ComputeResources for AmbienceResources {
 
 pub struct Ambience {
     update_player_events: ComputePipeline,
-    update_ambience: ComputePipeline,
+    // update_ambience: ComputePipeline,
     update_ambience_faces: ComputePipeline,
     update_ambience_flush_insertions: ComputePipeline,
     update_ambience_prepare_face_offsets: ComputePipeline,
@@ -111,18 +111,18 @@ impl Computable for Ambience {
             .bind_compute_pipeline(&self.update_player_events)
             .dispatch_1d(1)
             .buffer_barriers(vk::PipelineStageFlags::COMPUTE_SHADER, vk::PipelineStageFlags::COMPUTE_SHADER | vk::PipelineStageFlags::DRAW_INDIRECT, &[
-                make_shader_buffer_barrier(foundations.faces()),
                 make_shader_dispatch_buffer_barrier(foundations.indirect().update_ambience()),
-                make_shader_buffer_barrier(foundations.global_mutables())
-            ])
-            .bind_compute_pipeline(&self.update_ambience)
-            .dispatch_indirect(foundations.indirect().update_ambience(),0)
-            .buffer_barriers(vk::PipelineStageFlags::COMPUTE_SHADER, vk::PipelineStageFlags::COMPUTE_SHADER | vk::PipelineStageFlags::DRAW_INDIRECT, &[
-                make_shader_buffer_barrier(foundations.world_blocks_to_update()),
-                make_shader_dispatch_buffer_barrier(foundations.indirect().update_ambience_faces()),
                 make_shader_buffer_barrier(foundations.global_mutables()),
                 make_shader_buffer_barrier(foundations.blocks_to_be_inserted_or_removed())
             ])
+            // .bind_compute_pipeline(&self.update_ambience)
+            // .dispatch_indirect(foundations.indirect().update_ambience(),0)
+            // .buffer_barriers(vk::PipelineStageFlags::COMPUTE_SHADER, vk::PipelineStageFlags::COMPUTE_SHADER | vk::PipelineStageFlags::DRAW_INDIRECT, &[
+            //     make_shader_buffer_barrier(foundations.world_blocks_to_update()),
+            //     make_shader_dispatch_buffer_barrier(foundations.indirect().update_ambience_faces()),
+            //     make_shader_buffer_barrier(foundations.global_mutables()),
+            //     make_shader_buffer_barrier(foundations.blocks_to_be_inserted_or_removed())
+            // ])
             .bind_compute_pipeline(&self.update_ambience_faces)
             .dispatch_indirect(foundations.indirect().update_ambience_faces(),0)
             .buffer_barriers(vk::PipelineStageFlags::COMPUTE_SHADER, vk::PipelineStageFlags::COMPUTE_SHADER, &[

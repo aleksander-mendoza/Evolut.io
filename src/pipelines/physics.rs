@@ -34,7 +34,7 @@ pub struct PhysicsResources {
     broad_phase_collision_detection_cleanup: ShaderModule<Compute>,
     narrow_phase_collision_detection: ShaderModule<Compute>,
     update_bones: ShaderModule<Compute>,
-    // update_particles: ShaderModule<Compute>,
+    update_particles: ShaderModule<Compute>,
     // feed_forward_net: ShaderModule<Compute>,
     // update_entity_lidars: ShaderModule<Compute>,
 }
@@ -48,7 +48,7 @@ impl PhysicsResources {
         let broad_phase_collision_detection = ShaderModule::new(include_glsl!("assets/shaders/broad_phase_collision_detection.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let broad_phase_collision_detection_cleanup = ShaderModule::new(include_glsl!("assets/shaders/broad_phase_collision_detection_cleanup.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let narrow_phase_collision_detection = ShaderModule::new(include_glsl!("assets/shaders/narrow_phase_collision_detection.comp", kind: comp) as &[u32], cmd_pool.device())?;
-        // let update_particles = ShaderModule::new(include_glsl!("assets/shaders/update_particles.comp", kind: comp) as &[u32], cmd_pool.device())?;
+        let update_particles = ShaderModule::new(include_glsl!("assets/shaders/update_particles.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let update_bones = ShaderModule::new(include_glsl!("assets/shaders/update_bones.comp", kind: comp) as &[u32], cmd_pool.device())?;
         // let feed_forward_net = ShaderModule::new(include_glsl!("assets/shaders/feed_forward_net.comp", kind: comp, target: vulkan1_1) as &[u32], cmd_pool.device())?;
         // let update_entity_lidars = ShaderModule::new(include_glsl!("assets/shaders/update_entity_lidars.comp", kind: comp) as &[u32], cmd_pool.device())?;
@@ -56,7 +56,7 @@ impl PhysicsResources {
             broad_phase_collision_detection,
             broad_phase_collision_detection_cleanup,
             narrow_phase_collision_detection,
-            // update_particles,
+            update_particles,
             update_bones,
             // update_entity_lidars,
             // feed_forward_net
@@ -70,7 +70,7 @@ impl ComputeResources for PhysicsResources{
         let Self {
             broad_phase_collision_detection,
             broad_phase_collision_detection_cleanup,
-            // update_particles,
+            update_particles,
             narrow_phase_collision_detection,
             update_bones,
             // update_entity_lidars,
@@ -80,8 +80,8 @@ impl ComputeResources for PhysicsResources{
         let uniform_binding = descriptors.uniform_buffer(foundations.player_event_uniform().buffer());//0
         descriptors.storage_buffer(foundations.global_mutables());//1
         descriptors.storage_buffer(foundations.collision_grid());//2
-        descriptors.storage_buffer(foundations.neural_net_layers());//3
-        descriptors.storage_buffer(foundations.persistent_floats());//4
+        descriptors.storage_buffer(foundations.world_block_stability());//3
+        descriptors.storage_buffer(foundations.particles());//4
         descriptors.storage_buffer(foundations.indirect().super_buffer());//5
         descriptors.storage_buffer(foundations.bones());//6
         descriptors.storage_buffer(foundations.world());//7
@@ -101,11 +101,11 @@ impl ComputeResources for PhysicsResources{
         let update_bones = descriptors.build("main", update_bones,&sc)?;
         // let update_entity_lidars = descriptors.build("main", update_entity_lidars,&sc)?;
         // let feed_forward_net = descriptors.build("main", feed_forward_net)?;
-        // let update_particles = descriptors.build("main", update_particles,&sc)?;
+        let update_particles = descriptors.build("main", update_particles,&sc)?;
         let narrow_phase_collision_detection = descriptors.build("main", narrow_phase_collision_detection,&sc)?;
         Ok(Physics {
             narrow_phase_collision_detection,
-            // update_particles,
+            update_particles,
             // update_entity_lidars,
             // feed_forward_net,
             broad_phase_collision_detection,
@@ -124,7 +124,7 @@ pub struct Physics {
     broad_phase_collision_detection_cleanup: ComputePipeline,
     narrow_phase_collision_detection: ComputePipeline,
     update_bones: ComputePipeline,
-    // update_particles: ComputePipeline,
+    update_particles: ComputePipeline,
     // update_entity_lidars: ComputePipeline,
     // feed_forward_net: ComputePipeline,
 }
@@ -150,6 +150,8 @@ impl Computable for Physics {
             ])
             .bind_compute_pipeline(&self.update_bones)
             .dispatch_indirect(foundations.indirect().update_bones(), 0)
+            .bind_compute_pipeline(&self.update_particles)
+            .dispatch_indirect(foundations.indirect().update_particles(), 0)
             // .bind_compute_pipeline(&self.update_entity_lidars)
             // .dispatch_indirect(foundations.indirect().update_entity_lidars(), 0)
 
