@@ -1,0 +1,91 @@
+#version 450
+//#extension GL_EXT_debug_printf : enable
+#define IS_AVAILABLE_BUFFER_WORLD
+#define IS_AVAILABLE_BUFFER_RANDOM_VALS
+
+#include "descriptors_generate.comp"
+layout (local_size_x_id = GROUP_SIZE_CONST_ID) in;
+#include "utils.comp"
+
+float interpolate(uvec2 pos, uint chunk_count_in_x_axis, float scale, uint random_vals_offset){
+    // Here we assume that the world is divided into square chunks (side length equal to scale variable).
+    // Additionally there is an extra layer of chunks lying outside of the world. Those extra chunks form a kind of "margins".
+    // We assume that there is a buffer that contains some value for each chunk. We need to find the 4 chunks that lie closest to any given point.
+    // Points that lie very close to world border might have less than 4 neighbours but we are always required to return exactly 4 chunks.
+    // This is why we need to have margins. If we did not have those margins, then some strage artifacts would appear near world borders
+    // if we tried to blend/interpolate the values of neighbouring chunks.
+    const vec2 scale_v = vec2(scale,scale);
+    const vec2 pos_with_margins = vec2(pos) + /*middle point in the block=0.5*/ vec2(0.5,0.5) + /*size of extra chunk on the margin*/ scale_v;
+    const float radius = scale / 2.;
+    const vec2 fraction = fract((pos_with_margins - scale_v / 2.) / scale_v);
+
+    const vec4 x_values = pos_with_margins.x + vec4(radius, radius, - radius, - radius);
+    const vec4 z_values = pos_with_margins.y + vec4(radius, - radius, radius, - radius);
+    const uvec4 neighbour_indices = uvec4(x_values / scale) + uvec4(z_values / scale) * chunk_count_in_x_axis; // notice that
+    //neighbour_indices.x is right top neihbour
+    //neighbour_indices.y is right bottom neihbour
+    //neighbour_indices.z is left top neihbour
+    //neighbour_indices.w is left bottom neihbour
+    const uvec4 neighbour_offsets = random_vals_offset + neighbour_indices;
+    const float interpolated_value = smoothstep_on_2d_plane(fraction.x, fraction.y,
+        random_vals[neighbour_offsets.x],
+        random_vals[neighbour_offsets.y],
+        random_vals[neighbour_offsets.z],
+        random_vals[neighbour_offsets.w]);
+    return interpolated_value;
+}
+
+void main() {
+    const vec2 WORLD_SIZE = vec2(WORLD_WIDTH,WORLD_DEPTH);
+    // width and depth with margins
+    const uvec2 LARGE_SCALE_SIZE_WITH_MARGINS = uvec2(ceil(WORLD_SIZE/LARGE_SCALE)+2);// +2 stands for margins (+1 extra chunk on each side)
+    const uvec2 CHUNK_SCALE_SIZE_WITH_MARGINS = uvec2(ceil(WORLD_SIZE/CHUNK_SCALE)+2);
+    const uvec2 TEMPERATURE_SCALE_SIZE_WITH_MARGINS = uvec2(ceil(WORLD_SIZE/TEMPERATURE_SCALE)+2);
+    const uvec2 HUMIDITY_SCALE_SIZE_WITH_MARGINS = uvec2(ceil(WORLD_SIZE/HUMIDITY_SCALE)+2);
+    const uvec2 RESOURCE_TYPE_SCALE_SIZE_WITH_MARGINS = uvec2(ceil(WORLD_SIZE/RESOURCE_TYPE_SCALE)+2);
+    const uvec2 HAS_RESOURCE_SCALE_SIZE_WITH_MARGINS = uvec2(ceil(WORLD_SIZE/HAS_RESOURCE_SCALE)+2);
+    // sub buffer lengths
+    const uint LARGE_SCALE_SUB_BUFFER_LENGTH = LARGE_SCALE_SIZE_WITH_MARGINS.x*LARGE_SCALE_SIZE_WITH_MARGINS.y;
+    const uint CHUNK_SCALE_SUB_BUFFER_LENGTH = CHUNK_SCALE_SIZE_WITH_MARGINS.x*CHUNK_SCALE_SIZE_WITH_MARGINS.y;
+    const uint TEMPERATURE_SCALE_SUB_BUFFER_LENGTH = TEMPERATURE_SCALE_SIZE_WITH_MARGINS.x*TEMPERATURE_SCALE_SIZE_WITH_MARGINS.y;
+    const uint HUMIDITY_SCALE_SUB_BUFFER_LENGTH = HUMIDITY_SCALE_SIZE_WITH_MARGINS.x*HUMIDITY_SCALE_SIZE_WITH_MARGINS.y;
+    const uint RESOURCE_TYPE_SCALE_SUB_BUFFER_LENGTH = RESOURCE_TYPE_SCALE_SIZE_WITH_MARGINS.x*RESOURCE_TYPE_SCALE_SIZE_WITH_MARGINS.y;
+    const uint HAS_RESOURCE_SCALE_SUB_BUFFER_LENGTH = HAS_RESOURCE_SCALE_SIZE_WITH_MARGINS.x*HAS_RESOURCE_SCALE_SIZE_WITH_MARGINS.y;
+    const uint SURFACE_ARTIFACT_SCALE_SUB_BUFFER_LENGTH = WORLD_AREA;
+    // sub buffer offsets
+    const uint LARGE_SCALE_SUB_BUFFER_OFFSET = 0;
+    const uint CHUNK_SCALE_SUB_BUFFER_OFFSET = LARGE_SCALE_SUB_BUFFER_OFFSET + LARGE_SCALE_SUB_BUFFER_LENGTH;
+    const uint TEMPERATURE_SCALE_SUB_BUFFER_OFFSET = CHUNK_SCALE_SUB_BUFFER_OFFSET + CHUNK_SCALE_SUB_BUFFER_LENGTH;
+    const uint HUMIDITY_SCALE_SUB_BUFFER_OFFSET = TEMPERATURE_SCALE_SUB_BUFFER_OFFSET + TEMPERATURE_SCALE_SUB_BUFFER_LENGTH;
+    const uint RESOURCE_TYPE_SCALE_SUB_BUFFER_OFFSET = HUMIDITY_SCALE_SUB_BUFFER_OFFSET + HUMIDITY_SCALE_SUB_BUFFER_LENGTH;
+    const uint HAS_RESOURCE_SCALE_SUB_BUFFER_OFFSET = RESOURCE_TYPE_SCALE_SUB_BUFFER_OFFSET + RESOURCE_TYPE_SCALE_SUB_BUFFER_LENGTH;
+    const uint SURFACE_ARTIFACT_SCALE_SUB_BUFFER_OFFSET = HAS_RESOURCE_SCALE_SUB_BUFFER_OFFSET +HAS_RESOURCE_SCALE_SUB_BUFFER_LENGTH;
+    // interpolation
+    const uint gID = gl_GlobalInvocationID.x;
+    const uvec2 pos = world_2d_idx_into_xz_pos(gID);
+    const float large_scale_interpolated_value = interpolate(pos,LARGE_SCALE_SIZE_WITH_MARGINS.x,LARGE_SCALE,LARGE_SCALE_SUB_BUFFER_OFFSET);
+    const float chunk_scale_interpolated_value = interpolate(pos,CHUNK_SCALE_SIZE_WITH_MARGINS.x,CHUNK_SCALE,CHUNK_SCALE_SUB_BUFFER_OFFSET);
+    const float temperature_scale_interpolated_value = interpolate(pos,TEMPERATURE_SCALE_SIZE_WITH_MARGINS.x,TEMPERATURE_SCALE,TEMPERATURE_SCALE_SUB_BUFFER_OFFSET);
+    const float humidity_scale_interpolated_value = interpolate(pos,HUMIDITY_SCALE_SIZE_WITH_MARGINS.x,HUMIDITY_SCALE,HUMIDITY_SCALE_SUB_BUFFER_OFFSET);
+    const float resource_type_scale_interpolated_value = interpolate(pos,RESOURCE_TYPE_SCALE_SIZE_WITH_MARGINS.x,RESOURCE_TYPE_SCALE,RESOURCE_TYPE_SCALE_SUB_BUFFER_OFFSET);
+    const float has_resource_scale_interpolated_value = interpolate(pos,HAS_RESOURCE_SCALE_SIZE_WITH_MARGINS.x,HAS_RESOURCE_SCALE,HAS_RESOURCE_SCALE_SUB_BUFFER_OFFSET);
+    // the actual code that generates terrain
+    const uint height = uint(large_scale_interpolated_value + chunk_scale_interpolated_value);
+    const uint biome = get_biome(humidity_scale_interpolated_value,temperature_scale_interpolated_value);
+    const BiomeProp biome_props = BIOMES[biome];
+    fill_column_to(uvec3(pos.x, 1, pos.y), height - 4, BLOCK_ID_STONE);
+    fill_column_to(uvec3(pos.x, height - 4, pos.y), height, biome_props.dirt);
+    if (height < SEA_LEVEL) {
+        const uint sea_depth = SEA_LEVEL - height;
+        fill_column_to(uvec3(pos.x, height, pos.y), SEA_LEVEL, BLOCK_ID_WATER);
+        set_block(uvec3(pos.x, SEA_LEVEL, pos.y), sea_depth < biome_props.sea_depth ? biome_props.water_top : BLOCK_ID_WATER);
+    } else {
+        const float resource_random_value = has_resource_scale_interpolated_value*resource_type_scale_interpolated_value;
+        const float artifact_random_value = random_vals[SURFACE_ARTIFACT_SCALE_SUB_BUFFER_OFFSET+gID];
+        const uint resource_id = get_biome_resource(biome_props, resource_random_value);
+        set_block(uvec3(pos.x, height, pos.y), resource_id);
+        const uint surface_artifact_id = get_biome_surface_artifact(biome_props, artifact_random_value);
+        set_block(uvec3(pos.x, height+1, pos.y), surface_artifact_id);
+    }
+    set_block(uvec3(pos.x, 0, pos.y), BLOCK_ID_BEDROCK);
+}

@@ -31,6 +31,7 @@ use crate::pipelines::renderable::{RenderResources, Renderable};
 use crate::pipelines::computable::{Computable, ComputeResources};
 use std::sync::Arc;
 use crate::render::fence::Fence;
+use crate::pipelines::world_generation::WorldGeneratorInitializer;
 
 
 pub struct Display<P: RenderResources, C:ComputeResources, A:ComputeResources>{
@@ -85,6 +86,7 @@ impl <P: RenderResources, C:ComputeResources, A:ComputeResources> Display<P,C,A>
         let compute_background_cmd_pool = CommandPool::new(vulkan.device(),QUEUE_IDX_AMBIENT_COMPUTE, true)?;
         let mut descriptors_builder = DescriptorsBuilder::new();
         let foundations = FoundationInitializer::new(&graphics_cmd_pool)?;
+        let world_generator = WorldGeneratorInitializer::new(&compute_cmd_pool,&foundations)?;
         let uniforms_binding = descriptors_builder.singleton_uniform_buffer(player.mvp_uniforms());
         let _ = descriptors_builder.storage_buffer(foundations.global_mutables().gpu());
         let render_resources = render(&graphics_cmd_pool,&foundations)?;
@@ -93,6 +95,7 @@ impl <P: RenderResources, C:ComputeResources, A:ComputeResources> Display<P,C,A>
         render_resources.create_descriptors(&mut descriptors_builder, &foundations)?;
         let descriptors_builder = descriptors_builder.make_layout(graphics_cmd_pool.device())?;
         let foundations = foundations.build()?;
+        let world_generator = world_generator.build(&compute_cmd_pool, &foundations)?;
         let graphics_pipeline = render_resources.make_renderable(&graphics_cmd_pool, &render_pass,&descriptors_builder, &foundations)?;
         let compute_pipeline = compute_resources.make_computable(&compute_cmd_pool,&foundations)?;
         let compute_background_pipeline = compute_background_resources.make_computable(&compute_background_cmd_pool,&foundations)?;

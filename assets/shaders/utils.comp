@@ -38,6 +38,25 @@ RayCastResult ray_cast(vec3 start, vec3 distance_and_direction) {
     }
     return RayCastResult(v,1,v,false);
 }
+void set_block(uvec3 world_block_pos, Block block) {
+    world[block_pos_into_world_idx(world_block_pos)] = block;
+}
+void remove_block(uvec3 world_block_pos) {
+    set_block(world_block_pos, BLOCK_ID_AIR);
+}
+Block get_block(uvec3 world_block_pos) {
+    return world[block_pos_into_world_idx(world_block_pos)];
+}
+void fill_column_to(uvec3 from_world_block_pos, uint to_y, Block block) {
+    const uint from_idx = block_pos_into_world_idx(from_world_block_pos);
+    const uint to_idx = block_pos_into_world_idx(uvec3(from_world_block_pos.x,to_y,from_world_block_pos.z));
+    for(uint i = from_idx; i<to_idx;i+=WORLD_AREA){
+        world[i] = block;
+    }
+}
+void fill_column(uvec3 from_world_block_pos, uint height, Block block) {
+    fill_column_to(from_world_block_pos,from_world_block_pos.y+height,block);
+}
 
 #endif //IS_AVAILABLE_BUFFER_WORLD
 
@@ -88,6 +107,13 @@ uint ray_bone_intersect(vec3 start, vec3 distance_and_direction) {
 
 #endif //IS_AVAILABLE_BUFFER_COLLISION_GRID
 #endif //IS_AVAILABLE_BUFFER_BONES
+
+#ifdef IS_AVAILABLE_BUFFER_INDIRECT
+void set_indirect_dispatch(uint compute_shader_idx, uint invokations_count){
+    dispatch_indirect[compute_shader_idx].x = invokation_count_to_group_count(invokations_count);
+}
+#endif //IS_AVAILABLE_BUFFER_INDIRECT
+
 
 #ifdef IS_AVAILABLE_BUFFER_FACES
 #ifdef IS_AVAILABLE_BUFFER_WORLD
@@ -361,6 +387,12 @@ Face get_face_at(uint face_idx){
 uint get_chunk_face_count_at(uint chunk_offset){
     return faces[chunk_offset].x;
 }
+void set_chunk_face_count_at(uint chunk_offset, uint face_count){
+    faces[chunk_offset].x = face_count;
+}
+uint atomic_add_chunk_face_count_at(uint chunk_offset, uint face_count){
+    return atomicAdd(faces[chunk_offset].x, face_count);
+}
 #endif // IS_AVAILABLE_BUFFER_FACES
 
 
@@ -438,11 +470,6 @@ uvec2 get_face_copy(uint face_idx){
 #endif // IS_AVAILABLE_BUFFER_TMP_FACES_COPY
 
 
-#ifdef IS_AVAILABLE_BUFFER_INDIRECT
-void set_indirect_dispatch(uint compute_shader_idx, uint invokations_count){
-    dispatch_indirect[compute_shader_idx].x = invokation_count_to_group_count(invokations_count);
-}
-#endif // IS_AVAILABLE_BUFFER_INDIRECT
 
 #endif // UTILS_COMP
 

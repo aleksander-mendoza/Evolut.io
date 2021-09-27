@@ -1,0 +1,65 @@
+#version 450
+//#extension GL_EXT_debug_printf : enable
+#define IS_AVAILABLE_BUFFER_WORLD
+#define IS_AVAILABLE_BUFFER_FACES
+
+#include "descriptors_generate.comp"
+layout (local_size_x_id = GROUP_SIZE_CONST_ID) in;
+#include "utils.comp"
+
+void main() {
+    const uint gID = gl_GlobalInvocationID.x;
+    const uvec2 pos = world_2d_idx_into_xz_pos(gID);
+    const uint chunk_x = pos.x / CHUNK_WIDTH;
+    const uint chunk_z = pos.y / CHUNK_DEPTH;
+    const uint chunk_idx = chunk_pos_into_chunk_idx(chunk_x,chunk_z);
+    const uvec2 pos_relative_to_chunk = uvec2(pos.x - chunk_x * CHUNK_WIDTH, pos.y - chunk_z * CHUNK_DEPTH);
+    const uint chunk_x_of_x_neighbour = pos_relative_to_chunk.x==0?chunk_x-1:chunk_x;
+    const uint chunk_idx_of_x_neighbour = chunk_pos_into_chunk_idx(chunk_x_of_x_neighbour,chunk_z);
+    const uint chunk_z_of_z_neighbour = pos_relative_to_chunk.y==0?chunk_z-1:chunk_z;
+    const uint chunk_idx_of_z_neighbour = chunk_pos_into_chunk_idx(chunk_x,chunk_z_of_z_neighbour);
+    const uint from_block_idx = block_pos_into_world_idx(uvec3(pos.x,0,pos.y));
+    const uint to_block_idx = block_pos_into_world_idx(uvec3(pos.x,CHUNK_HEIGHT,pos.y));
+    uint[2] number_of_faces_in_this_chunk = uint[2](0,0); // first element are opaque faces and second are transparent faces
+    uint[2] number_of_faces_in_x_neighbour_chunk = uint[2](0,0); // first element are opaque faces and second are transparent faces
+    uint[2] number_of_faces_in_z_neighbour_chunk = uint[2](0,0); // first element are opaque faces and second are transparent faces
+    float block_below_opacity = BLOCK_PROPS[world[from_block_idx]].opacity;
+    for(uint idx=from_block_idx+WORLD_AREA;idx<to_block_idx;idx+=WORLD_AREA){
+        const float block_opacity = BLOCK_PROPS[world[idx]].opacity;
+        const uint am_i_transparent = uint(block_opacity < 1);
+        if(block_opacity > block_below_opacity){ // I have a face
+            number_of_faces_in_this_chunk[am_i_transparent]++;
+        } else if(block_opacity < block_below_opacity){ // neighbour has a face
+            number_of_faces_in_this_chunk[uint(block_below_opacity<1)]++;
+        }
+        if(pos.x > 0){
+            const uint neighbour_idx = idx-1; // go one block in the negative x direction
+            const float neighbour_opacity = BLOCK_PROPS[world[neighbour_idx]].opacity;
+            if(neighbour_opacity < block_opacity){ // I have a face
+                number_of_faces_in_this_chunk[am_i_transparent]++;
+            }else if(neighbour_opacity > block_opacity){ // neighbour has a face
+                number_of_faces_in_x_neighbour_chunk[uint(neighbour_opacity<1)]++;
+            }
+        }
+        if(pos.y > 0){
+            const uint neighbour_idx = idx-WORLD_WIDTH; // go one block in the negative z direction
+            const float neighbour_opacity = BLOCK_PROPS[world[neighbour_idx]].opacity;
+            if(neighbour_opacity < block_opacity){ // I have a face
+                number_of_faces_in_this_chunk[am_i_transparent]++;
+            }else if(neighbour_opacity > block_opacity){ // neighbour has a face
+                number_of_faces_in_z_neighbour_chunk[uint(neighbour_opacity<1)]++;
+            }
+        }
+        block_below_opacity = block_opacity;
+    }
+    atomic_add_chunk_face_count_at(chunk_idx,number_of_faces_in_this_chunk[0]);
+    atomic_add_chunk_face_count_at(chunk_idx+TOTAL_CHUNKS,number_of_faces_in_this_chunk[1]);
+    if(pos.x > 0){
+        atomic_add_chunk_face_count_at(chunk_idx_of_x_neighbour, number_of_faces_in_x_neighbour_chunk[0]);
+        atomic_add_chunk_face_count_at(chunk_idx_of_x_neighbour+TOTAL_CHUNKS, number_of_faces_in_x_neighbour_chunk[1]);
+    }
+    if(pos.y > 0){
+        atomic_add_chunk_face_count_at(chunk_idx_of_z_neighbour, number_of_faces_in_z_neighbour_chunk[0]);
+        atomic_add_chunk_face_count_at(chunk_idx_of_z_neighbour+TOTAL_CHUNKS, number_of_faces_in_z_neighbour_chunk[1]);
+    }
+}

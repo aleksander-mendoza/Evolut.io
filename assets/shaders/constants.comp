@@ -9,10 +9,10 @@
 #define YMinus 3
 #define ZPlus 4
 #define ZMinus 5
-#define CHUNK_WIDTH 16
-#define CHUNK_DEPTH 16
-#define CHUNK_HEIGHT 256
-#define MAX_UINT 4294967295
+const uint CHUNK_WIDTH = 16;
+const uint CHUNK_DEPTH = 16;
+const uint CHUNK_HEIGHT = 256;
+const uint MAX_UINT = 4294967295;
 #define GROUP_SIZE_CONST_ID 1
 layout (constant_id = 1) const uint GROUP_SIZE = 32;
 layout (constant_id = 2) const uint CHUNKS_X = 0;
@@ -42,8 +42,8 @@ layout (constant_id = 106) const float DAMPING_COEFFICIENT = 0.99;
 layout (constant_id = 300) const uint MAX_BONES = 128;
 layout (constant_id = 301) const uint MAX_SENSORS = 128;
 layout (constant_id = 302) const uint MAX_FACES = 128;
-layout (constant_id = 303) const uint MAX_PERSISTENT_FLOATS = 128;
-layout (constant_id = 304) const uint MAX_NEURAL_NET_LAYERS = 128;
+layout (constant_id = 303) const uint MAX_RANDOM_NUMBERS = 128;
+//layout (constant_id = 304) const uint MAX_NEURAL_NET_LAYERS = 128;
 layout (constant_id = 305) const uint MAX_TMP_FACES_COPY = 128;
 //layout (constant_id = 306) const uint MAX_WORLD_BLOCKS_TO_UPDATE = 128;
 layout (constant_id = 307) const uint MAX_BLOCKS_TO_BE_INSERTED_OR_REMOVED = 128;
@@ -53,13 +53,24 @@ layout (constant_id = 310) const uint MAX_HTM_ENTITIES = 128;
 layout (constant_id = 311) const uint MAX_ANN_ENTITIES = 128;
 layout (constant_id = 312) const uint MAX_PARTICLES = 1024;
 
+layout (constant_id = 400) const uint SEA_LEVEL = 128;
+layout (constant_id = 401) const float FREEZING_TEMPERATURE = 0.;
+layout (constant_id = 402) const float SWAMP_HUMIDITY = 40.;
+layout (constant_id = 403) const float DESERT_HUMIDITY = 25.;//humidity of sahara desert
+layout (constant_id = 404) const float LARGE_SCALE = 64.;
+layout (constant_id = 405) const float CHUNK_SCALE = 16.;
+layout (constant_id = 406) const float TEMPERATURE_SCALE = 64.;
+layout (constant_id = 407) const float HUMIDITY_SCALE = 64.;
+layout (constant_id = 408) const float RESOURCE_TYPE_SCALE = 16.;
+layout (constant_id = 409) const float HAS_RESOURCE_SCALE = 4.;
+
 bool is_in_world_borders(uvec3 pos){
     return all(lessThan(pos,WORLD_BORDERS));
 }
 
-#define PLAYER_EVENT_NOTHING 0
-#define PLAYER_EVENT_THROW 1
-#define PLAYER_EVENT_SET_BLOCK 2
+const uint PLAYER_EVENT_NOTHING = 0;
+const uint PLAYER_EVENT_THROW = 1;
+const uint PLAYER_EVENT_SET_BLOCK = 2;
 
 struct PlayerEvent{
     vec3 vec3_slot0;
@@ -150,6 +161,11 @@ struct Particle{
     float energy;
 };
 
+////////////////////////////////////////////////////////////////////////////////////
+///////////// BELOW ARE GENERIC UTILITY FUNCTIONS FOR CONVERTING WORLD/FACE POSITIONS TO BUFFER INDICES ETC
+////////////////////////////////////////////////////////////////////////////////////
+
+
 uint chunk_pos_into_chunk_idx(uint x, uint z) {
     return z * CHUNKS_X + x;
 }
@@ -166,6 +182,17 @@ uvec3 world_idx_into_block_pos(uint idx){
     uint x = y_rem - z * WORLD_WIDTH;
     return uvec3(x,y,z);
 }
+
+uint world_xz_pos_into_2d_idx(uvec2 pos){
+    return pos.y*WORLD_WIDTH + pos.x;
+}
+uvec2 world_2d_idx_into_xz_pos(uint idx){
+    uint z = idx / WORLD_WIDTH;
+    uint x = idx - z * WORLD_WIDTH;
+    return uvec2(x,z);
+}
+
+
 uint block_pos_relative_to_chunk_into_block_idx_relative_to_chunk(uvec3 position_relative_to_chunk) {
     //Notice that this conversion could equivalently be expressed as
     // position_relative_to_chunk.x + position_relative_to_chunk.z << 4 + position_relative_to_chunk.y << 8
@@ -218,25 +245,28 @@ uvec2 new_face(uvec3 block_position_relative_to_chunk, uint orientation, uint ch
     return uvec2(face_coords,tex_id);
 }
 
-#define DISPATCH_INDIRECT_UPDATE_PARTICLES 0
-#define DISPATCH_INDIRECT_PER_PARTICLE 0
-#define DISPATCH_INDIRECT_BROAD_PHASE_COLLISION_DETECTION 1
-#define DISPATCH_INDIRECT_BROAD_PHASE_COLLISION_DETECTION_CLEANUP 1
-#define DISPATCH_INDIRECT_UPDATE_BONES 1
-#define DISPATCH_INDIRECT_PER_BONE 1
-#define DISPATCH_INDIRECT_AGENT_SENSORY_INPUT_UPDATE 2
-#define DISPATCH_INDIRECT_FEED_FORWARD_NET 3
-#define DISPATCH_INDIRECT_UPDATE_AMBIENCE 4
-#define DISPATCH_INDIRECT_UPDATE_AMBIENCE_FACES 5
-#define DISPATCH_INDIRECT_UPDATE_AMBIENCE_FLUSH_WORLD_COPY 5
-#define DISPATCH_INDIRECT_PER_BLOCKS_TO_BE_INSERTED_OR_REMOVED 5
-#define DISPATCH_INDIRECT_PER_HTM_ENTITIES 6
-#define DISPATCH_INDIRECT_PER_ANN_ENTITIES 7
-#define DISPATCH_INDIRECT_LEN 8
-#define DRAW_INDIRECT_BONES 0
-#define DRAW_INDIRECT_BLOCK 1
-#define DRAW_INDIRECT_PARTICLES 2
-#define DRAW_INDIRECT_LEN 3
+///////////////////////////////////////////////////////////////////////////////////
+///////////// BELOW ARE DEFINITIONS OF ALL AVAILABLE INDIRECT DISPATCH BUFFERS
+///////////////////////////////////////////////////////////////////////////////////
+
+const uint DISPATCH_INDIRECT_UPDATE_PARTICLES = 0;
+const uint DISPATCH_INDIRECT_PER_PARTICLE = 0;
+const uint DISPATCH_INDIRECT_BROAD_PHASE_COLLISION_DETECTION = 1;
+const uint DISPATCH_INDIRECT_BROAD_PHASE_COLLISION_DETECTION_CLEANUP = 1;
+const uint DISPATCH_INDIRECT_UPDATE_BONES = 1;
+const uint DISPATCH_INDIRECT_PER_BONE = 1;
+const uint DISPATCH_INDIRECT_AGENT_SENSORY_INPUT_UPDATE = 2;
+const uint DISPATCH_INDIRECT_UPDATE_AMBIENCE = 3;
+const uint DISPATCH_INDIRECT_UPDATE_AMBIENCE_FACES = 4;
+const uint DISPATCH_INDIRECT_UPDATE_AMBIENCE_FLUSH_WORLD_COPY = 4;
+const uint DISPATCH_INDIRECT_PER_BLOCKS_TO_BE_INSERTED_OR_REMOVED = 4;
+const uint DISPATCH_INDIRECT_PER_HTM_ENTITIES = 5;
+const uint DISPATCH_INDIRECT_PER_ANN_ENTITIES = 6;
+const uint DISPATCH_INDIRECT_LEN = 7;
+const uint DRAW_INDIRECT_BONES = 0;
+const uint DRAW_INDIRECT_FACES = 1;
+const uint DRAW_INDIRECT_PARTICLES = 2;
+const uint DRAW_INDIRECT_LEN = 3;
 
 const uint GROUP_SIZE_MINUS_ONE = GROUP_SIZE-1;
 uint invokation_count_to_group_count(uint invokations){
@@ -253,6 +283,12 @@ struct DrawIndirectCommand{
     uint first_vertex;
     uint first_instance;
 };
+
+
+//////////////////////////////////////////////////////////////////////////////////
+/////////// BELOW ARE SOME GENERIC MATH FUNCTIONS
+//////////////////////////////////////////////////////////////////////////////////
+
 
 uint max_vec3_component(vec3 v){
     return v.x > v.y ? (v.x > v.z ? 0 : 2) : (v.y > v.z ? 1 : 2);
@@ -280,6 +316,22 @@ vec3 quat_rotate_vec(vec4 q, vec3 v){
     return quat_mult(q,quat_mult(vec4(v,0.),quat_conj(q))).xyz;
 }
 
+float smoothstep(float x) {
+    return x * x * (3. - 2. * x);
+}
+float smoothstep_between(float x, float edge0,float edge1){
+    return edge0 + smoothstep(x)*(edge1-edge0);
+}
+float smoothstep_on_2d_plane(float x, float z, float right_top, float right_bottom,float left_top, float left_bottom){
+    const float val_left = smoothstep_between(z, left_bottom, left_top);
+    const float val_right = smoothstep_between(z, right_bottom, right_top);
+    return smoothstep_between(x, val_left, val_right);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///////// BELOW ARE DEFINITIONS OF BLOCKS AND BLOCK KPROPERTIES
+////////////////////////////////////////////////////////////////////////////////
+
 struct BlockProp{
     uint[6] texture_ids;
     float opacity; // the higher, the more opaque
@@ -288,158 +340,66 @@ struct BlockProp{
 
 #define Block uint
 
-#define BLOCK_ID_AIR 0
-#define BLOCK_ID_WATER 1
-#define BLOCK_ID_LAVA 2
+const uint BLOCK_ID_AIR = 0;
+const uint BLOCK_ID_WATER = 1;
+const uint BLOCK_ID_LAVA = 2;
 // blocks above are traversable. Blocks below are solid (Notice
 // that if a block is traversable, player's camera might get inside it.
 // When that happens the block's faces will be culled. This means that every
 // traversable block must be transparent to prevent a situation where
 // the player could see through walls)
-#define BLOCK_ID_GLASS 3
-#define BLOCK_ID_ICE 4
-#define BLOCK_ID_SWAMP_LEAVES 5
-#define BLOCK_ID_GOLDEN_LEAVES 6
-#define BLOCK_ID_OAK_LEAVES 7
-#define BLOCK_ID_PEACH_LEAVES 8
-#define BLOCK_ID_AETHER_LEAVES 9
-#define BLOCK_ID_FROST_LEAVES 10
+const uint BLOCK_ID_GLASS = 3;
+const uint BLOCK_ID_ICE = 4;
+const uint BLOCK_ID_SWAMP_LEAVES = 5;
+const uint BLOCK_ID_GOLDEN_LEAVES = 6;
+const uint BLOCK_ID_OAK_LEAVES = 7;
+const uint BLOCK_ID_PEACH_LEAVES = 8;
+const uint BLOCK_ID_AETHER_LEAVES = 9;
+const uint BLOCK_ID_FROST_LEAVES = 10;
 // blocks above are transparent. Blocks below are not
-#define BLOCK_ID_STONE 11
-#define BLOCK_ID_GOLD_ORE 12
-#define BLOCK_ID_IRON_ORE 13
-#define BLOCK_ID_COAL_ORE 14
-#define BLOCK_ID_DIAMOND_ORE 15
-#define BLOCK_ID_REDSTONE_ORE 16
-#define BLOCK_ID_DIRT 17
-#define BLOCK_ID_SWAMP_DIRT 18
-#define BLOCK_ID_IRON_RICH_DIRT 19
-#define BLOCK_ID_AETHER_DIRT 20
-#define BLOCK_ID_FROST_DIRT 21
-#define BLOCK_ID_GRASS 22
-#define BLOCK_ID_BERRIES 23
-#define BLOCK_ID_STRAWBERRIES 24
-#define BLOCK_ID_WHEAT 25
-#define BLOCK_ID_SWAMP_GRASS 26
-#define BLOCK_ID_SWAMP_BERRIES 27
-#define BLOCK_ID_SWAMP_BACKBERRIES 28
-#define BLOCK_ID_FROST_GRASS 29
-#define BLOCK_ID_SNOW_CROCUS 30
-#define BLOCK_ID_SNOW_BLACKBERRIES 31
-#define BLOCK_ID_PLANK 32
-#define BLOCK_ID_SLAB 33
-#define BLOCK_ID_BRICK 34
-#define BLOCK_ID_COBBLESTONE 35
-#define BLOCK_ID_BEDROCK 36
-#define BLOCK_ID_SAND 37
-#define BLOCK_ID_RARE_SAND 38
-#define BLOCK_ID_GRAVEL 39
-#define BLOCK_ID_WET_GRAVEL 40
-#define BLOCK_ID_OAK_WOOD 41
-#define BLOCK_ID_OAK_STEM 42
-#define BLOCK_ID_PINK_WOOD 43
-#define BLOCK_ID_PINK_STEM 44
-#define BLOCK_ID_DARK_WOOD 45
-#define BLOCK_ID_DARK_STEM 46
-#define BLOCK_ID_OBSIDIAN 47
-#define BLOCK_ID_SPONGE 48
-#define BLOCK_ID_SNOW 49
-#define BLOCKS_LEN 50
-#define NO_OF_TRAVERSABLE_BLOCKS 3 // every traversable block (mobs can pass through it without colliding) is transparent but the opposite may not necessarily hold
-#define NO_OF_TRANSPARENT_BLOCKS 11 // The blocks are aligned in such a way that transparent blocks come first. Hence in
+const uint BLOCK_ID_STONE = 11;
+const uint BLOCK_ID_GOLD_ORE = 12;
+const uint BLOCK_ID_IRON_ORE = 13;
+const uint BLOCK_ID_COAL_ORE = 14;
+const uint BLOCK_ID_DIAMOND_ORE = 15;
+const uint BLOCK_ID_REDSTONE_ORE = 16;
+const uint BLOCK_ID_DIRT = 17;
+const uint BLOCK_ID_SWAMP_DIRT = 18;
+const uint BLOCK_ID_IRON_RICH_DIRT = 19;
+const uint BLOCK_ID_AETHER_DIRT = 20;
+const uint BLOCK_ID_FROST_DIRT = 21;
+const uint BLOCK_ID_GRASS = 22;
+const uint BLOCK_ID_BERRIES = 23;
+const uint BLOCK_ID_STRAWBERRIES = 24;
+const uint BLOCK_ID_WHEAT = 25;
+const uint BLOCK_ID_SWAMP_GRASS = 26;
+const uint BLOCK_ID_SWAMP_BERRIES = 27;
+const uint BLOCK_ID_SWAMP_BACKBERRIES = 28;
+const uint BLOCK_ID_FROST_GRASS = 29;
+const uint BLOCK_ID_SNOW_CROCUS = 30;
+const uint BLOCK_ID_SNOW_BLACKBERRIES = 31;
+const uint BLOCK_ID_PLANK = 32;
+const uint BLOCK_ID_SLAB = 33;
+const uint BLOCK_ID_BRICK = 34;
+const uint BLOCK_ID_COBBLESTONE = 35;
+const uint BLOCK_ID_BEDROCK = 36;
+const uint BLOCK_ID_SAND = 37;
+const uint BLOCK_ID_RARE_SAND = 38;
+const uint BLOCK_ID_GRAVEL = 39;
+const uint BLOCK_ID_WET_GRAVEL = 40;
+const uint BLOCK_ID_OAK_WOOD = 41;
+const uint BLOCK_ID_OAK_STEM = 42;
+const uint BLOCK_ID_PINK_WOOD = 43;
+const uint BLOCK_ID_PINK_STEM = 44;
+const uint BLOCK_ID_DARK_WOOD = 45;
+const uint BLOCK_ID_DARK_STEM = 46;
+const uint BLOCK_ID_OBSIDIAN = 47;
+const uint BLOCK_ID_SPONGE = 48;
+const uint BLOCK_ID_SNOW = 49;
+const uint BLOCKS_LEN = 50;
+const uint NO_OF_TRAVERSABLE_BLOCKS = 3; // every traversable block (mobs can pass through it without colliding) is transparent but the opposite may not necessarily hold
+const uint NO_OF_TRANSPARENT_BLOCKS = 11; // The blocks are aligned in such a way that transparent blocks come first. Hence in
 // order to check whether a block is transparent or not, it's enough to just check if its ID is below this value
-
-#define ENTITY_LIDAR_COUNT 32
-#define HTM_INPUT_SIZE (ENTITY_LIDAR_COUNT)*(BLOCKS_LEN)
-#define HTM_MINICOLUMNS 64
-#define HTM_POTENTIAL_POOL_SPARSITY 0.4 // the fraction of input that constitutes potential pool of a minicolumn
-#define HTM_TOTAL_FEEDFORWARD_CONNECTIONS uint(HTM_INPUT_SIZE*HTM_POTENTIAL_POOL_SPARSITY)
-#define HTM_FEEDFORWARD_CONNECTIONS_PER_MINICOLUMN 32
-#define ENTITY_BLOCK_SLOTS 8
-#define HTM_MINICOLUMN_LAYERS 6
-#define HTM_PERMANENCE_THRESHOLD 0.1
-#define HTM_LIMIT_OF_MINICOLUMNS_TO_ACTIVATE HTM_MINICOLUMNS/8
-#define HTM_PERMAMENCE_DECREMENT -0.04
-#define HTM_PERMAMENCE_INCREMENT 0.08
-#define HTM_MAX_SEGMENTS 4
-#define HTM_CONTEXT_CONNECTIONS_PER_MINICOLUMN 16
-
-struct HtmFeedforwardConnection{
-    uint minicolumn_id;
-    float permanence;
-    uint input_id;
-};
-struct HtmContextConnection{
-    uint minicolumn_id;
-    float permanence;
-    uint segment_id;
-};
-struct HtmMinicolumn{
-    uint active_layer; // there can be only one active neuron in each minicolumns, except when the columns is bursting.
-    // Bursting is represented with number HTM_MINICOLUMN_LAYERS. If the minicolumn is not active then the value is HTM_MINICOLUMN_LAYERS+1
-    HtmContextConnection[HTM_CONTEXT_CONNECTIONS_PER_MINICOLUMN] context_connections;
-    uint[HTM_FEEDFORWARD_CONNECTIONS_PER_MINICOLUMN] feedforward_connection_indices;
-};
-struct HtmInput{
-    bool is_active;
-    uint feedforward_connections_offset;
-    uint feedforward_connections_len;
-};
-struct HtmEntity{
-    uint[ENTITY_LIDAR_COUNT] lidars;
-    HtmFeedforwardConnection[HTM_TOTAL_FEEDFORWARD_CONNECTIONS] htm_feedforward_connections;
-    HtmMinicolumn[HTM_MINICOLUMNS] htm_minicolumns;
-    HtmInput[HTM_INPUT_SIZE] htm_inputs;
-    uint bone_idx;
-    uint main;
-    float energy;
-    float speed;
-    float max_speed;
-};
-
-#define ANN_LIDAR_COUNT
-#define ANN_INPUT_SIZE (ANN_LIDAR_COUNT)
-#define ANN_HIDDEN_SIZE 32
-#define ANN_INPUT_CONNECTIONS_PER_HIDDEN_NEURON 16
-#define ANN_LATENT_SIZE 32
-#define ANN_HIDDEN_CONNECTIONS_PER_LATENT_NEURON 4
-#define ANN_LATENT_CONNECTIONS_PER_LATENT_NEURON 4
-#define ANN_OUTPUT_SIZE 32
-#define ANN_LATENT_CONNECTIONS_PER_OUTPUT_NEURON 4
-#define ANN_MAX_SIZE max(max(max(ANN_HIDDEN_SIZE,ANN_LATENT_SIZE),ANN_OUTPUT_SIZE),ANN_INPUT_SIZE)
-struct AnnSparseConnection{
-    uint src_neuron;
-    float weight;
-};
-struct AnnLidar{
-    vec3 direction;
-    float dummy;
-};
-struct AnnSparseHiddenNeuron{
-    AnnSparseConnection[ANN_INPUT_CONNECTIONS_PER_HIDDEN_NEURON] incoming;
-    float bias;
-};
-struct AnnSparseLatentNeuron{
-    AnnSparseConnection[ANN_HIDDEN_CONNECTIONS_PER_LATENT_NEURON] incoming_from_hidden;
-    AnnSparseConnection[ANN_LATENT_CONNECTIONS_PER_LATENT_NEURON] recurrent_from_latent;
-    float bias;
-};
-struct AnnSparseOutputNeuron{
-    AnnSparseConnection[ANN_LATENT_CONNECTIONS_PER_OUTPUT_NEURON] incoming;
-    float bias;
-};
-struct AnnEntity{
-    AnnSparseHiddenNeuron[ANN_HIDDEN_SIZE] ann_hidden;
-    AnnSparseLatentNeuron[ANN_LATENT_SIZE] ann_latent;
-    AnnSparseOutputNeuron[ANN_OUTPUT_SIZE] ann_output;
-    float[ANN_LATENT_SIZE] latent;
-    AnnLidar[ENTITY_LIDAR_COUNT] lidars;
-    uint bone_idx;
-    uint main;
-    float energy;
-    float speed;
-    float max_speed;
-};
 
 #define new_block_prop_regular_transparent(texture_id, opacity, mass) BlockProp(uint[6](texture_id,texture_id,texture_id,texture_id,texture_id,texture_id),opacity,mass)
 #define new_block_prop_regular( texture_id, mass) new_block_prop_regular_transparent(texture_id,1.,mass)
@@ -498,6 +458,160 @@ const BlockProp[BLOCKS_LEN] BLOCK_PROPS = BlockProp[BLOCKS_LEN](
     new_block_prop_regular( 33, 3.1), // obsidian
     new_block_prop_regular( 34, 0.1), // sponge
     new_block_prop_regular( 15, 0.05) // snow
+);
+
+const uint ENTITY_LIDAR_COUNT = 32;
+const uint HTM_INPUT_SIZE = (ENTITY_LIDAR_COUNT)*(BLOCKS_LEN);
+const uint HTM_MINICOLUMNS = 64;
+const float HTM_POTENTIAL_POOL_SPARSITY = 0.4; // the fraction of input that constitutes potential pool of a minicolumn
+const uint HTM_TOTAL_FEEDFORWARD_CONNECTIONS = uint(HTM_INPUT_SIZE*HTM_POTENTIAL_POOL_SPARSITY);
+const uint HTM_FEEDFORWARD_CONNECTIONS_PER_MINICOLUMN = 32;
+const uint ENTITY_BLOCK_SLOTS = 8;
+const uint HTM_MINICOLUMN_LAYERS = 6;
+const float HTM_PERMANENCE_THRESHOLD = 0.1;
+const uint HTM_LIMIT_OF_MINICOLUMNS_TO_ACTIVATE = HTM_MINICOLUMNS/8;
+const float HTM_PERMAMENCE_DECREMENT = -0.04;
+const float HTM_PERMAMENCE_INCREMENT = 0.08;
+const uint HTM_MAX_SEGMENTS = 4;
+const uint HTM_CONTEXT_CONNECTIONS_PER_MINICOLUMN = 16;
+
+struct HtmFeedforwardConnection{
+    uint minicolumn_id;
+    float permanence;
+    uint input_id;
+};
+struct HtmContextConnection{
+    uint minicolumn_id;
+    float permanence;
+    uint segment_id;
+};
+struct HtmMinicolumn{
+    uint active_layer; // there can be only one active neuron in each minicolumns, except when the columns is bursting.
+    // Bursting is represented with number HTM_MINICOLUMN_LAYERS. If the minicolumn is not active then the value is HTM_MINICOLUMN_LAYERS+1
+    HtmContextConnection[HTM_CONTEXT_CONNECTIONS_PER_MINICOLUMN] context_connections;
+    uint[HTM_FEEDFORWARD_CONNECTIONS_PER_MINICOLUMN] feedforward_connection_indices;
+};
+struct HtmInput{
+    bool is_active;
+    uint feedforward_connections_offset;
+    uint feedforward_connections_len;
+};
+struct HtmEntity{
+    uint[ENTITY_LIDAR_COUNT] lidars;
+    HtmFeedforwardConnection[HTM_TOTAL_FEEDFORWARD_CONNECTIONS] htm_feedforward_connections;
+    HtmMinicolumn[HTM_MINICOLUMNS] htm_minicolumns;
+    HtmInput[HTM_INPUT_SIZE] htm_inputs;
+    uint bone_idx;
+    uint main;
+    float energy;
+    float speed;
+    float max_speed;
+};
+
+const uint ANN_LIDAR_COUNT = 32;
+const uint ANN_INPUT_SIZE = ANN_LIDAR_COUNT;
+const uint ANN_HIDDEN_SIZE = 32;
+const uint ANN_INPUT_CONNECTIONS_PER_HIDDEN_NEURON = 16;
+const uint ANN_LATENT_SIZE = 32;
+const uint ANN_HIDDEN_CONNECTIONS_PER_LATENT_NEURON = 4;
+const uint ANN_LATENT_CONNECTIONS_PER_LATENT_NEURON = 4;
+const uint ANN_OUTPUT_SIZE = 32;
+const uint ANN_LATENT_CONNECTIONS_PER_OUTPUT_NEURON = 4;
+const uint ANN_MAX_SIZE = max(max(max(ANN_HIDDEN_SIZE,ANN_LATENT_SIZE),ANN_OUTPUT_SIZE),ANN_INPUT_SIZE);
+struct AnnSparseConnection{
+    uint src_neuron;
+    float weight;
+};
+struct AnnLidar{
+    vec3 direction;
+    float dummy;
+};
+struct AnnSparseHiddenNeuron{
+    AnnSparseConnection[ANN_INPUT_CONNECTIONS_PER_HIDDEN_NEURON] incoming;
+    float bias;
+};
+struct AnnSparseLatentNeuron{
+    AnnSparseConnection[ANN_HIDDEN_CONNECTIONS_PER_LATENT_NEURON] incoming_from_hidden;
+    AnnSparseConnection[ANN_LATENT_CONNECTIONS_PER_LATENT_NEURON] recurrent_from_latent;
+    float bias;
+};
+struct AnnSparseOutputNeuron{
+    AnnSparseConnection[ANN_LATENT_CONNECTIONS_PER_OUTPUT_NEURON] incoming;
+    float bias;
+};
+struct AnnEntity{
+    AnnSparseHiddenNeuron[ANN_HIDDEN_SIZE] ann_hidden;
+    AnnSparseLatentNeuron[ANN_LATENT_SIZE] ann_latent;
+    AnnSparseOutputNeuron[ANN_OUTPUT_SIZE] ann_output;
+    float[ANN_LATENT_SIZE] latent;
+    AnnLidar[ENTITY_LIDAR_COUNT] lidars;
+    uint bone_idx;
+    uint main;
+    float energy;
+    float speed;
+    float max_speed;
+};
+
+
+///////////////////////////////////////////////////////////////////////////
+///////////////// BELOW SECTION CONTAINS CONSTANTS AND DEFINITIONS USED BY WORLD GENERATOR
+///////////////////////////////////////////////////////////////////////////
+
+const uint BIOME_ID_ARCTIC_DESERT = 0;
+const uint BIOME_ID_TAIGA = 1;
+const uint BIOME_ID_ARCTIC = 2;
+const uint BIOME_ID_DESERT = 3;
+const uint BIOME_ID_PLAINS = 4;
+const uint BIOME_ID_SWAMP = 5;
+const uint BIOME_COUNT = 6;
+uint get_biome(float humidity,float temperature){
+    uint freezing = uint(temperature < FREEZING_TEMPERATURE);
+    uint dry = uint(humidity > DESERT_HUMIDITY) + uint(humidity > SWAMP_HUMIDITY);
+    return freezing*3+dry;
+}
+const uint MAX_BIOME_RESOURCES = 4;
+const uint MAX_BIOME_SURFACE_ARTIFACTS = 4;
+struct BiomeRes{
+    uint res;
+    float prob;
+};
+struct BiomeProp{
+    Block dirt;
+    Block grass;
+    Block water_top;
+    uint sea_depth;
+    BiomeRes[MAX_BIOME_RESOURCES] resources;
+    BiomeRes[MAX_BIOME_SURFACE_ARTIFACTS] surface_artifacts;
+};
+uint get_biome_resource(const BiomeProp biome, float random_value){
+    for(uint i=0;i<MAX_BIOME_RESOURCES;i++){
+        if(random_value < biome.resources[i].prob){
+            return biome.resources[i].res;
+        }
+    }
+    return biome.grass;
+}
+uint get_biome_surface_artifact(const BiomeProp biome, float random_value){
+    for(uint i=0;i<MAX_BIOME_SURFACE_ARTIFACTS;i++){
+        if(random_value < biome.surface_artifacts[i].prob){
+            return biome.surface_artifacts[i].res;
+        }
+    }
+    return BLOCK_ID_AIR;
+}
+#define biome_res4(prob,res0,prob0,res1,prob1,res2,prob2,res3,prob3) BiomeRes[MAX_BIOME_RESOURCES](BiomeRes(res0,prob*prob0),BiomeRes(res1,prob*(prob0+prob1)),BiomeRes(res2,prob*(prob0+prob1+prob2)),BiomeRes(res3,prob*(prob0+prob1+prob2+prob3)))
+#define biome_res3(prob,res0,prob0,res1,prob1,res2,prob2) biome_res4(prob,res0,prob0,res1,prob1,res2,prob2,BLOCK_ID_AIR,-1)
+#define biome_res2(prob,res0,prob0,res1,prob1) biome_res3(prob,res0,prob0,res1,prob1,BLOCK_ID_AIR,-1)
+#define biome_res1(prob,res0,prob0) biome_res2(prob,res0,prob0,BLOCK_ID_AIR,-1)
+#define biome_res0 biome_res1(1,BLOCK_ID_AIR,-1)
+
+const BiomeProp[BIOME_COUNT] BIOMES = BiomeProp[BIOME_COUNT](
+    BiomeProp(BLOCK_ID_DIRT,BLOCK_ID_GRASS,BLOCK_ID_WATER,0,biome_res3(0.1,BLOCK_ID_BERRIES,0.5,BLOCK_ID_STRAWBERRIES,0.25,BLOCK_ID_WHEAT,0.25),biome_res2(0.01,BLOCK_ID_OAK_STEM,0.8,BLOCK_ID_PINK_STEM,0.2)),//BIOME_ID_PLAINS
+    BiomeProp(BLOCK_ID_SAND,BLOCK_ID_SAND,BLOCK_ID_WATER,0,biome_res0,biome_res1(0.01,BLOCK_ID_AETHER_LEAVES,1)),//BIOME_ID_DESERT
+    BiomeProp(BLOCK_ID_FROST_DIRT,BLOCK_ID_FROST_DIRT,BLOCK_ID_ICE,15,biome_res0,biome_res1(0.01,BLOCK_ID_FROST_LEAVES,1)),//BIOME_ID_ARCTIC_DESERT
+    BiomeProp(BLOCK_ID_FROST_DIRT,BLOCK_ID_FROST_GRASS,BLOCK_ID_ICE,5,biome_res2(0.1,BLOCK_ID_SNOW_BLACKBERRIES, 0.4,BLOCK_ID_SNOW_CROCUS,0.6),biome_res2(0.01,BLOCK_ID_OAK_STEM, 0.8,BLOCK_ID_FROST_LEAVES,0.2)),//BIOME_ID_TAIGA
+    BiomeProp(BLOCK_ID_FROST_DIRT,BLOCK_ID_SNOW,BLOCK_ID_ICE,15,biome_res2(0.05,BLOCK_ID_SNOW_BLACKBERRIES,0.4,BLOCK_ID_SNOW_CROCUS,0.6),biome_res1(0.01,BLOCK_ID_FROST_LEAVES,1)),//BIOME_ID_ARCTIC
+    BiomeProp(BLOCK_ID_SWAMP_DIRT,BLOCK_ID_SWAMP_GRASS,BLOCK_ID_WATER,0,biome_res2(0.15,BLOCK_ID_SWAMP_BACKBERRIES, 0.5,BLOCK_ID_SWAMP_BERRIES,0.5),biome_res2(0.01,BLOCK_ID_OAK_STEM, 0.8,BLOCK_ID_DARK_STEM,0.2))//BIOME_ID_SWAMP
 );
 
 #endif // CONSTANTS_COMP

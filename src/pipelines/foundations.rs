@@ -18,7 +18,7 @@ use crate::render::subbuffer::SubBuffer;
 use crate::pipelines::constraint::Constraint;
 use crate::render::buffer::Buffer;
 use crate::pipelines::global_mutables::{GlobalMutables};
-use crate::blocks::{WorldSize, Block, Face, WorldBlocks, WorldFaces, HeightMap};
+use crate::blocks::{WorldSize, Block, Face, WorldBlocks, WorldFaces};
 use crate::render::sampler::Sampler;
 use crate::pipelines::bone::Bone;
 use crate::blocks::block_properties::{BLOCKS, BlockProp, BEDROCK, DIRT, GRASS, GLASS, PLANK, AIR, STONE, WATER};
@@ -41,7 +41,6 @@ pub struct Indirect {
     per_particle: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
     per_bone: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
     agent_sensory_input_update: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
-    feed_forward_net: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
     update_ambience: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
     per_blocks_to_be_inserted_or_removed: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
     per_htm_entity: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
@@ -57,11 +56,10 @@ impl Indirect {
         let per_particle = indirect_dispatch.gpu().element(0);
         let per_bone = indirect_dispatch.gpu().element(1);
         let agent_sensory_input_update = indirect_dispatch.gpu().element(2);
-        let feed_forward_net = indirect_dispatch.gpu().element(3);
-        let update_ambience = indirect_dispatch.gpu().element(4);
-        let per_blocks_to_be_inserted_or_removed = indirect_dispatch.gpu().element(5);
-        let per_htm_entity = indirect_dispatch.gpu().element(6);
-        let per_ann_entity = indirect_dispatch.gpu().element(7);
+        let update_ambience = indirect_dispatch.gpu().element(3);
+        let per_blocks_to_be_inserted_or_removed = indirect_dispatch.gpu().element(4);
+        let per_htm_entity = indirect_dispatch.gpu().element(5);
+        let per_ann_entity = indirect_dispatch.gpu().element(6);
 
         let draw_bones = indirect_draw.gpu().element(0);
         let draw_blocks = indirect_draw.gpu().element(1);
@@ -73,7 +71,6 @@ impl Indirect {
             per_particle,
             per_bone,
             agent_sensory_input_update,
-            feed_forward_net,
             draw_bones,
             draw_blocks,
             draw_particles,
@@ -120,9 +117,6 @@ impl Indirect {
     pub fn broad_phase_collision_detection_cleanup(&self) -> &SubBuffer<vk::DispatchIndirectCommand, GpuIndirect> {
         &self.per_bone
     }
-    pub fn feed_forward_net(&self) -> &SubBuffer<vk::DispatchIndirectCommand, GpuIndirect> {
-        &self.feed_forward_net
-    }
     pub fn agent_sensory_input_update(&self) -> &SubBuffer<vk::DispatchIndirectCommand, GpuIndirect> {
         &self.agent_sensory_input_update
     }
@@ -132,14 +126,16 @@ impl Indirect {
 }
 
 pub struct FoundationInitializer {
+    cap:FoundationsCapacity,
     specialization_constants: SpecializationConstants,
-    world: Submitter<StageSubBuffer<Block, Cpu, Storage>>,
-    faces: Submitter<StageSubBuffer<Face, Cpu, Storage>>,
+    world: SubBuffer<Block, Storage>,
+    faces: SubBuffer<Face, Storage>,
+    random_numbers: SubBuffer<u32, Storage>,
     face_count_per_chunk_buffer: SubBuffer<Face, Storage>,
     htm_entities_buffer: SubBuffer<HtmEntity, Storage>,
     ann_entities_buffer: SubBuffer<AnnEntity, Storage>,
     opaque_and_transparent_face_buffer: SubBuffer<Face, Storage>,
-    world_copy: Submitter<StageSubBuffer<Block, Cpu, Storage>>,
+    world_copy: SubBuffer<Block, Storage>,
     tmp_faces_copy: Submitter<SubBuffer<u32, Storage>>,
     world_block_stability_buffer: SubBuffer<u32, Storage>,
     blocks_to_be_inserted_or_removed: SubBuffer<u32, Storage>,
@@ -147,26 +143,23 @@ pub struct FoundationInitializer {
     faces_to_be_removed: SubBuffer<u32, Storage>,
     player_event_uniform: HostBuffer<PlayerEvent, Uniform>,
     collision_grid: SubBuffer<u32, Storage>,
-    bones: Submitter<StageSubBuffer<Bone, Cpu, Storage>>,
+    bones: SubBuffer<Bone, Storage>,
     particles: SubBuffer<Particle, Storage>,
-    neural_net_layers: Submitter<StageSubBuffer<NeuralNetLayer, Cpu, Storage>>,
     global_mutables: Submitter<StageSubBuffer<GlobalMutables, Cpu, Storage>>,
     indirect_dispatch: Submitter<IndirectDispatchSubBuffer>,
     indirect_draw: Submitter<IndirectSubBuffer>,
     indirect: Indirect,
     sampler: Sampler,
-    world_size: WorldSize,
 }
 
-struct FoundationsCapacity {
+pub struct FoundationsCapacity {
     world_size: WorldSize,
     faces_to_be_inserted_chunk_capacity: u32,
     faces_to_be_removed_chunk_capacity: u32,
     max_bones: u64,
     max_faces: u64,
     max_faces_copy: u64,
-    max_persistent_floats: u64,
-    max_neural_net_layers: u64,
+    max_random_numbers: u64,
     max_tmp_faces_copy: u64,
     max_blocks_to_be_inserted_or_removed: u64,
     max_faces_to_be_inserted: u64,
@@ -187,10 +180,9 @@ impl FoundationsCapacity {
             faces_to_be_removed_chunk_capacity,
             max_bones: 1024u64,
             max_faces: 16 * 1024u64 * world_size.total_chunks() as u64,
-            max_persistent_floats: 64 * 1024u64, // used as backing memory for vectors, matrices and
+            max_random_numbers: 64 * 1024u64, // used as backing memory for vectors, matrices and
             // tensors that make up various neural networks. Especially, the outputs of recursive neural networks
             // often need to be persistent, because those outputs are later fed as inputs to the same neural net.
-            max_neural_net_layers: 128u64,
             max_tmp_faces_copy: world_size.world_volume() as u64 / 4,
             max_blocks_to_be_inserted_or_removed: world_size.world_volume() as u64 / 16,
             max_faces_to_be_inserted: faces_to_be_inserted_chunk_capacity as u64 * 2 * world_size.total_chunks() as u64,
@@ -208,62 +200,6 @@ impl FoundationsCapacity {
     }
 }
 
-
-struct FoundationsData {
-    world_blocks: WorldBlocks,
-    world_faces: WorldFaces,
-    constraints_data: Vec<Constraint>,
-    bone_data: Vec<Bone>,
-    entity_data: Vec<HtmEntity>,
-    sensor_data: Vec<Sensor>,
-    muscle_data: Vec<Muscle>,
-    block_properties_data: Vec<BlockProp>,
-    neural_net_layer_data: Vec<NeuralNetLayer>,
-    persistent_floats_len: u32,
-}
-
-
-
-
-impl FoundationsData {
-    pub fn new(cap: &FoundationsCapacity) -> Self {
-        Self {
-            world_blocks: WorldBlocks::new(cap.world_size.clone()),
-            world_faces: WorldFaces::with_capacity(cap.world_size.clone(), cap.max_faces as usize),
-            // particles_data: std::iter::repeat_with(Particle::random).take((cap.solid_particles+cap.phantom_particles) as usize).collect(),
-            constraints_data: vec![],
-            bone_data: vec![],
-            entity_data: vec![],
-            sensor_data: vec![],
-            muscle_data: vec![],
-            neural_net_layer_data: vec![],
-            block_properties_data: BLOCKS.iter().map(|p| p.prop).collect(),
-            persistent_floats_len: 0,
-        }
-    }
-
-
-
-    fn setup_world_faces(&mut self) {
-        let Self { world_blocks, world_faces, .. } = self;
-        world_faces.generate_faces(world_blocks);
-    }
-
-    fn compute_constants(&self, cap: &FoundationsCapacity) -> GlobalMutables {
-        let FoundationsCapacity { world_size, .. } = cap;
-        let Self { sensor_data, bone_data, .. } = self;
-        GlobalMutables {
-            blocks_to_be_inserted_or_removed: 0,
-            bones: bone_data.len() as u32,
-            particles: 0,
-            held_bone_idx: 0,
-            htm_entities: 0,
-            tick: 0,
-            lidars: 0,
-            ann_entities: 0,
-        }
-    }
-}
 struct CollisionCell{
     len:u32,
     contents:[u32;BROAD_PHASE_CELL_CAPACITY]
@@ -273,7 +209,7 @@ fn append_owned<X>(v: &mut Vec<X>, mut v2: Vec<X>) {
 }
 
 impl FoundationInitializer {
-    pub fn faces(&self) -> &StageSubBuffer<Face, Cpu, Storage> {
+    pub fn faces(&self) -> &SubBuffer<Face, Storage> {
         &self.faces
     }
 
@@ -298,10 +234,12 @@ impl FoundationInitializer {
     pub fn collision_grid(&self) -> &SubBuffer<u32, Storage> {
         &self.collision_grid
     }
-    pub fn bones(&self) -> &StageSubBuffer<Bone, Cpu, Storage> {
+    pub fn bones(&self) -> &SubBuffer<Bone, Storage> {
         &self.bones
     }
-
+    pub fn cap(&self) -> &FoundationsCapacity {
+        &self.cap
+    }
     pub fn indirect(&self) -> &Indirect {
         &self.indirect
     }
@@ -309,44 +247,24 @@ impl FoundationInitializer {
         &self.sampler
     }
     pub fn world_size(&self) -> &WorldSize {
-        &self.world_size
+        &self.cap.world_size
     }
-    pub fn world(&self) -> &StageSubBuffer<Block, Cpu, Storage> {
+    pub fn world(&self) -> &SubBuffer<Block, Storage> {
         &self.world
     }
 
     pub fn new(cmd_pool: &CommandPool) -> Result<Self, failure::Error> {
-        let cap = FoundationsCapacity::new(8,8);
-        let mut data = FoundationsData::new(&cap);
-        let heights = HeightMap::new(cap.world_size);
-        // data.world_blocks.set_block(15,128,15,DIRT);
-        // data.world_blocks.set_block(8,127,4,DIRT);
-        // data.world_blocks.set_block(15,127,15,STONE);
-        // data.world_blocks.set_block(15,126,14,STONE);
-        heights.setup_world_blocks(&mut data.world_blocks);
-        data.setup_world_faces();
-        // data.particle_data.extend((0..64).map(|_| Particle::random()));
-        for _ in 0..8 {
-            let x = rand::random::<usize>() % cap.world_size.world_width();
-            let z = rand::random::<usize>() % cap.world_size.world_depth();
-            data.bone_data.push(Bone::new(glm::vec3(x as f32, heights.height(x, z) as f32 + 5., z as f32), 0.5, f32::random_vec3(), 1., 1.0));
-        }
-
-        data.neural_net_layer_data.append(&mut vec![
-            NeuralNetLayer::new_input_recurrent(0, 0, 0, 0),
-            NeuralNetLayer::new_hidden(0, 0, 0, 0, 0, None, Overwrite),
-            NeuralNetLayer::new_output(0, 0, 0, 0, 0, 0)
-        ]);
-        // let mut zombies = vec![];
-        // for r in 0..5 {
-        //     for c in 0..1 {
-        //         zombies.push(data.add_zombie(glm::vec3(2. + r as f32 * 3., 5., 2. + c as f32 * 3.), &cap));
-        //     }
-        // }
-
-
-        let mutables = data.compute_constants(&cap);
-
+        let cap = FoundationsCapacity::new(16,16);
+        let mutables =  GlobalMutables {
+            blocks_to_be_inserted_or_removed: 0,
+            bones: 0,
+            particles: 0,
+            held_bone_idx: 0,
+            htm_entities: 0,
+            tick: 0,
+            lidars: 0,
+            ann_entities: 0,
+        };
         let bones_in_bytes = std::mem::size_of::<Bone>() as u64 * cap.max_bones;
         let faces_in_bytes = std::mem::size_of::<Face>() as u64 * cap.max_faces;
         let tmp_faces_copy_in_bytes = std::mem::size_of::<u32>() as u64 * 3 * cap.max_faces_copy;
@@ -356,8 +274,7 @@ impl FoundationInitializer {
         let world_block_stability_in_bytes = world_in_bytes;
         let blocks_to_be_inserted_or_removed_in_bytes = std::mem::size_of::<u32>() as u64 * cap.max_blocks_to_be_inserted_or_removed;
         let global_mutables_in_bytes = std::mem::size_of_val(&mutables) as u64;
-        let persistent_floats_in_bytes = std::mem::size_of::<f32>() as u64 * cap.max_persistent_floats;
-        let neural_net_layers_in_bytes = std::mem::size_of::<NeuralNetLayer>() as u64 * cap.max_neural_net_layers;
+        let random_numbers_in_bytes = std::mem::size_of::<f32>() as u64 * cap.max_random_numbers;
         let htm_entities_in_bytes = std::mem::size_of::<HtmEntity>() as u64 * cap.max_htm_entities;
         let ann_entities_in_bytes = std::mem::size_of::<AnnEntity>() as u64 * cap.max_ann_entities;
         let faces_to_be_inserted_in_bytes = std::mem::size_of::<Face>() as u64 * cap.max_faces_to_be_inserted;
@@ -375,11 +292,11 @@ impl FoundationInitializer {
                                                                                 blocks_to_be_inserted_or_removed_in_bytes +
                                                                                 global_mutables_in_bytes +
                                                                                 particles_in_bytes +
-                                                                                neural_net_layers_in_bytes +
                                                                                 faces_to_be_inserted_in_bytes +
                                                                                 faces_to_be_removed_in_bytes +
                                                                                 htm_entities_in_bytes +
-                                                                                ann_entities_in_bytes
+                                                                                ann_entities_in_bytes +
+                                                                                random_numbers_in_bytes
         )?;
         let offset = 0;
         let bones_buffer = super_buffer.sub(offset..offset + bones_in_bytes).reinterpret_into::<Bone>();
@@ -412,9 +329,6 @@ impl FoundationInitializer {
         let particles_buffer = super_buffer.sub(offset..offset + particles_in_bytes).reinterpret_into::<Particle>();
         let offset = offset + particles_in_bytes;
         assert_eq!(offset % 16, 0);
-        let neural_net_layers_buffer = super_buffer.sub(offset..offset + neural_net_layers_in_bytes).reinterpret_into::<NeuralNetLayer>();
-        let offset = offset + neural_net_layers_in_bytes;
-        assert_eq!(offset % 16, 0);
         let faces_to_be_inserted_buffer = super_buffer.sub(offset..offset + faces_to_be_inserted_in_bytes).reinterpret_into::<Face>();
         let offset = offset + faces_to_be_inserted_in_bytes;
         assert_eq!(offset % 16, 0);
@@ -427,6 +341,9 @@ impl FoundationInitializer {
         let ann_entities_buffer = super_buffer.sub(offset..offset + ann_entities_in_bytes).reinterpret_into::<AnnEntity>();
         let offset = offset + ann_entities_in_bytes;
         assert_eq!(offset % 16, 0);
+        let random_numbers_buffer = super_buffer.sub(offset..offset + random_numbers_in_bytes).reinterpret_into::<u32>();
+        let offset = offset + random_numbers_in_bytes;
+        assert_eq!(offset % 16, 0);
 
         let mut tmp_faces_copy = Submitter::new(tmp_faces_copy_buffer, cmd_pool)?;
         fill_zeros_submit(&mut tmp_faces_copy)?;
@@ -435,23 +352,14 @@ impl FoundationInitializer {
 
         let face_count_per_chunk_buffer = face_buffer.sub(..std::mem::size_of::<Face>() as u64 * cap.world_size.total_chunks() as u64 * 2);
         let opaque_and_transparent_face_buffer = face_buffer.sub(std::mem::size_of::<Face>() as u64 * cap.world_size.total_chunks() as u64 * 2..);
-        let faces = StageBuffer::wrap(cmd_pool, data.world_faces.as_slice(), face_buffer)?;
-
-        let bones = StageBuffer::wrap(cmd_pool, &data.bone_data, bones_buffer)?;
 
         let particles = particles_buffer;
 
-        let world = StageBuffer::wrap(cmd_pool, data.world_blocks.as_slice(), world_buffer)?;
-
-        let world_copy = StageBuffer::wrap(cmd_pool, data.world_blocks.as_slice(), world_copy_buffer)?;
-
-        let neural_net_layers = StageBuffer::wrap(cmd_pool, &data.neural_net_layer_data, neural_net_layers_buffer)?;
-
         let sampler = Sampler::new(cmd_pool.device(), vk::Filter::NEAREST, true)?;
 
-        fn dispatch_indirect(x: usize) -> vk::DispatchIndirectCommand {
+        fn dispatch_indirect(x: usize, group_size:u32) -> vk::DispatchIndirectCommand {
             vk::DispatchIndirectCommand {
-                x: (x as f32 / 32.).ceil() as u32,
+                x: (x as f32 / group_size as f32).ceil() as u32,
                 y: 1,
                 z: 1,
             }
@@ -465,22 +373,17 @@ impl FoundationInitializer {
             }
         }
         let indirect_dispatch_data = vec![
-            dispatch_indirect(0),// update_particles.comp
-            dispatch_indirect(data.bone_data.len()),// broad_phase_collision_detection.comp broad_phase_collision_detection_cleanup.comp narrow_phase_collision_detection.comp update_bones.comp
-            dispatch_indirect(data.sensor_data.len()), // agent_sensory_input_update.comp
-            vk::DispatchIndirectCommand {  // feed_forward_net.comp
-                x: (data.neural_net_layer_data.len() / 3) as u32,
-                y: 1,
-                z: 1,
-            },
-            dispatch_indirect(0),// update_ambience.comp
-            dispatch_indirect(0),// update_ambience_faces.comp, update_ambience_flush_world_copy.comp
-            dispatch_indirect(0),// update_htm_entities.comp
-            dispatch_indirect(0),// update_ann_entities.comp
+            dispatch_indirect(0, cmd_pool.device().get_max_subgroup_size()),// update_particles.comp
+            dispatch_indirect(0, cmd_pool.device().get_max_subgroup_size()),// broad_phase_collision_detection.comp broad_phase_collision_detection_cleanup.comp narrow_phase_collision_detection.comp update_bones.comp
+            dispatch_indirect(0, cmd_pool.device().get_max_subgroup_size()), // agent_sensory_input_update.comp
+            dispatch_indirect(0, cmd_pool.device().get_max_subgroup_size()),// update_ambience.comp
+            dispatch_indirect(0, cmd_pool.device().get_max_subgroup_size()),// update_ambience_faces.comp, update_ambience_flush_world_copy.comp
+            dispatch_indirect(0, cmd_pool.device().get_max_subgroup_size()),// update_htm_entities.comp
+            dispatch_indirect(0, cmd_pool.device().get_max_subgroup_size()),// update_ann_entities.comp
         ];
         let indirect_draw_data = vec![
-            draw_indirect(36, data.bone_data.len() as u32),// bones.vert
-            draw_indirect(6, data.world_faces.len() as u32),// block.vert
+            draw_indirect(36, 0),// bones.vert
+            draw_indirect(6, 0),// block.vert
             draw_indirect(0, 0),// particles.vert
         ];
         let indirect_dispatch_in_bytes = std::mem::size_of_val(indirect_dispatch_data.as_slice()) as u64;
@@ -521,8 +424,8 @@ impl FoundationInitializer {
         specialization_constants.entry_uint(300,cap.max_bones as u32);//MAX_BONES
         specialization_constants.entry_uint(301,cap.max_sensors as u32);//MAX_SENSORS
         specialization_constants.entry_uint(302,cap.max_faces as u32);//MAX_FACES
-        specialization_constants.entry_uint(303,cap.max_persistent_floats as u32);//MAX_PERSISTENT_FLOATS
-        specialization_constants.entry_uint(304,cap.max_neural_net_layers as u32);//MAX_NEURAL_NET_LAYERS
+        specialization_constants.entry_uint(303,cap.max_random_numbers as u32);//MAX_RANDOM_NUMBERS
+        // specialization_constants.entry_uint(304,cap.max_neural_net_layers as u32);//MAX_NEURAL_NET_LAYERS
         specialization_constants.entry_uint(305,cap.max_tmp_faces_copy as u32);//MAX_TMP_FACES_COPY
         // specialization_constants.entry_uint(306,cap.max_world_block_stability as u32);//MAX_WORLD_BLOCKS_TO_UPDATE
         specialization_constants.entry_uint(307,cap.max_blocks_to_be_inserted_or_removed as u32);//MAX_BLOCKS_TO_BE_INSERTED_OR_REMOVED
@@ -531,21 +434,32 @@ impl FoundationInitializer {
         specialization_constants.entry_uint(310,cap.max_htm_entities as u32);//MAX_HTM_ENTITIES
         specialization_constants.entry_uint(311,cap.max_ann_entities as u32);//MAX_ANN_ENTITIES
         specialization_constants.entry_uint(312,cap.max_particles as u32);//MAX_PARTICLES
+
+        specialization_constants.entry_uint(400, super::world_generation::SEA_LEVEL);
+        specialization_constants.entry_float(401, super::world_generation::FREEZING_TEMPERATURE);
+        specialization_constants.entry_float(402, super::world_generation::SWAMP_HUMIDITY);
+        specialization_constants.entry_float(403, super::world_generation::DESERT_HUMIDITY);
+        specialization_constants.entry_float(404, super::world_generation::LARGE_SCALE);
+        specialization_constants.entry_float(405, super::world_generation::CHUNK_SCALE);
+        specialization_constants.entry_float(406, super::world_generation::TEMPERATURE_SCALE);
+        specialization_constants.entry_float(407, super::world_generation::HUMIDITY_SCALE);
+        specialization_constants.entry_float(408, super::world_generation::RESOURCE_TYPE_SCALE);
+        specialization_constants.entry_float(409, super::world_generation::HAS_RESOURCE_SCALE);
         Ok(Self {
+            cap,
             specialization_constants,
             face_count_per_chunk_buffer,
             opaque_and_transparent_face_buffer,
-            faces,
-            world_copy,
-            world,
+            random_numbers:random_numbers_buffer,
+            faces:face_buffer,
+            world_copy:world_copy_buffer,
+            world:world_buffer,
             world_block_stability_buffer,
-            world_size: cap.world_size.clone(),
             sampler,
             player_event_uniform,
             htm_entities_buffer,
             ann_entities_buffer,
             particles,
-            neural_net_layers,
             collision_grid: grid_buffer,
             global_mutables,
             indirect_dispatch,
@@ -555,11 +469,13 @@ impl FoundationInitializer {
             faces_to_be_inserted: faces_to_be_inserted_buffer,
             faces_to_be_removed: faces_to_be_removed_buffer,
             indirect,
-            bones,
+            bones:bones_buffer,
         })
     }
     pub fn build(self) -> Result<Foundations, Error> {
         let Self {
+            cap,
+            random_numbers,
             specialization_constants,
             face_count_per_chunk_buffer,
             htm_entities_buffer ,
@@ -575,26 +491,20 @@ impl FoundationInitializer {
             player_event_uniform,
             indirect_dispatch,
             indirect_draw,
-            world_size,
             world,
             bones,
             particles,
             collision_grid,
             global_mutables,
             indirect,
-            neural_net_layers,
             sampler,
         } = self;
-        let bones = bones.take()?.take_gpu();
-        let neural_net_layers = neural_net_layers.take()?.take_gpu();
         let global_mutables = global_mutables.take()?.take_gpu();
         let _ = indirect_dispatch.take()?.take_gpu();
         let _ = indirect_draw.take()?.take_gpu();
-        let faces = faces.take()?.take_gpu();
-        let world_copy = world_copy.take()?.take_gpu();
-        let world = world.take()?.take_gpu(); //wait for completion and then dispose of the staging buffer
         let tmp_faces_copy = tmp_faces_copy.take()?;
         Ok(Foundations {
+            random_numbers,
             specialization_constants,
             faces_to_be_inserted,
             faces_to_be_removed,
@@ -608,10 +518,9 @@ impl FoundationInitializer {
             world_copy,
             particles,
             world,
-            world_size,
+            cap,
             bones,
             collision_grid,
-            neural_net_layers,
             global_mutables,
             indirect,
             sampler,
@@ -626,19 +535,19 @@ pub struct Foundations {
     ann_entities_buffer: SubBuffer<AnnEntity, Storage>,
     specialization_constants: SpecializationConstants,
     faces: SubBuffer<Face, Storage>,
+    random_numbers: SubBuffer<u32, Storage>,
     face_count_per_chunk_buffer: SubBuffer<Face, Storage>,
     opaque_and_transparent_face_buffer: SubBuffer<Face, Storage>,
     world_block_stability_buffer: SubBuffer<u32, Storage>,
     world_copy: SubBuffer<Block, Storage>,
     faces_to_be_inserted: SubBuffer<Face, Storage>,
     faces_to_be_removed: SubBuffer<u32, Storage>,
-    world_size: WorldSize,
+    cap: FoundationsCapacity,
     tmp_faces_copy: SubBuffer<u32, Storage>,
     blocks_to_be_inserted_or_removed: SubBuffer<u32, Storage>,
     player_event_uniform: HostBuffer<PlayerEvent, Uniform>,
     world: SubBuffer<Block, Storage>,
     bones: SubBuffer<Bone, Storage>,
-    neural_net_layers: SubBuffer<NeuralNetLayer, Storage>,
     particles: SubBuffer<Particle, Storage>,
     global_mutables: SubBuffer<GlobalMutables, Storage>,
     collision_grid: SubBuffer<u32, Storage>,
@@ -674,8 +583,11 @@ impl Foundations {
     pub fn player_event_uniform_mut(&mut self) -> &mut HostBuffer<PlayerEvent, Uniform> {
         &mut self.player_event_uniform
     }
+    pub fn cap(&self) -> &FoundationsCapacity {
+        &self.cap
+    }
     pub fn world_size(&self) -> &WorldSize {
-        &self.world_size
+        &self.cap.world_size
     }
     pub fn indirect(&self) -> &Indirect {
         &self.indirect
@@ -698,8 +610,8 @@ impl Foundations {
     pub fn particles(&self) -> &SubBuffer<Particle, Storage> {
         &self.particles
     }
-    pub fn neural_net_layers(&self) -> &SubBuffer<NeuralNetLayer, Storage> {
-        &self.neural_net_layers
+    pub fn random_numbers(&self) -> &SubBuffer<u32, Storage> {
+        &self.random_numbers
     }
     pub fn world(&self) -> &SubBuffer<Block, Storage> {
         &self.world

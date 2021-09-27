@@ -1,0 +1,81 @@
+#version 450
+//#extension GL_EXT_debug_printf : enable
+#define IS_AVAILABLE_BUFFER_WORLD
+#define IS_AVAILABLE_BUFFER_FACES
+
+#include "descriptors_generate.comp"
+layout (local_size_x_id = GROUP_SIZE_CONST_ID) in;
+#include "utils.comp"
+
+uint[2] get_chunk_offset(uint chunk_idx){
+    return uint[2](faces[chunk_idx].y,faces[chunk_idx+TOTAL_CHUNKS].y);
+}
+struct InsertionArgs{
+    uvec3 pos_relative_to_chunk;
+    uint chunk_idx;
+    uint[2] chunk_face_offset;
+    uint face_orientation;
+    uint chunk_x;
+    uint chunk_z;
+    uint block_id;
+    float block_opacity;
+};
+void insert_block_face(InsertionArgs args){
+    const uint is_transparent = uint(args.block_opacity<1);
+    const uint face_offset_within_chunk = atomic_add_chunk_face_count_at(args.chunk_idx+is_transparent*TOTAL_CHUNKS,1);
+    const uint face_offset = args.chunk_face_offset[is_transparent]+face_offset_within_chunk;
+    faces[face_offset]=new_face(args.pos_relative_to_chunk,args.face_orientation, args.chunk_x, args.chunk_z, BLOCK_PROPS[args.block_id].texture_ids[args.face_orientation]);
+}
+void insert_either_block_face(InsertionArgs args0, InsertionArgs args1){
+    if(args0.block_opacity != args1.block_opacity){ // I have a face
+        insert_block_face(args0.block_opacity > args1.block_opacity ? args0 : args1);
+    }
+}
+void main() {
+    const uint gID = gl_GlobalInvocationID.x;
+    const uvec2 pos = world_2d_idx_into_xz_pos(gID);
+    const uint chunk_x = pos.x / CHUNK_WIDTH;
+    const uint chunk_z = pos.y / CHUNK_DEPTH;
+    const uint chunk_idx = chunk_pos_into_chunk_idx(chunk_x,chunk_z);
+    const uvec2 pos_relative_to_chunk = uvec2(pos.x - chunk_x * CHUNK_WIDTH, pos.y - chunk_z * CHUNK_DEPTH);
+    const uint chunk_x_of_x_neighbour = pos_relative_to_chunk.x==0?chunk_x-1:chunk_x;
+    const uint chunk_idx_of_x_neighbour = chunk_pos_into_chunk_idx(chunk_x_of_x_neighbour,chunk_z);
+    const uint pos_x_relative_to_chunk_of_x_neighbour = (pos_relative_to_chunk.x==0?CHUNK_WIDTH:pos_relative_to_chunk.x)-1;
+    const uint chunk_z_of_z_neighbour = pos_relative_to_chunk.y==0?chunk_z-1:chunk_z;
+    const uint chunk_idx_of_z_neighbour = chunk_pos_into_chunk_idx(chunk_x,chunk_z_of_z_neighbour);
+    const uint pos_z_relative_to_chunk_of_z_neighbour = (pos_relative_to_chunk.y==0?CHUNK_DEPTH:pos_relative_to_chunk.y)-1;
+    const uint from_block_idx = block_pos_into_world_idx(uvec3(pos.x,0,pos.y));
+    const uint to_block_idx = block_pos_into_world_idx(uvec3(pos.x,CHUNK_HEIGHT,pos.y));
+    uint block_below_id = world[from_block_idx];
+    float block_below_opacity = BLOCK_PROPS[block_below_id].opacity;
+    const uint[2] chunk_face_offset = get_chunk_offset(chunk_idx);
+    const uint[2] chunk_face_offset_of_z_neighbour = get_chunk_offset(chunk_idx_of_z_neighbour);
+    const uint[2] chunk_face_offset_of_x_neighbour = get_chunk_offset(chunk_idx_of_x_neighbour);
+    uvec3 pos_3d_relative_to_chunk = uvec3(pos_relative_to_chunk.x,1,pos_relative_to_chunk.y);
+    for(uint idx=from_block_idx+WORLD_AREA;idx<to_block_idx;idx+=WORLD_AREA){
+        const uint block_id = world[idx];
+        const float block_opacity = BLOCK_PROPS[block_id].opacity;
+        insert_either_block_face(
+            InsertionArgs(pos_3d_relative_to_chunk, chunk_idx, chunk_face_offset, YMinus, chunk_x, chunk_z, block_id, block_opacity),
+            InsertionArgs(pos_3d_relative_to_chunk-uvec3(0,1,0), chunk_idx, chunk_face_offset, YPlus, chunk_x, chunk_z, block_below_id, block_below_opacity));
+        if(pos.x > 0){
+            const uint neighbour_idx = idx-1; // go one block in the negative x direction
+            const uint neighbour_id = world[neighbour_idx];
+            const float neighbour_opacity = BLOCK_PROPS[neighbour_id].opacity;
+            insert_either_block_face(
+                InsertionArgs(pos_3d_relative_to_chunk, chunk_idx, chunk_face_offset, XMinus, chunk_x, chunk_z, block_id, block_opacity),
+                InsertionArgs(uvec3(pos_x_relative_to_chunk_of_x_neighbour,pos_3d_relative_to_chunk.yz), chunk_idx_of_x_neighbour, chunk_face_offset_of_x_neighbour, XPlus, chunk_x_of_x_neighbour, chunk_z, neighbour_id, neighbour_opacity));
+        }
+        if(pos.y > 0){
+            const uint neighbour_idx = idx-WORLD_WIDTH; // go one block in the negative z direction
+            const uint neighbour_id = world[neighbour_idx];
+            const float neighbour_opacity = BLOCK_PROPS[neighbour_id].opacity;
+            insert_either_block_face(
+                InsertionArgs(pos_3d_relative_to_chunk, chunk_idx, chunk_face_offset, ZMinus, chunk_x, chunk_z, block_id, block_opacity),
+                InsertionArgs(uvec3(pos_3d_relative_to_chunk.xy,pos_z_relative_to_chunk_of_z_neighbour), chunk_idx_of_z_neighbour, chunk_face_offset_of_z_neighbour, ZPlus, chunk_x, chunk_z_of_z_neighbour, neighbour_id, neighbour_opacity));
+        }
+        block_below_id = block_id;
+        block_below_opacity = block_opacity;
+        pos_3d_relative_to_chunk.y++;
+    }
+}

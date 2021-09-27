@@ -22,7 +22,7 @@ void main() {
         faces[2*TOTAL_CHUNKS + dst_offset] = uvec2(face_coords,tex_id);
     }
     if(LAST_CHUNK_OFFSET==chunk_offset && lID==0){
-        draw_indirect[DRAW_INDIRECT_BLOCK].instance_count = get_new_faces_ending_offset(chunk_offset);
+        draw_indirect[DRAW_INDIRECT_FACES].instance_count = get_new_faces_ending_offset(chunk_offset);
 //        debugPrintfEXT("E%d",get_new_faces_ending_offset(chunk_offset));
     }
 }

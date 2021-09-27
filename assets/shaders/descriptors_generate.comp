@@ -1,0 +1,57 @@
+#ifndef DESCRIPTORS_GENERATE_COMP
+#define DESCRIPTORS_GENERATE_COMP
+
+#include "constants.comp"
+
+#ifdef IS_AVAILABLE_BUFFER_GLOBAL_MUTABLES
+restrict layout (std430, set = 0, binding = 0) buffer GlobalMutablesBlock{
+    GlobalMutables global_mutables;
+};
+#endif
+
+#ifdef IS_AVAILABLE_BUFFER_WORLD_BLOCK_STABILITY
+restrict layout(std430, set = 0, binding = 1) buffer WorldBlockStability{
+    uint world_block_stability[];
+};
+#endif // IS_AVAILABLE_BUFFER_WORLD_BLOCK_STABILITY
+
+
+#ifdef IS_AVAILABLE_BUFFER_INDIRECT
+restrict layout(std430, set = 0, binding = 2) buffer Indirect{
+    DispatchIndirectCommand[DISPATCH_INDIRECT_LEN] dispatch_indirect;
+    DrawIndirectCommand[DRAW_INDIRECT_LEN] draw_indirect;
+};
+#endif //IS_AVAILABLE_BUFFER_INDIRECT
+
+#ifdef IS_AVAILABLE_BUFFER_BONES
+restrict layout(std430, set = 0, binding = 3) buffer Bones{
+    Bone bones[];
+};
+#endif
+
+#ifdef IS_AVAILABLE_BUFFER_WORLD
+restrict layout(std430, set = 0, binding = 4) buffer World{
+    uint world[];
+};
+#endif
+
+#ifdef IS_AVAILABLE_BUFFER_WORLD_COPY
+restrict layout(std430, set = 0, binding = 5) buffer WorldCopy{
+    uint world_copy[];
+};
+#endif
+
+#ifdef IS_AVAILABLE_BUFFER_FACES
+restrict layout(std430, set = 0, binding = 6) buffer Faces{
+    Face faces[];
+};
+#endif //IS_AVAILABLE_BUFFER_FACES
+
+#ifdef IS_AVAILABLE_BUFFER_RANDOM_VALS
+restrict layout(std430, set = 0, binding = 7) buffer RandomVals{
+    float random_vals[];
+};
+#endif //IS_AVAILABLE_BUFFER_RANDOM_VALS
+
+
+#endif //DESCRIPTORS_GENERATE_COMP

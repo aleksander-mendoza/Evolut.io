@@ -1,0 +1,44 @@
+#version 450
+#extension GL_KHR_shader_subgroup_basic : enable
+//#extension GL_EXT_debug_printf : enable
+#define IS_AVAILABLE_BUFFER_FACES
+#define IS_AVAILABLE_BUFFER_WORLD
+#define IS_AVAILABLE_BUFFER_INDIRECT
+#include "descriptors_generate.comp"
+layout (local_size_x_id = GROUP_SIZE_CONST_ID) in;
+#include "utils.comp"
+
+
+// The array needs to store offset to each chunk faces (both opaque and transparent),
+// so there must be 2*TOTAL_CHUNKS elements.
+const uint ARR_LEN = 2*TOTAL_CHUNKS;
+shared uint face_offset_per_chunk[ARR_LEN];
+
+void main() {
+
+    const uint lID = gl_LocalInvocationID.x;
+    if(lID==0){
+        face_offset_per_chunk[0] = ARR_LEN; //this will be the offset to the very first face in faces buffer
+    }
+    for (uint chunk_offset=lID;chunk_offset < ARR_LEN-1;chunk_offset+=GROUP_SIZE){
+        face_offset_per_chunk[chunk_offset+1] = faces[chunk_offset].x;
+    }
+    // parallel summation algorithm, that sums up all entries to the left of each array cell (inclusive)
+    for(int shift=1;shift<ARR_LEN;shift*=2){
+        for (int i=int(ARR_LEN)-1-int(lID);i-shift >= 0;i-=int(GROUP_SIZE)){
+            const uint sum = face_offset_per_chunk[i] + face_offset_per_chunk[i-shift];
+            subgroupBarrier();
+            face_offset_per_chunk[i] = sum;
+        }
+    }
+    if(lID==0){
+        const uint total_faces = face_offset_per_chunk[ARR_LEN-1] + faces[ARR_LEN-1].x;
+        draw_indirect[DRAW_INDIRECT_FACES].instance_count = total_faces;
+    }
+    for (uint chunk_offset=lID;chunk_offset < ARR_LEN;chunk_offset+=GROUP_SIZE){
+        //now face_offset_per_chunk[chunk_offset] holds information about total number of faces in all chunks from 0 up to chunk_offset (exclusive).
+        faces[chunk_offset] = uvec2(/*we reset this to 0 so that generate_world_faces.comp could count it again, this time using it as global atomic counter*/0,
+        /*this component is never normally used, so we are free to temporarily hijack it as auxiliary storage for the offset*/face_offset_per_chunk[chunk_offset]);
+    }
+
+}
