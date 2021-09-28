@@ -80,7 +80,7 @@ impl ComputeResources for PhysicsResources{
         let uniform_binding = descriptors.uniform_buffer(foundations.player_event_uniform().buffer());//0
         descriptors.storage_buffer(foundations.global_mutables());//1
         descriptors.storage_buffer(foundations.collision_grid());//2
-        descriptors.storage_buffer(foundations.world_block_stability());//3
+        descriptors.storage_buffer(foundations.world_block_meta());//3
         descriptors.storage_buffer(foundations.particles());//4
         descriptors.storage_buffer(foundations.indirect().super_buffer());//5
         descriptors.storage_buffer(foundations.bones());//6
@@ -88,6 +88,7 @@ impl ComputeResources for PhysicsResources{
         descriptors.storage_buffer(foundations.faces());//8
         descriptors.storage_buffer(foundations.htm_entities_buffer());//9
         descriptors.storage_buffer(foundations.ann_entities_buffer());//10
+        descriptors.storage_buffer(foundations.rand_uint());//11
         let descriptors = descriptors.build(cmd_pool.device())?;
         // descriptors.storage_buffer(foundations.block_properties());
         // descriptors.storage_buffer(foundations.particles());

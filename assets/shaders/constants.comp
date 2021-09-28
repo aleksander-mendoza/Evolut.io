@@ -13,6 +13,8 @@ const uint CHUNK_WIDTH = 16;
 const uint CHUNK_DEPTH = 16;
 const uint CHUNK_HEIGHT = 256;
 const uint MAX_UINT = 4294967295;
+const uvec3 MAX_UVEC3 = uvec3(MAX_UINT,MAX_UINT,MAX_UINT);
+const uvec2 MAX_UVEC2 = uvec2(MAX_UINT,MAX_UINT);
 #define GROUP_SIZE_CONST_ID 1
 layout (constant_id = 1) const uint GROUP_SIZE = 32;
 layout (constant_id = 2) const uint CHUNKS_X = 0;
@@ -42,7 +44,7 @@ layout (constant_id = 106) const float DAMPING_COEFFICIENT = 0.99;
 layout (constant_id = 300) const uint MAX_BONES = 128;
 layout (constant_id = 301) const uint MAX_SENSORS = 128;
 layout (constant_id = 302) const uint MAX_FACES = 128;
-layout (constant_id = 303) const uint MAX_RANDOM_NUMBERS = 128;
+layout (constant_id = 303) const uint MAX_RAND_UINT = 128;
 //layout (constant_id = 304) const uint MAX_NEURAL_NET_LAYERS = 128;
 layout (constant_id = 305) const uint MAX_TMP_FACES_COPY = 128;
 //layout (constant_id = 306) const uint MAX_WORLD_BLOCKS_TO_UPDATE = 128;
@@ -63,6 +65,7 @@ layout (constant_id = 406) const float TEMPERATURE_SCALE = 64.;
 layout (constant_id = 407) const float HUMIDITY_SCALE = 64.;
 layout (constant_id = 408) const float RESOURCE_TYPE_SCALE = 16.;
 layout (constant_id = 409) const float HAS_RESOURCE_SCALE = 4.;
+layout (constant_id = 410) const uint RAND_SEED = 1;
 
 bool is_in_world_borders(uvec3 pos){
     return all(lessThan(pos,WORLD_BORDERS));
@@ -95,6 +98,20 @@ struct Bone{
     vec4 texture_coords;//xy components hold text UV coordinates. zw components hold width and height
 };
 
+const uint ENTITY_TYPE_ANN = 0;
+const uint ENTITY_TYPE_HTM = 1;
+uint encode_ann_entity_idx(uint ann_entity_idx){
+    return ann_entity_idx*2+ENTITY_TYPE_ANN;
+}
+uint encode_htm_entity_idx(uint ann_entity_idx){
+    return ann_entity_idx*2+ENTITY_TYPE_HTM;
+}
+uint decode_entity_idx(uint encoded_entity_idx){
+    return encoded_entity_idx/2;
+}
+uint decode_entity_type(uint encoded_entity_idx){
+    return encoded_entity_idx&1u;
+}
 mat2 normal_vec2_to_rotation_matrix(vec2 direction){
     vec2 new_z_axis = direction;
     vec2 new_x_axis = vec2(direction.y,-direction.x);
@@ -161,11 +178,12 @@ struct Particle{
     float energy;
 };
 
+
 ////////////////////////////////////////////////////////////////////////////////////
 ///////////// BELOW ARE GENERIC UTILITY FUNCTIONS FOR CONVERTING WORLD/FACE POSITIONS TO BUFFER INDICES ETC
 ////////////////////////////////////////////////////////////////////////////////////
 
-
+const uvec3 WORLD_BLOCK_STRIDE = uvec3(1,WORLD_AREA,WORLD_WIDTH);
 uint chunk_pos_into_chunk_idx(uint x, uint z) {
     return z * CHUNKS_X + x;
 }
@@ -173,7 +191,26 @@ uint block_pos_into_chunk_idx(uint x,uint z){
     return chunk_pos_into_chunk_idx(x / CHUNK_WIDTH, z / CHUNK_DEPTH);
 }
 uint block_pos_into_world_idx(uvec3 pos){
-    return pos.z * WORLD_WIDTH + pos.x + pos.y * WORLD_AREA;
+    uvec3 s = WORLD_BLOCK_STRIDE*pos;
+    return s.x+s.y+s.z;
+}
+uint block_idx_x_plus_1(uint block_idx){
+    return block_idx + WORLD_BLOCK_STRIDE.x; //pos.z * WORLD_WIDTH + pos.x + pos.y * WORLD_AREA;
+}
+uint block_idx_x_minus_1(uint block_idx){
+    return block_idx - WORLD_BLOCK_STRIDE.x; //pos.z * WORLD_WIDTH + pos.x + pos.y * WORLD_AREA;
+}
+uint block_idx_y_plus_1(uint block_idx){
+    return block_idx + WORLD_BLOCK_STRIDE.y; //pos.z * WORLD_WIDTH + pos.x + pos.y * WORLD_AREA;
+}
+uint block_idx_y_minus_1(uint block_idx){
+    return block_idx - WORLD_BLOCK_STRIDE.y; //pos.z * WORLD_WIDTH + pos.x + pos.y * WORLD_AREA;
+}
+uint block_idx_z_plus_1(uint block_idx){
+    return block_idx + WORLD_BLOCK_STRIDE.z; //pos.z * WORLD_WIDTH + pos.x + pos.y * WORLD_AREA;
+}
+uint block_idx_z_minus_1(uint block_idx){
+    return block_idx - WORLD_BLOCK_STRIDE.z;// pos.z * WORLD_WIDTH + pos.x + pos.y * WORLD_AREA;
 }
 uvec3 world_idx_into_block_pos(uint idx){
     uint y = idx / WORLD_AREA;
@@ -289,6 +326,14 @@ struct DrawIndirectCommand{
 /////////// BELOW ARE SOME GENERIC MATH FUNCTIONS
 //////////////////////////////////////////////////////////////////////////////////
 
+/* x must be non-zero */
+uint xorshift32(uint x){
+    /* Algorithm "xor" from p. 4 of Marsaglia, "Xorshift RNGs" */
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    return x;
+}
 
 uint max_vec3_component(vec3 v){
     return v.x > v.y ? (v.x > v.z ? 0 : 2) : (v.y > v.z ? 1 : 2);
@@ -336,6 +381,11 @@ struct BlockProp{
     uint[6] texture_ids;
     float opacity; // the higher, the more opaque
     float mass;
+};
+
+
+struct BlockMeta{
+    uint humidity;
 };
 
 #define Block uint
@@ -401,64 +451,229 @@ const uint NO_OF_TRAVERSABLE_BLOCKS = 3; // every traversable block (mobs can pa
 const uint NO_OF_TRANSPARENT_BLOCKS = 11; // The blocks are aligned in such a way that transparent blocks come first. Hence in
 // order to check whether a block is transparent or not, it's enough to just check if its ID is below this value
 
-#define new_block_prop_regular_transparent(texture_id, opacity, mass) BlockProp(uint[6](texture_id,texture_id,texture_id,texture_id,texture_id,texture_id),opacity,mass)
-#define new_block_prop_regular( texture_id, mass) new_block_prop_regular_transparent(texture_id,1.,mass)
-#define new_block_prop_top_sides_bottom_transparent( texture_id_top, texture_id_side, texture_id_bottom, opacity, mass) BlockProp(uint[6](texture_id_side,texture_id_side,texture_id_top,texture_id_bottom,texture_id_side,texture_id_side),opacity, mass)
-#define new_block_prop_top_sides_bottom_front( texture_id_top, texture_id_side, texture_id_bottom, texture_id_front, mass) BlockProp(uint[6](texture_id_side,texture_id_side,texture_id_top,texture_id_bottom,texture_id_side,texture_id_front),1., mass)
-#define new_block_prop_top_sides_bottom(texture_id_top, texture_id_side, texture_id_bottom, mass) new_block_prop_top_sides_bottom_transparent(texture_id_top,texture_id_side,texture_id_bottom,1., mass)
+#define new_block_tex_ids_regular(texture_id) uint[6](texture_id,texture_id,texture_id,texture_id,texture_id,texture_id)
+#define new_block_tex_ids_top_sides_bottom( texture_id_top, texture_id_side, texture_id_bottom) uint[6](texture_id_side,texture_id_side,texture_id_top,texture_id_bottom,texture_id_side,texture_id_side)
+#define new_block_tex_ids_top_sides_bottom_front( texture_id_top, texture_id_side, texture_id_bottom, texture_id_front) uint[6](texture_id_side,texture_id_side,texture_id_top,texture_id_bottom,texture_id_side,texture_id_front)
 
-const BlockProp[BLOCKS_LEN] BLOCK_PROPS = BlockProp[BLOCKS_LEN](
-    new_block_prop_regular_transparent( /*Some dummy value*/256, 0., 0.05), // air
-    new_block_prop_regular_transparent( 44, 0.09, 1.0), // water
-    new_block_prop_regular_transparent( 45, 0.009, 3.011), // lava
-    new_block_prop_regular_transparent( 54, 0.1, 0.1), // glass
-    new_block_prop_regular_transparent( 46, 0.7, 0.9167), // ice
-    new_block_prop_regular_transparent( 47, 0.1, 0.143), // swamp_leaves
-    new_block_prop_regular_transparent( 48, 0.1, 0.143), // golden_leaves
-    new_block_prop_regular_transparent( 49, 0.1, 0.143), // oak_leaves
-    new_block_prop_regular_transparent( 50, 0.1, 0.143), // peach_leaves
-    new_block_prop_regular_transparent( 51, 0.1, 0.143), // aether_leaves
-    new_block_prop_regular_transparent( 52, 0.1, 0.143), // frost_leaves
-    new_block_prop_regular( 18, 2.26796), // stone
-    new_block_prop_regular( 19, 2.9), // gold_ore
-    new_block_prop_regular( 20, 2.7), // iron_ore
-    new_block_prop_regular( 21, 2.0), // coal_ore
-    new_block_prop_regular( 22, 2.1), // diamond_ore
-    new_block_prop_regular( 23, 2.2), // redstone_ore
-    new_block_prop_regular( 5, 1.3), // dirt
-    new_block_prop_regular( 10, 1.3), // swamp_dirt
-    new_block_prop_regular( 11, 1.3), // iron_rich_dirt
-    new_block_prop_regular( 12, 1.3), // aether_dirt
-    new_block_prop_regular( 17, 1.3), // frost_dirt
-    new_block_prop_top_sides_bottom( 3, 4,5, 1.4), // grass
-    new_block_prop_top_sides_bottom( 0, 4,5, 1.4), // berries
-    new_block_prop_top_sides_bottom( 1, 4,5, 1.4), // strawberries
-    new_block_prop_top_sides_bottom( 2, 4,5, 1.4), // wheat
-    new_block_prop_top_sides_bottom( 8,9,10, 1.4), // swamp_grass
-    new_block_prop_top_sides_bottom( 6,9,10, 1.4), // swamp_berries
-    new_block_prop_top_sides_bottom( 7,9,10, 1.4), // swamp_backberries
-    new_block_prop_top_sides_bottom( 15,16,17, 1.4), // frost_grass
-    new_block_prop_top_sides_bottom( 13,16,17, 1.4), // snow_crocus
-    new_block_prop_top_sides_bottom( 14,16,17, 1.4), // snow_blackberries
-    new_block_prop_regular( 41, 1.5/4.), // plank
-    new_block_prop_regular( 42, 2.26796), // slab
-    new_block_prop_regular( 43, 1.9), // brick
-    new_block_prop_regular( 35, 2.26796), // cobblestone
-    new_block_prop_regular( 36, 3.1), // bedrock
-    new_block_prop_regular( 38, 1.62), // sand
-    new_block_prop_regular( 37, 1.62), // rare_sand
-    new_block_prop_regular( 40, 1.68), // gravel
-    new_block_prop_regular( 39, 1.68), // wet_gravel
-    new_block_prop_top_sides_bottom( 26,25,26, 1.5), // oak_wood
-    new_block_prop_top_sides_bottom( 26,24,26, 1.5), // oak_stem
-    new_block_prop_top_sides_bottom( 29,28,29, 1.5), // pink_wood
-    new_block_prop_top_sides_bottom( 29,27,29, 1.5), // pink_stem
-    new_block_prop_top_sides_bottom( 32,31,32, 1.5), // dark_wood
-    new_block_prop_top_sides_bottom( 32,30,32, 1.5), // dark_stem
-    new_block_prop_regular( 33, 3.1), // obsidian
-    new_block_prop_regular( 34, 0.1), // sponge
-    new_block_prop_regular( 15, 0.05) // snow
+const uint[BLOCKS_LEN][6] BLOCK_TEXTURE_IDS = uint[BLOCKS_LEN][6](
+    new_block_tex_ids_regular( /*Some dummy value*/256), // air
+    new_block_tex_ids_regular( 44), // water
+    new_block_tex_ids_regular( 45), // lava
+    new_block_tex_ids_regular( 54), // glass
+    new_block_tex_ids_regular( 46), // ice
+    new_block_tex_ids_regular( 47), // swamp_leaves
+    new_block_tex_ids_regular( 48), // golden_leaves
+    new_block_tex_ids_regular( 49), // oak_leaves
+    new_block_tex_ids_regular( 50), // peach_leaves
+    new_block_tex_ids_regular( 51), // aether_leaves
+    new_block_tex_ids_regular( 52), // frost_leaves
+    new_block_tex_ids_regular( 18), // stone
+    new_block_tex_ids_regular( 19), // gold_ore
+    new_block_tex_ids_regular( 20), // iron_ore
+    new_block_tex_ids_regular( 21), // coal_ore
+    new_block_tex_ids_regular( 22), // diamond_ore
+    new_block_tex_ids_regular( 23), // redstone_ore
+    new_block_tex_ids_regular( 5), // dirt
+    new_block_tex_ids_regular( 10), // swamp_dirt
+    new_block_tex_ids_regular( 11), // iron_rich_dirt
+    new_block_tex_ids_regular( 12), // aether_dirt
+    new_block_tex_ids_regular( 17), // frost_dirt
+    new_block_tex_ids_top_sides_bottom( 3, 4,5), // grass
+    new_block_tex_ids_top_sides_bottom( 0, 4,5), // berries
+    new_block_tex_ids_top_sides_bottom( 1, 4,5), // strawberries
+    new_block_tex_ids_top_sides_bottom( 2, 4,5), // wheat
+    new_block_tex_ids_top_sides_bottom( 8,9,10), // swamp_grass
+    new_block_tex_ids_top_sides_bottom( 6,9,10), // swamp_berries
+    new_block_tex_ids_top_sides_bottom( 7,9,10), // swamp_backberries
+    new_block_tex_ids_top_sides_bottom( 15,16,17), // frost_grass
+    new_block_tex_ids_top_sides_bottom( 13,16,17), // snow_crocus
+    new_block_tex_ids_top_sides_bottom( 14,16,17), // snow_blackberries
+    new_block_tex_ids_regular( 41), // plank
+    new_block_tex_ids_regular( 42), // slab
+    new_block_tex_ids_regular( 43), // brick
+    new_block_tex_ids_regular( 35), // cobblestone
+    new_block_tex_ids_regular( 36), // bedrock
+    new_block_tex_ids_regular( 38), // sand
+    new_block_tex_ids_regular( 37), // rare_sand
+    new_block_tex_ids_regular( 40), // gravel
+    new_block_tex_ids_regular( 39), // wet_gravel
+    new_block_tex_ids_top_sides_bottom( 26,25,26), // oak_wood
+    new_block_tex_ids_top_sides_bottom( 26,24,26), // oak_stem
+    new_block_tex_ids_top_sides_bottom( 29,28,29), // pink_wood
+    new_block_tex_ids_top_sides_bottom( 29,27,29), // pink_stem
+    new_block_tex_ids_top_sides_bottom( 32,31,32), // dark_wood
+    new_block_tex_ids_top_sides_bottom( 32,30,32), // dark_stem
+    new_block_tex_ids_regular( 33), // obsidian
+    new_block_tex_ids_regular( 34), // sponge
+    new_block_tex_ids_regular( 15) // snow
 );
+
+const float[BLOCKS_LEN] BLOCK_OPACITY = float[BLOCKS_LEN](
+    0., // air
+    0.09, // water
+    0.009, // lava
+    0.1, // glass
+    0.7, // ice
+    0.1, // swamp_leaves
+    0.1, // golden_leaves
+    0.1, // oak_leaves
+    0.1, // peach_leaves
+    0.1, // aether_leaves
+    0.1, // frost_leaves
+    1., // stone
+    1., // gold_ore
+    1., // iron_ore
+    1., // coal_ore
+    1., // diamond_ore
+    1., // redstone_ore
+    1., // dirt
+    1., // swamp_dirt
+    1., // iron_rich_dirt
+    1., // aether_dirt
+    1., // frost_dirt
+    1., // grass
+    1., // berries
+    1., // strawberries
+    1., // wheat
+    1., // swamp_grass
+    1., // swamp_berries
+    1., // swamp_backberries
+    1., // frost_grass
+    1., // snow_crocus
+    1., // snow_blackberries
+    1., // plank
+    1., // slab
+    1., // brick
+    1., // cobblestone
+    1., // bedrock
+    1., // sand
+    1., // rare_sand
+    1., // gravel
+    1., // wet_gravel
+    1., // oak_wood
+    1., // oak_stem
+    1., // pink_wood
+    1., // pink_stem
+    1., // dark_wood
+    1., // dark_stem
+    1., // obsidian
+    1., // sponge
+    1. // snow
+);
+
+const float[BLOCKS_LEN] BLOCK_MASS = float[BLOCKS_LEN](
+    0.05, // air
+    1.0, // water
+    3.011, // lava
+    0.1, // glass
+    0.9167, // ice
+    0.143, // swamp_leaves
+    0.143, // golden_leaves
+    0.143, // oak_leaves
+    0.143, // peach_leaves
+    0.143, // aether_leaves
+    0.143, // frost_leaves
+    2.26796, // stone
+    2.9, // gold_ore
+    2.7, // iron_ore
+    2.0, // coal_ore
+    2.1, // diamond_ore
+    2.2, // redstone_ore
+    1.3, // dirt
+    1.3, // swamp_dirt
+    1.3, // iron_rich_dirt
+    1.3, // aether_dirt
+    1.3, // frost_dirt
+    1.4, // grass
+    1.4, // berries
+    1.4, // strawberries
+    1.4, // wheat
+    1.4, // swamp_grass
+    1.4, // swamp_berries
+    1.4, // swamp_backberries
+    1.4, // frost_grass
+    1.4, // snow_crocus
+    1.4, // snow_blackberries
+    4.0, // plank
+    2.26796, // slab
+    1.9, // brick
+    2.26796, // cobblestone
+    3.1, // bedrock
+    1.62, // sand
+    1.62, // rare_sand
+    1.68, // gravel
+    1.68, // wet_gravel
+    1.5, // oak_wood
+    1.5, // oak_stem
+    1.5, // pink_wood
+    1.5, // pink_stem
+    1.5, // dark_wood
+    1.5, // dark_stem
+    3.1, // obsidian
+    0.1, // sponge
+    0.05 // snow
+);
+
+const uint[BLOCKS_LEN] BLOCK_HUMIDITY = uint[BLOCKS_LEN](
+    0, // air
+    255, // water
+    0, // lava
+    2, // glass
+    255, // ice
+    128, // swamp_leaves
+    64, // golden_leaves
+    76, // oak_leaves
+    65, // peach_leaves
+    20, // aether_leaves
+    50, // frost_leaves
+    10, // stone
+    8, // gold_ore
+    8, // iron_ore
+    6, // coal_ore
+    6, // diamond_ore
+    3, // redstone_ore
+    50, // dirt
+    86, // swamp_dirt
+    86, // iron_rich_dirt
+    20, // aether_dirt
+    40, // frost_dirt
+    60, // grass
+    78, // berries
+    67, // strawberries
+    54, // wheat
+    120, // swamp_grass
+    100, // swamp_berries
+    110, // swamp_backberries
+    50, // frost_grass
+    55, // snow_crocus
+    60, // snow_blackberries
+    20, // plank
+    5, // slab
+    12, // brick
+    10, // cobblestone
+    0, // bedrock
+    1, // sand
+    1, // rare_sand
+    3, // gravel
+    60, // wet_gravel
+    60, // oak_wood
+    100, // oak_stem
+    50, // pink_wood
+    70, // pink_stem
+    100, // dark_wood
+    180, // dark_stem
+    15, // obsidian
+    200, // sponge
+    120 // snow
+);
+
+BlockMeta get_default_block_meta(Block block_id){
+    return BlockMeta(BLOCK_HUMIDITY[block_id]);
+}
+
+/////////////////////////////////////////////////////////////////////////////////
+///////// BELOW SECTION CONTAINS DEFINITIONS OF NEURAL NETWORKS
+/////////////////////////////////////////////////////////////////////////////////
 
 const uint ENTITY_LIDAR_COUNT = 32;
 const uint HTM_INPUT_SIZE = (ENTITY_LIDAR_COUNT)*(BLOCKS_LEN);

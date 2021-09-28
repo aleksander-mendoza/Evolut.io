@@ -21,11 +21,11 @@ restrict layout(std430, set = 0, binding = 2) buffer CollisionGrid{
 };
 #endif // IS_AVAILABLE_BUFFER_COLLISION_GRID
 
-#ifdef IS_AVAILABLE_BUFFER_WORLD_BLOCK_STABILITY
-restrict layout(std430, set = 0, binding = 3) buffer WorldBlockStability{
-    uint world_block_stability[];
+#ifdef IS_AVAILABLE_BUFFER_WORLD_BLOCK_META
+restrict layout(std430, set = 0, binding = 3) buffer WorldBlockMeta{
+    BlockMeta world_block_meta[];
 };
-#endif // IS_AVAILABLE_BUFFER_WORLD_BLOCK_STABILITY
+#endif // IS_AVAILABLE_BUFFER_WORLD_BLOCK_META
 
 
 #ifdef IS_AVAILABLE_BUFFER_PARTICLES
@@ -83,6 +83,12 @@ restrict layout(std430, set = 0, binding = 9) buffer HtmEntities{
 #ifdef IS_AVAILABLE_BUFFER_ANN_ENTITIES
 restrict layout(std430, set = 0, binding = 10) buffer AnnEntities{
     AnnEntity ann_entities[];
+};
+#endif
+
+#ifdef IS_AVAILABLE_BUFFER_RAND_UINT
+restrict layout(std430, set = 0, binding = 11) buffer RandUInt{
+    uint rand_uint[];
 };
 #endif
 

@@ -1,0 +1,12 @@
+#version 450
+//#extension GL_EXT_debug_printf : enable
+#define IS_AVAILABLE_BUFFER_WORLD
+#define IS_AVAILABLE_BUFFER_WORLD_BLOCK_META
+
+#include "descriptors_generate.comp"
+layout (local_size_x_id = GROUP_SIZE_CONST_ID) in;
+
+void main() {
+    const uint gID = gl_GlobalInvocationID.x;
+    world_block_meta[gID] = BlockMeta(BLOCK_HUMIDITY[world[gID]]);
+}

@@ -67,3 +67,4 @@ impl Block {
         self.opacity() == 1.
     }
 }
+

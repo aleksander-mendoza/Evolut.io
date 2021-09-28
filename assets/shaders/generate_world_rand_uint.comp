@@ -1,0 +1,15 @@
+#version 450
+//#extension GL_EXT_debug_printf : enable
+#define IS_AVAILABLE_BUFFER_RAND_UINT
+
+#include "descriptors_generate.comp"
+layout (local_size_x_id = GROUP_SIZE_CONST_ID) in;
+
+void main() {
+    const uint gID = gl_GlobalInvocationID.x;
+    if(gID<MAX_RAND_UINT){
+        const uint seed = max(/*0 is not a valid seed*/1, RAND_SEED + gID*0x43658773);
+        const uint rand = xorshift32(seed);
+        rand_uint[gID] = rand;
+    }
+}

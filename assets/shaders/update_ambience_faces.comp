@@ -34,8 +34,8 @@ void main() {
         const uvec3 block_pos = world_idx_into_block_pos(block_idx);
         const uint block_old_id = world[block_idx];
         const uint block_new_id = world_copy[block_idx];
-        const float block_old_opacity = BLOCK_PROPS[block_old_id].opacity;
-        const float block_new_opacity = BLOCK_PROPS[block_new_id].opacity;
+        const float block_old_opacity = BLOCK_OPACITY[block_old_id];
+        const float block_new_opacity = BLOCK_OPACITY[block_new_id];
         const uint chunk_x = block_pos.x / CHUNK_WIDTH;
         const uint chunk_z = block_pos.z / CHUNK_DEPTH;
         const uint chunk_idx = chunk_pos_into_chunk_idx(chunk_x,chunk_z);
@@ -58,8 +58,8 @@ void main() {
                 const uint neighbour_idx = block_pos_into_world_idx(neighbour_pos);
                 const uint neighbour_block_old_id = world[neighbour_idx];
                 const uint neighbour_block_new_id = world_copy[neighbour_idx];
-                const float neighbour_old_opacity = BLOCK_PROPS[neighbour_block_old_id].opacity;
-                const float neighbour_new_opacity = BLOCK_PROPS[neighbour_block_new_id].opacity;
+                const float neighbour_old_opacity = BLOCK_OPACITY[neighbour_block_old_id];
+                const float neighbour_new_opacity = BLOCK_OPACITY[neighbour_block_new_id];
                 const bool is_neighbour_unchanged = neighbour_block_old_id == neighbour_block_new_id;
                 const bool neighbour_had_face = block_old_opacity < neighbour_old_opacity;
                 const bool neighbour_has_face = block_new_opacity < neighbour_new_opacity;
@@ -78,7 +78,7 @@ void main() {
                 }
                 if(!neighbour_had_face && neighbour_has_face && is_neighbour_unchanged){
                     const uint op_face = opposite_orientation(face_orientation);
-                    const uint neighbour_new_texture = BLOCK_PROPS[neighbour_block_new_id].texture_ids[op_face];
+                    const uint neighbour_new_texture = BLOCK_TEXTURE_IDS[neighbour_block_new_id][op_face];
                     const uint face_coords = block_pos_relative_to_chunk_and_orientation_into_face_coords(uvec4(neighbour_block_pos_relative_to_chunk,op_face));
                     insert_face(face_coords,neighbour_new_texture,neighbour_chunk_x,neighbour_chunk_z,neighbour_chunk_idx,neighbour_new_opacity);
                 }
@@ -87,7 +87,7 @@ void main() {
                     remove_face(face_coords,chunk_idx,block_old_opacity);
                 }
                 if(!i_had_face && i_have_face){
-                    const uint my_new_texture = BLOCK_PROPS[block_new_id].texture_ids[face_orientation];
+                    const uint my_new_texture = BLOCK_TEXTURE_IDS[block_new_id][face_orientation];
                     const uint face_coords = block_pos_relative_to_chunk_and_orientation_into_face_coords(uvec4(block_pos_relative_to_chunk,face_orientation));
                     insert_face(face_coords,my_new_texture,chunk_x,chunk_z,chunk_idx,block_new_opacity);
                 }

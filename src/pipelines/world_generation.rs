@@ -65,6 +65,9 @@ pub struct WorldGeneratorInitializer {
     generate_world_faces_prepare_face_offsets:ShaderModule<Compute>,
     generate_world_faces:ShaderModule<Compute>,
     generate_world_copy:ShaderModule<Compute>,
+    generate_world_update_meta:ShaderModule<Compute>,
+    generate_world_agents:ShaderModule<Compute>,
+    generate_world_rand_uint:ShaderModule<Compute>,
 }
 
 
@@ -83,6 +86,9 @@ impl WorldGeneratorInitializer {
         let generate_world_faces_prepare_face_offsets = ShaderModule::new(include_glsl!("assets/shaders/generate_world_faces_prepare_face_offsets.comp", target: vulkan1_1, kind: comp) as &[u32], cmd_pool.device())?;
         let generate_world_faces = ShaderModule::new(include_glsl!("assets/shaders/generate_world_faces.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let generate_world_copy = ShaderModule::new(include_glsl!("assets/shaders/generate_world_copy.comp", kind: comp) as &[u32], cmd_pool.device())?;
+        let generate_world_update_meta = ShaderModule::new(include_glsl!("assets/shaders/generate_world_update_meta.comp", kind: comp) as &[u32], cmd_pool.device())?;
+        let generate_world_agents = ShaderModule::new(include_glsl!("assets/shaders/generate_world_agents.comp", kind: comp) as &[u32], cmd_pool.device())?;
+        let generate_world_rand_uint = ShaderModule::new(include_glsl!("assets/shaders/generate_world_rand_uint.comp", kind: comp) as &[u32], cmd_pool.device())?;
         // heights.setup_world_blocks(&mut data.world_blocks);
         // data.setup_world_faces();
         // for _ in 0..8 {
@@ -141,11 +147,15 @@ impl WorldGeneratorInitializer {
             generate_world_faces_prepare_face_offsets,
             generate_world_faces,
             generate_world_copy,
-            random_vals_buffer
+            random_vals_buffer,
+            generate_world_update_meta,
+            generate_world_agents,
+            generate_world_rand_uint,
         })
     }
     pub fn build(self, cmd_pool: &CommandPool, foundations:&Foundations) -> Result<(), Error> {
         let Self {
+            generate_world_update_meta,
             generate_world_stone_dirt_grass,
             surface_artifact_scale,
             large_scale,
@@ -158,17 +168,21 @@ impl WorldGeneratorInitializer {
             generate_world_copy,
             generate_world_face_count_per_chunk,
             generate_world_faces_prepare_face_offsets,
-            generate_world_faces
+            generate_world_faces,
+            generate_world_agents,
+            generate_world_rand_uint
         } = self;
         let mut descriptors = ComputeDescriptorsBuilder::new();
         descriptors.storage_buffer(foundations.global_mutables());//0
-        descriptors.storage_buffer(foundations.world_block_stability());//1
+        descriptors.storage_buffer(foundations.world_block_meta());//1
         descriptors.storage_buffer(foundations.indirect().super_buffer());//2
         descriptors.storage_buffer(foundations.bones());//3
         descriptors.storage_buffer(foundations.world());//4
         descriptors.storage_buffer(foundations.world_copy());//5
         descriptors.storage_buffer(foundations.faces());//6
         descriptors.storage_buffer(&random_vals_buffer);//7
+        descriptors.storage_buffer(foundations.rand_uint());//8
+        descriptors.storage_buffer(foundations.ann_entities_buffer());//9
         let descriptors = descriptors.build(cmd_pool.device())?;
         let large_scale = large_scale.take()?.take_gpu();
         let chunk_scale = chunk_scale.take()?.take_gpu();
@@ -183,21 +197,39 @@ impl WorldGeneratorInitializer {
         let generate_world_faces_prepare_face_offsets = descriptors.build("main", generate_world_faces_prepare_face_offsets,&sc)?;
         let generate_world_faces = descriptors.build("main", generate_world_faces,&sc)?;
         let generate_world_copy = descriptors.build("main", generate_world_copy,&sc)?;
+        let generate_world_update_meta = descriptors.build("main", generate_world_update_meta,&sc)?;
+        let generate_world_agents = descriptors.build("main", generate_world_agents,&sc)?;
+        let generate_world_rand_uint = descriptors.build("main", generate_world_rand_uint,&sc)?;
         let mut generate_command_buffer = cmd_pool.create_command_buffer()?;
+        let subgroup_size = cmd_pool.device().get_max_subgroup_size();
         let world_area = foundations.world_size().world_area() as u32;
-        let world_volume = foundations.world_size().world_volume() as u32;
-        assert_eq!(world_area%cmd_pool.device().get_max_subgroup_size(),0,"World area {} is not divisible by subgroup size {}",world_area,cmd_pool.device().get_max_subgroup_size());
-        let groups = world_area/cmd_pool.device().get_max_subgroup_size();
+        let world_volume = foundations.world_size().world_volume() ;
+        let agents_groups = foundations.default_global_mutables().ann_entities/subgroup_size;
+        assert_eq!(world_area%subgroup_size,0,"World area {} is not divisible by subgroup size {}",world_area,cmd_pool.device().get_max_subgroup_size());
+        assert!(foundations.default_global_mutables().ann_entities<foundations.cap().max_rand_uint as u32/ /*xz dimensions*/2);
+
+        let area_groups = world_area/subgroup_size;
+        let rand_uint_groups = (foundations.cap().max_rand_uint as u32+subgroup_size-1)/subgroup_size;
+        let volume_groups = (world_volume/subgroup_size as usize) as u32;
         generate_command_buffer.reset()?
             .begin(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)?
             .bind_compute_descriptors(&generate_world_stone_dirt_grass)
             .bind_compute_pipeline(&generate_world_stone_dirt_grass)
-            .dispatch_1d(groups)
+            .dispatch_1d(area_groups)
+            .bind_compute_pipeline(&generate_world_rand_uint)
+            .dispatch_1d(rand_uint_groups)
             .buffer_barriers(vk::PipelineStageFlags::COMPUTE_SHADER, vk::PipelineStageFlags::COMPUTE_SHADER, &[
-                make_shader_buffer_barrier(foundations.world())
+                make_shader_buffer_barrier(foundations.world()),
+                make_shader_buffer_barrier(foundations.world_block_meta()),
+                make_shader_buffer_barrier(foundations.rand_uint()),
             ])
+            // .bind_compute_pipeline(&generate_world_update_meta)
+            // .dispatch_1d(volume_groups)
+            // .buffer_barriers(vk::PipelineStageFlags::COMPUTE_SHADER, vk::PipelineStageFlags::COMPUTE_SHADER, &[
+            //     make_shader_buffer_barrier(foundations.world())
+            // ])
             .bind_compute_pipeline(&generate_world_face_count_per_chunk)
-            .dispatch_1d(groups)
+            .dispatch_1d(area_groups)
             .buffer_barriers(vk::PipelineStageFlags::COMPUTE_SHADER, vk::PipelineStageFlags::COMPUTE_SHADER, &[
                 make_shader_buffer_barrier(foundations.faces())
             ])
@@ -206,10 +238,12 @@ impl WorldGeneratorInitializer {
             .buffer_barriers(vk::PipelineStageFlags::COMPUTE_SHADER, vk::PipelineStageFlags::COMPUTE_SHADER, &[
                 make_shader_buffer_barrier(foundations.faces())
             ])
+            .bind_compute_pipeline(&generate_world_agents)
+            .dispatch_1d(agents_groups)
             .bind_compute_pipeline(&generate_world_faces)
-            .dispatch_1d(groups)
+            .dispatch_1d(area_groups)
             .bind_compute_pipeline(&generate_world_copy)
-            .dispatch_1d(world_volume/cmd_pool.device().get_max_subgroup_size())
+            .dispatch_1d(volume_groups)
             .end()?;
         let generate_fence = Fence::new(cmd_pool.device(), false)?;
         generate_command_buffer.submit(&[], &[], Some(&generate_fence))?;

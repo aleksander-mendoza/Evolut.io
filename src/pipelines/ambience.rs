@@ -62,7 +62,7 @@ impl ComputeResources for AmbienceResources {
         let mut descriptors = ComputeDescriptorsBuilder::new();
         let uniform_binding = descriptors.uniform_buffer(foundations.player_event_uniform().buffer());
         descriptors.storage_buffer(foundations.global_mutables());
-        descriptors.storage_buffer(foundations.world_block_stability());
+        descriptors.storage_buffer(foundations.world_block_meta());
         descriptors.storage_buffer(foundations.faces_to_be_inserted());
         descriptors.storage_buffer(foundations.faces_to_be_removed());
         descriptors.storage_buffer(foundations.indirect().super_buffer());

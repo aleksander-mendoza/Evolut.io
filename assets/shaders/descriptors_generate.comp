@@ -9,11 +9,11 @@ restrict layout (std430, set = 0, binding = 0) buffer GlobalMutablesBlock{
 };
 #endif
 
-#ifdef IS_AVAILABLE_BUFFER_WORLD_BLOCK_STABILITY
-restrict layout(std430, set = 0, binding = 1) buffer WorldBlockStability{
-    uint world_block_stability[];
+#ifdef IS_AVAILABLE_BUFFER_WORLD_BLOCK_META
+restrict layout(std430, set = 0, binding = 1) buffer WorldBlockMeta{
+    BlockMeta world_block_meta[];
 };
-#endif // IS_AVAILABLE_BUFFER_WORLD_BLOCK_STABILITY
+#endif // IS_AVAILABLE_BUFFER_WORLD_BLOCK_META
 
 
 #ifdef IS_AVAILABLE_BUFFER_INDIRECT
@@ -52,6 +52,18 @@ restrict layout(std430, set = 0, binding = 7) buffer RandomVals{
     float random_vals[];
 };
 #endif //IS_AVAILABLE_BUFFER_RANDOM_VALS
+
+#ifdef IS_AVAILABLE_BUFFER_RAND_UINT
+restrict layout(std430, set = 0, binding = 8) buffer RandUInt{
+    uint rand_uint[];
+};
+#endif
+
+#ifdef IS_AVAILABLE_BUFFER_ANN_ENTITIES
+restrict layout(std430, set = 0, binding = 9) buffer AnnEntities{
+    AnnEntity ann_entities[];
+};
+#endif
 
 
 #endif //DESCRIPTORS_GENERATE_COMP

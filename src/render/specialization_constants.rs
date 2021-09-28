@@ -16,6 +16,7 @@ impl SpecializationConstants{
     pub fn entry_uint(&mut self, id:u32, val:u32){
         self.entry(id,&val)
     }
+
     pub fn entry<T:Copy>(&mut self, id:u32, val:&T){
         assert_eq!(self.entries.iter().find(|x|x.constant_id==id).map(|x|x.constant_id),None);
         let size = std::mem::size_of_val(val);

@@ -2,6 +2,7 @@
 //#extension GL_EXT_debug_printf : enable
 #define IS_AVAILABLE_BUFFER_WORLD
 #define IS_AVAILABLE_BUFFER_RANDOM_VALS
+#define IS_AVAILABLE_BUFFER_WORLD_BLOCK_META
 
 #include "descriptors_generate.comp"
 layout (local_size_x_id = GROUP_SIZE_CONST_ID) in;
@@ -73,19 +74,19 @@ void main() {
     const uint height = uint(large_scale_interpolated_value + chunk_scale_interpolated_value);
     const uint biome = get_biome(humidity_scale_interpolated_value,temperature_scale_interpolated_value);
     const BiomeProp biome_props = BIOMES[biome];
-    fill_column_to(uvec3(pos.x, 1, pos.y), height - 4, BLOCK_ID_STONE);
-    fill_column_to(uvec3(pos.x, height - 4, pos.y), height, biome_props.dirt);
+    fill_column_and_meta_to(uvec3(pos.x, 1, pos.y), height - 4, BLOCK_ID_STONE);
+    fill_column_and_meta_to(uvec3(pos.x, height - 4, pos.y), height, biome_props.dirt);
     if (height < SEA_LEVEL) {
         const uint sea_depth = SEA_LEVEL - height;
-        fill_column_to(uvec3(pos.x, height, pos.y), SEA_LEVEL, BLOCK_ID_WATER);
-        set_block(uvec3(pos.x, SEA_LEVEL, pos.y), sea_depth < biome_props.sea_depth ? biome_props.water_top : BLOCK_ID_WATER);
+        fill_column_and_meta_to(uvec3(pos.x, height, pos.y), SEA_LEVEL, BLOCK_ID_WATER);
+        set_block_and_meta(uvec3(pos.x, SEA_LEVEL, pos.y), sea_depth < biome_props.sea_depth ? biome_props.water_top : BLOCK_ID_WATER);
     } else {
         const float resource_random_value = has_resource_scale_interpolated_value*resource_type_scale_interpolated_value;
         const float artifact_random_value = random_vals[SURFACE_ARTIFACT_SCALE_SUB_BUFFER_OFFSET+gID];
         const uint resource_id = get_biome_resource(biome_props, resource_random_value);
-        set_block(uvec3(pos.x, height, pos.y), resource_id);
+        set_block_and_meta(uvec3(pos.x, height, pos.y), resource_id);
         const uint surface_artifact_id = get_biome_surface_artifact(biome_props, artifact_random_value);
-        set_block(uvec3(pos.x, height+1, pos.y), surface_artifact_id);
+        set_block_and_meta(uvec3(pos.x, height+1, pos.y), surface_artifact_id);
     }
-    set_block(uvec3(pos.x, 0, pos.y), BLOCK_ID_BEDROCK);
+    set_block_and_meta(uvec3(pos.x, 0, pos.y), BLOCK_ID_BEDROCK);
 }

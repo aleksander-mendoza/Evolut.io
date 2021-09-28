@@ -23,9 +23,9 @@ void main() {
     uint[2] number_of_faces_in_this_chunk = uint[2](0,0); // first element are opaque faces and second are transparent faces
     uint[2] number_of_faces_in_x_neighbour_chunk = uint[2](0,0); // first element are opaque faces and second are transparent faces
     uint[2] number_of_faces_in_z_neighbour_chunk = uint[2](0,0); // first element are opaque faces and second are transparent faces
-    float block_below_opacity = BLOCK_PROPS[world[from_block_idx]].opacity;
-    for(uint idx=from_block_idx+WORLD_AREA;idx<to_block_idx;idx+=WORLD_AREA){
-        const float block_opacity = BLOCK_PROPS[world[idx]].opacity;
+    float block_below_opacity = BLOCK_OPACITY[world[from_block_idx]];
+    for(uint idx=from_block_idx+WORLD_AREA;idx<to_block_idx;idx=block_idx_y_plus_1(idx)){
+        const float block_opacity = BLOCK_OPACITY[world[idx]];
         const uint am_i_transparent = uint(block_opacity < 1);
         if(block_opacity > block_below_opacity){ // I have a face
             number_of_faces_in_this_chunk[am_i_transparent]++;
@@ -33,8 +33,8 @@ void main() {
             number_of_faces_in_this_chunk[uint(block_below_opacity<1)]++;
         }
         if(pos.x > 0){
-            const uint neighbour_idx = idx-1; // go one block in the negative x direction
-            const float neighbour_opacity = BLOCK_PROPS[world[neighbour_idx]].opacity;
+            const uint neighbour_idx = block_idx_x_minus_1(idx); // go one block in the negative x direction
+            const float neighbour_opacity = BLOCK_OPACITY[world[neighbour_idx]];
             if(neighbour_opacity < block_opacity){ // I have a face
                 number_of_faces_in_this_chunk[am_i_transparent]++;
             }else if(neighbour_opacity > block_opacity){ // neighbour has a face
@@ -42,8 +42,8 @@ void main() {
             }
         }
         if(pos.y > 0){
-            const uint neighbour_idx = idx-WORLD_WIDTH; // go one block in the negative z direction
-            const float neighbour_opacity = BLOCK_PROPS[world[neighbour_idx]].opacity;
+            const uint neighbour_idx = block_idx_z_minus_1(idx); // go one block in the negative z direction
+            const float neighbour_opacity = BLOCK_OPACITY[world[neighbour_idx]];
             if(neighbour_opacity < block_opacity){ // I have a face
                 number_of_faces_in_this_chunk[am_i_transparent]++;
             }else if(neighbour_opacity > block_opacity){ // neighbour has a face

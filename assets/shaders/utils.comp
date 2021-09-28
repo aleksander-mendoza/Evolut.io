@@ -61,6 +61,27 @@ void fill_column(uvec3 from_world_block_pos, uint height, Block block) {
 #endif //IS_AVAILABLE_BUFFER_WORLD
 
 
+#ifdef IS_AVAILABLE_BUFFER_WORLD
+#ifdef IS_AVAILABLE_BUFFER_WORLD_BLOCK_META
+void set_block_and_meta(uvec3 world_block_pos, Block block) {
+    const uint idx = block_pos_into_world_idx(world_block_pos);
+    world[idx] = block;
+    world_block_meta[idx] = get_default_block_meta(block);
+}
+void fill_column_and_meta_to(uvec3 from_world_block_pos, uint to_y, Block block) {
+    const uint from_idx = block_pos_into_world_idx(from_world_block_pos);
+    const uint to_idx = block_pos_into_world_idx(uvec3(from_world_block_pos.x,to_y,from_world_block_pos.z));
+    for(uint i = from_idx; i<to_idx;i=block_idx_y_plus_1(i)){
+        world[i] = block;
+        world_block_meta[i] = get_default_block_meta(block);
+    }
+}
+void fill_column_and_meta(uvec3 from_world_block_pos, uint height, Block block) {
+    fill_column_and_meta_to(from_world_block_pos,from_world_block_pos.y+height,block);
+}
+#endif // IS_AVAILABLE_BUFFER_WORLD_BLOCK_META
+#endif // IS_AVAILABLE_BUFFER_WORLD
+
 #ifdef IS_AVAILABLE_BUFFER_BONES
 #ifdef IS_AVAILABLE_BUFFER_COLLISION_GRID
 
@@ -117,7 +138,7 @@ void set_indirect_dispatch(uint compute_shader_idx, uint invokations_count){
 
 #ifdef IS_AVAILABLE_BUFFER_FACES
 #ifdef IS_AVAILABLE_BUFFER_WORLD
-uint remove_block_faces(const BlockProp p, uvec3 block_pos){
+uint remove_block_faces(const float opacity, uvec3 block_pos){
     ///////////////////////////////
     // FIRST WE COLLECT ALL THE NEIGHBOURING THAT USED TO BE COVERED AND WILL NOW BE UNCOVERED
     ///////////////////////////////
@@ -155,8 +176,8 @@ uint remove_block_faces(const BlockProp p, uvec3 block_pos){
     uint number_of_opaque_blocks = 0;
     for(int i=0;i<6;i++){
         neighbour_block_ids[i] = has_neighbour[i] ? world[block_pos_into_world_idx(neighbour_block_pos[i])] : 0;
-        neighbour_opacity[i] = has_neighbour[i] ? BLOCK_PROPS[neighbour_block_ids[i]].opacity : 0;
-        if(neighbour_opacity[i] <= p.opacity && neighbour_block_ids[i] >= NO_OF_TRANSPARENT_BLOCKS) {
+        neighbour_opacity[i] = has_neighbour[i] ? BLOCK_OPACITY[neighbour_block_ids[i]] : 0;
+        if(neighbour_opacity[i] <= opacity && neighbour_block_ids[i] >= NO_OF_TRANSPARENT_BLOCKS) {
             number_of_opaque_blocks++;
         }
     }
@@ -175,7 +196,7 @@ uint remove_block_faces(const BlockProp p, uvec3 block_pos){
     for(int j=0;j<6;j++){
         int i = permutation[j];
         uint neighbour = neighbour_block_ids[i];
-        if(0 < neighbour && neighbour_opacity[i] <= p.opacity){
+        if(0 < neighbour && neighbour_opacity[i] <= opacity){
 
             uint orientation = orientations[i];
             uint chunk_x = neighbour_block_pos[i].x / CHUNK_WIDTH;
@@ -183,7 +204,7 @@ uint remove_block_faces(const BlockProp p, uvec3 block_pos){
             neighbour_block_pos[i].x -= chunk_x * CHUNK_WIDTH;
             neighbour_block_pos[i].z -= chunk_z * CHUNK_DEPTH;
 
-            uvec2 face_to_insert = new_face(neighbour_block_pos[i], orientation, chunk_x, chunk_z, BLOCK_PROPS[neighbour].texture_ids[orientation]);
+            uvec2 face_to_insert = new_face(neighbour_block_pos[i], orientation, chunk_x, chunk_z, BLOCK_TEXTURE_IDS[neighbour][orientation]);
             uint is_transparent = uint(neighbour < NO_OF_TRANSPARENT_BLOCKS);
             uint chunk_idx = chunk_pos_into_chunk_idx(chunk_x,chunk_z) + is_transparent*TOTAL_CHUNKS;
             faces_to_insert[faces_to_insert_len[is_transparent]++] = uvec3(face_to_insert,chunk_idx);
@@ -197,7 +218,7 @@ uint remove_block_faces(const BlockProp p, uvec3 block_pos){
     // THIS SECTION REMOVES FACES OF THE BLOCK THAT HAS BEEN REMOVED
     ///////////////////////////////
     int i=0;
-    bool was_transparent = p.opacity < 1.0;
+    bool was_transparent = opacity < 1.0;
     for(;i<chunk_idx+(was_transparent?TOTAL_CHUNKS:0);i++){
         face_offset += faces[i].x;
     }
@@ -247,9 +268,9 @@ uint remove_block_faces(const BlockProp p, uvec3 block_pos){
     return final_face_count;
 }
 
-uint add_block_faces(uvec3 block_pos, uint block_id){
+uint add_block_faces(uvec3 block_pos,const uint block_id){
     bool is_transparent = block_id < NO_OF_TRANSPARENT_BLOCKS;
-    const BlockProp p = BLOCK_PROPS[block_id];
+    const float opacity = BLOCK_OPACITY[block_id];
     uint chunk_x = block_pos.x / CHUNK_WIDTH;
     uint chunk_z = block_pos.z / CHUNK_DEPTH;
     uint chunk_idx = chunk_pos_into_chunk_idx(chunk_x,chunk_z);
@@ -288,8 +309,8 @@ uint add_block_faces(uvec3 block_pos, uint block_id){
         if(has_neighbour[neighbour]){
             uvec3 neighbour_pos = neighbour_block_pos[neighbour];
             neighbour_block_ids[neighbour] = world[block_pos_into_world_idx(neighbour_pos)];
-            neighbour_block_opacities[neighbour] = BLOCK_PROPS[neighbour_block_ids[neighbour]].opacity;
-            if( neighbour_block_opacities[neighbour] <= p.opacity && neighbour_block_ids[neighbour]>0 && neighbour_block_opacities[neighbour] == 1){
+            neighbour_block_opacities[neighbour] = BLOCK_OPACITY[neighbour_block_ids[neighbour]];
+            if( neighbour_block_opacities[neighbour] <= opacity && neighbour_block_ids[neighbour]>0 && neighbour_block_opacities[neighbour] == 1){
                 opaque_neighbours++;
             }
         }
@@ -314,11 +335,11 @@ uint add_block_faces(uvec3 block_pos, uint block_id){
             uint neighbour_block_id = neighbour_block_ids[neighbour];
             float neighbour_opacity = neighbour_block_opacities[neighbour];
             uint orientation = orientations[neighbour];
-            if(neighbour_opacity < p.opacity){
-                Face f = new_face(block_pos,orientation,chunk_x,chunk_z,p.texture_ids[orientation]);
+            if(neighbour_opacity < opacity){
+                Face f = new_face(block_pos,orientation,chunk_x,chunk_z,BLOCK_TEXTURE_IDS[block_id][orientation]);
                 faces_to_insert[faces_to_insert_len++] = f;
             }
-            if( neighbour_opacity <= p.opacity && neighbour_block_id>0 ){
+            if( neighbour_opacity <= opacity && neighbour_block_id>0 ){
                 uint neighbour_chunk_x = neighbour_pos.x / CHUNK_WIDTH;
                 uint neighbour_chunk_z = neighbour_pos.z / CHUNK_DEPTH;
                 neighbour_pos.x -= neighbour_chunk_x * CHUNK_WIDTH;
