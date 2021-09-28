@@ -1,5 +1,6 @@
 #version 450
-#extension GL_EXT_debug_printf : enable
+#extension GL_GOOGLE_include_directive : enable
+//#extension GL_EXT_debug_printf : enable
 
 #define IS_AVAILABLE_BUFFER_PLAYER_EVENT
 #define IS_AVAILABLE_BUFFER_GLOBAL_MUTABLES
@@ -90,7 +91,7 @@ void main() {
             }
         }
         for(uint i=0;i<neighbours_to_check_len;i++){
-            if(world[neighbours_to_check[i].block_idx]>=NO_OF_TRAVERSABLE_BLOCKS){ // this operation is the most expensive, because it queries global memory.
+            if(!is_traversable(neighbours_to_check[i].block_idx)){ // this operation is the most expensive, because it queries global memory.
                 // We can make major optimisation by factoring this out into it's own loop. This way all threads will query
                 // those blocks in parallel.
                 velocity[neighbours_to_check[i].velocity_component_affected] = 0;

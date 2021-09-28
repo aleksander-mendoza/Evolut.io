@@ -1,5 +1,5 @@
 #version 450
-#extension GL_EXT_debug_printf : enable
+//#extension GL_EXT_debug_printf : enable
 #define IS_AVAILABLE_BUFFER_BONES
 #define IS_AVAILABLE_BUFFER_GLOBAL_MUTABLES
 #define IS_AVAILABLE_BUFFER_WORLD
@@ -7,6 +7,7 @@
 
 #include "descriptors_generate.comp"
 layout (local_size_x_id = GROUP_SIZE_CONST_ID) in;
+#include "utils.comp"
 
 void main() {
     const uint gID = gl_GlobalInvocationID.x;
@@ -18,15 +19,14 @@ void main() {
         const uvec2 rand_pos = uvec2(rand_pos_f * WORLD_BORDERS.xz);
         uvec3 block_pos = uvec3(rand_pos.x, SEA_LEVEL, rand_pos.y);
         const uint block_idx = block_pos_into_world_idx(block_pos);
-        const bool go_down = world[block_idx]==BLOCK_ID_AIR;
+        const bool go_down = is_air(block_idx);
         const ivec3 block_idx_step_y_step_and_initial_y = go_down ? ivec3(-WORLD_BLOCK_STRIDE.y, -1, SEA_LEVEL+1) : ivec3(WORLD_BLOCK_STRIDE.y, 1, SEA_LEVEL);
         ivec2 block_idx_and_y = ivec2(block_idx+block_idx_step_y_step_and_initial_y.x, block_idx_step_y_step_and_initial_y.y+block_idx_step_y_step_and_initial_y.z);
         const uint limit = block_pos_into_world_idx(uvec3(rand_pos.x, go_down ? 0 : CHUNK_HEIGHT-1, rand_pos.y));
-        while (block_idx_and_y.x!=limit && (world[block_idx_and_y.x]==BLOCK_ID_AIR)==go_down){
+        while (block_idx_and_y.x!=limit && is_air(block_idx_and_y.x)==go_down){
             block_idx_and_y+=block_idx_step_y_step_and_initial_y.xy;
         }
         const vec3 agent_pos = vec3(rand_pos.x, block_idx_and_y.y, rand_pos.y)+vec3(0.5,0.5,0.5);
-        debugPrintfEXT("%v3f",agent_pos);
         const uint agent_entity_idx = gID;
         const Bone agent_bone = Bone(
             agent_pos, // vec3 new_center;

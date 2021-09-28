@@ -5,6 +5,78 @@
 
 #ifdef IS_AVAILABLE_BUFFER_WORLD
 
+uint get_block_id(uint block_idx){
+    return world[block_idx].block_id;
+}
+uint get_block_id_copy(uint block_idx){
+    return world[block_idx].block_id_copy;
+}
+uint get_block_id_at(uvec3 block_pos){
+    return get_block_id(block_pos_into_world_idx( block_pos));
+}
+float get_block_opacity(uint block_idx){
+    return get_opacity(get_block_id(block_idx));
+}
+float get_block_opacity_at(uvec3 block_pos){
+    return get_opacity(get_block_id_at(block_pos));
+}
+bool is_traversable(uint block_idx){
+    return get_block_id(block_idx)<NO_OF_TRAVERSABLE_BLOCKS;
+}
+bool is_transparent(uint block_idx){
+    return get_block_id(block_idx)<NO_OF_TRANSPARENT_BLOCKS;
+}
+bool is_air(uint block_idx){
+    return get_block_id(block_idx)==BLOCK_ID_AIR;
+}
+bool is_air_at(uvec3 block_pos){
+    return get_block_id_at(block_pos)==BLOCK_ID_AIR;
+}
+void set_block_id(uint block_idx, uint block) {
+    world[block_idx].block_id = block;
+}
+void set_block_id_at(uvec3 world_block_pos, uint block) {
+    set_block_id(block_pos_into_world_idx(world_block_pos),block);
+}
+void set_block_id_copy(uint block_idx, uint block) {
+    world[block_idx].block_id_copy = block;
+}
+void set_block_id_copy_at(uvec3 world_block_pos, uint block) {
+    set_block_id_copy(block_pos_into_world_idx(world_block_pos),block);
+}
+void remove_block_at(uvec3 world_block_pos) {
+    set_block_id_at(world_block_pos, BLOCK_ID_AIR);
+}
+void remove_block(uint block_idx) {
+    set_block_id(block_idx, BLOCK_ID_AIR);
+}
+void fill_column_to(uvec3 from_world_block_pos, uint to_y, uint block) {
+    const uint from_idx = block_pos_into_world_idx(from_world_block_pos);
+    const uint to_idx = block_pos_into_world_idx(uvec3(from_world_block_pos.x,to_y,from_world_block_pos.z));
+    for(uint i = from_idx; i<to_idx;i+=WORLD_AREA){
+        world[i].block_id = block;
+    }
+}
+void fill_column(uvec3 from_world_block_pos, uint height, uint block) {
+    fill_column_to(from_world_block_pos,from_world_block_pos.y+height,block);
+}
+void set_block_and_meta(uint block_idx, uint block, float humidity, float temperature) {
+    world[block_idx] = get_default_block_meta(block,humidity,temperature);
+}
+void set_block_and_meta_at(uvec3 world_block_pos, uint block, float humidity, float temperature) {
+    set_block_and_meta(block_pos_into_world_idx(world_block_pos),block,humidity,temperature);
+}
+void fill_column_and_meta_to(uvec3 from_world_block_pos, uint to_y, uint block, float humidity, float temperature) {
+    const uint from_idx = block_pos_into_world_idx(from_world_block_pos);
+    const uint to_idx = block_pos_into_world_idx(uvec3(from_world_block_pos.x,to_y,from_world_block_pos.z));
+    for(uint i = from_idx; i<to_idx;i=block_idx_y_plus_1(i)){
+        world[i] = get_default_block_meta(block,humidity,temperature);
+    }
+}
+void fill_column_and_meta(uvec3 from_world_block_pos, uint height, uint block, float humidity, float temperature) {
+    fill_column_and_meta_to(from_world_block_pos,from_world_block_pos.y+height,block,humidity,temperature);
+}
+
 struct RayCastResult{
     vec3 v;
     float ratio_of_traversed_length; // traversed_length == length(distance_and_direction) * ratio_of_traversed_length
@@ -16,7 +88,7 @@ struct RayCastResult{
 RayCastResult ray_cast(vec3 start, vec3 distance_and_direction) {
     //current voxel boundary
     vec3 v = floor(start);
-    if(world[block_pos_into_world_idx( uvec3(v))]!=0) {
+    if(!is_air_at( uvec3(v))) {
         return RayCastResult(v,0,v,true);
     }
     //final voxel boundary B
@@ -30,7 +102,7 @@ RayCastResult ray_cast(vec3 start, vec3 distance_and_direction) {
         uint min_dim = min_vec3_component(t_max);
         vec3 new_v = v;
         new_v[min_dim] += step[min_dim];
-        if(world[block_pos_into_world_idx(uvec3(new_v))]!=0){
+        if(!is_air_at(uvec3(new_v))){
             return RayCastResult(new_v,t_max[min_dim],v,true);
         }
         t_max[min_dim] += t_delta[min_dim];
@@ -38,49 +110,10 @@ RayCastResult ray_cast(vec3 start, vec3 distance_and_direction) {
     }
     return RayCastResult(v,1,v,false);
 }
-void set_block(uvec3 world_block_pos, Block block) {
-    world[block_pos_into_world_idx(world_block_pos)] = block;
-}
-void remove_block(uvec3 world_block_pos) {
-    set_block(world_block_pos, BLOCK_ID_AIR);
-}
-Block get_block(uvec3 world_block_pos) {
-    return world[block_pos_into_world_idx(world_block_pos)];
-}
-void fill_column_to(uvec3 from_world_block_pos, uint to_y, Block block) {
-    const uint from_idx = block_pos_into_world_idx(from_world_block_pos);
-    const uint to_idx = block_pos_into_world_idx(uvec3(from_world_block_pos.x,to_y,from_world_block_pos.z));
-    for(uint i = from_idx; i<to_idx;i+=WORLD_AREA){
-        world[i] = block;
-    }
-}
-void fill_column(uvec3 from_world_block_pos, uint height, Block block) {
-    fill_column_to(from_world_block_pos,from_world_block_pos.y+height,block);
-}
+
 
 #endif //IS_AVAILABLE_BUFFER_WORLD
 
-
-#ifdef IS_AVAILABLE_BUFFER_WORLD
-#ifdef IS_AVAILABLE_BUFFER_WORLD_BLOCK_META
-void set_block_and_meta(uvec3 world_block_pos, Block block) {
-    const uint idx = block_pos_into_world_idx(world_block_pos);
-    world[idx] = block;
-    world_block_meta[idx] = get_default_block_meta(block);
-}
-void fill_column_and_meta_to(uvec3 from_world_block_pos, uint to_y, Block block) {
-    const uint from_idx = block_pos_into_world_idx(from_world_block_pos);
-    const uint to_idx = block_pos_into_world_idx(uvec3(from_world_block_pos.x,to_y,from_world_block_pos.z));
-    for(uint i = from_idx; i<to_idx;i=block_idx_y_plus_1(i)){
-        world[i] = block;
-        world_block_meta[i] = get_default_block_meta(block);
-    }
-}
-void fill_column_and_meta(uvec3 from_world_block_pos, uint height, Block block) {
-    fill_column_and_meta_to(from_world_block_pos,from_world_block_pos.y+height,block);
-}
-#endif // IS_AVAILABLE_BUFFER_WORLD_BLOCK_META
-#endif // IS_AVAILABLE_BUFFER_WORLD
 
 #ifdef IS_AVAILABLE_BUFFER_BONES
 #ifdef IS_AVAILABLE_BUFFER_COLLISION_GRID
@@ -175,7 +208,7 @@ uint remove_block_faces(const float opacity, uvec3 block_pos){
     block_pos.z -= chunk_z * CHUNK_DEPTH;
     uint number_of_opaque_blocks = 0;
     for(int i=0;i<6;i++){
-        neighbour_block_ids[i] = has_neighbour[i] ? world[block_pos_into_world_idx(neighbour_block_pos[i])] : 0;
+        neighbour_block_ids[i] = has_neighbour[i] ? get_block_id_at(neighbour_block_pos[i]) : 0;
         neighbour_opacity[i] = has_neighbour[i] ? BLOCK_OPACITY[neighbour_block_ids[i]] : 0;
         if(neighbour_opacity[i] <= opacity && neighbour_block_ids[i] >= NO_OF_TRANSPARENT_BLOCKS) {
             number_of_opaque_blocks++;
@@ -308,7 +341,7 @@ uint add_block_faces(uvec3 block_pos,const uint block_id){
     for(int neighbour=0;neighbour<6;neighbour++){
         if(has_neighbour[neighbour]){
             uvec3 neighbour_pos = neighbour_block_pos[neighbour];
-            neighbour_block_ids[neighbour] = world[block_pos_into_world_idx(neighbour_pos)];
+            neighbour_block_ids[neighbour] = get_block_id_at(neighbour_pos);
             neighbour_block_opacities[neighbour] = BLOCK_OPACITY[neighbour_block_ids[neighbour]];
             if( neighbour_block_opacities[neighbour] <= opacity && neighbour_block_ids[neighbour]>0 && neighbour_block_opacities[neighbour] == 1){
                 opaque_neighbours++;

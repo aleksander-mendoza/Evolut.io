@@ -9,58 +9,46 @@ restrict layout (std430, set = 0, binding = 0) buffer GlobalMutablesBlock{
 };
 #endif
 
-#ifdef IS_AVAILABLE_BUFFER_WORLD_BLOCK_META
-restrict layout(std430, set = 0, binding = 1) buffer WorldBlockMeta{
-    BlockMeta world_block_meta[];
-};
-#endif // IS_AVAILABLE_BUFFER_WORLD_BLOCK_META
-
 
 #ifdef IS_AVAILABLE_BUFFER_INDIRECT
-restrict layout(std430, set = 0, binding = 2) buffer Indirect{
+restrict layout(std430, set = 0, binding = 1) buffer Indirect{
     DispatchIndirectCommand[DISPATCH_INDIRECT_LEN] dispatch_indirect;
     DrawIndirectCommand[DRAW_INDIRECT_LEN] draw_indirect;
 };
 #endif //IS_AVAILABLE_BUFFER_INDIRECT
 
 #ifdef IS_AVAILABLE_BUFFER_BONES
-restrict layout(std430, set = 0, binding = 3) buffer Bones{
+restrict layout(std430, set = 0, binding = 2) buffer Bones{
     Bone bones[];
 };
 #endif
 
 #ifdef IS_AVAILABLE_BUFFER_WORLD
-restrict layout(std430, set = 0, binding = 4) buffer World{
-    uint world[];
-};
-#endif
-
-#ifdef IS_AVAILABLE_BUFFER_WORLD_COPY
-restrict layout(std430, set = 0, binding = 5) buffer WorldCopy{
-    uint world_copy[];
+restrict layout(std430, set = 0, binding = 3) buffer World{
+    Block world[];
 };
 #endif
 
 #ifdef IS_AVAILABLE_BUFFER_FACES
-restrict layout(std430, set = 0, binding = 6) buffer Faces{
+restrict layout(std430, set = 0, binding = 4) buffer Faces{
     Face faces[];
 };
 #endif //IS_AVAILABLE_BUFFER_FACES
 
 #ifdef IS_AVAILABLE_BUFFER_RANDOM_VALS
-restrict layout(std430, set = 0, binding = 7) buffer RandomVals{
+restrict layout(std430, set = 0, binding = 5) buffer RandomVals{
     float random_vals[];
 };
 #endif //IS_AVAILABLE_BUFFER_RANDOM_VALS
 
 #ifdef IS_AVAILABLE_BUFFER_RAND_UINT
-restrict layout(std430, set = 0, binding = 8) buffer RandUInt{
+restrict layout(std430, set = 0, binding = 6) buffer RandUInt{
     uint rand_uint[];
 };
 #endif
 
 #ifdef IS_AVAILABLE_BUFFER_ANN_ENTITIES
-restrict layout(std430, set = 0, binding = 9) buffer AnnEntities{
+restrict layout(std430, set = 0, binding = 7) buffer AnnEntities{
     AnnEntity ann_entities[];
 };
 #endif

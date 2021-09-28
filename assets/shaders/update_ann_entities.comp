@@ -1,5 +1,6 @@
 #version 450
-#extension GL_EXT_debug_printf : enable
+#extension GL_GOOGLE_include_directive : enable
+//#extension GL_EXT_debug_printf : enable
 #extension GL_KHR_shader_subgroup_basic : enable
 
 #define IS_AVAILABLE_BUFFER_LIDARS

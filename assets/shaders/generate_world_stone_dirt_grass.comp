@@ -64,29 +64,29 @@ void main() {
     // interpolation
     const uint gID = gl_GlobalInvocationID.x;
     const uvec2 pos = world_2d_idx_into_xz_pos(gID);
-    const float large_scale_interpolated_value = interpolate(pos,LARGE_SCALE_SIZE_WITH_MARGINS.x,LARGE_SCALE,LARGE_SCALE_SUB_BUFFER_OFFSET);
-    const float chunk_scale_interpolated_value = interpolate(pos,CHUNK_SCALE_SIZE_WITH_MARGINS.x,CHUNK_SCALE,CHUNK_SCALE_SUB_BUFFER_OFFSET);
-    const float temperature_scale_interpolated_value = interpolate(pos,TEMPERATURE_SCALE_SIZE_WITH_MARGINS.x,TEMPERATURE_SCALE,TEMPERATURE_SCALE_SUB_BUFFER_OFFSET);
-    const float humidity_scale_interpolated_value = interpolate(pos,HUMIDITY_SCALE_SIZE_WITH_MARGINS.x,HUMIDITY_SCALE,HUMIDITY_SCALE_SUB_BUFFER_OFFSET);
-    const float resource_type_scale_interpolated_value = interpolate(pos,RESOURCE_TYPE_SCALE_SIZE_WITH_MARGINS.x,RESOURCE_TYPE_SCALE,RESOURCE_TYPE_SCALE_SUB_BUFFER_OFFSET);
-    const float has_resource_scale_interpolated_value = interpolate(pos,HAS_RESOURCE_SCALE_SIZE_WITH_MARGINS.x,HAS_RESOURCE_SCALE,HAS_RESOURCE_SCALE_SUB_BUFFER_OFFSET);
+    const float large = interpolate(pos,LARGE_SCALE_SIZE_WITH_MARGINS.x,LARGE_SCALE,LARGE_SCALE_SUB_BUFFER_OFFSET);
+    const float chunk = interpolate(pos,CHUNK_SCALE_SIZE_WITH_MARGINS.x,CHUNK_SCALE,CHUNK_SCALE_SUB_BUFFER_OFFSET);
+    const float temperature = interpolate(pos,TEMPERATURE_SCALE_SIZE_WITH_MARGINS.x,TEMPERATURE_SCALE,TEMPERATURE_SCALE_SUB_BUFFER_OFFSET);
+    const float humidity = interpolate(pos,HUMIDITY_SCALE_SIZE_WITH_MARGINS.x,HUMIDITY_SCALE,HUMIDITY_SCALE_SUB_BUFFER_OFFSET);
+    const float resource_type = interpolate(pos,RESOURCE_TYPE_SCALE_SIZE_WITH_MARGINS.x,RESOURCE_TYPE_SCALE,RESOURCE_TYPE_SCALE_SUB_BUFFER_OFFSET);
+    const float has_resource = interpolate(pos,HAS_RESOURCE_SCALE_SIZE_WITH_MARGINS.x,HAS_RESOURCE_SCALE,HAS_RESOURCE_SCALE_SUB_BUFFER_OFFSET);
     // the actual code that generates terrain
-    const uint height = uint(large_scale_interpolated_value + chunk_scale_interpolated_value);
-    const uint biome = get_biome(humidity_scale_interpolated_value,temperature_scale_interpolated_value);
+    const uint height = uint(large + chunk);
+    const uint biome = get_biome(humidity,temperature);
     const BiomeProp biome_props = BIOMES[biome];
-    fill_column_and_meta_to(uvec3(pos.x, 1, pos.y), height - 4, BLOCK_ID_STONE);
-    fill_column_and_meta_to(uvec3(pos.x, height - 4, pos.y), height, biome_props.dirt);
+    fill_column_and_meta_to(uvec3(pos.x, 1, pos.y), height - 4, BLOCK_ID_STONE,humidity,temperature);
+    fill_column_and_meta_to(uvec3(pos.x, height - 4, pos.y), height, biome_props.dirt, humidity, temperature);
     if (height < SEA_LEVEL) {
         const uint sea_depth = SEA_LEVEL - height;
-        fill_column_and_meta_to(uvec3(pos.x, height, pos.y), SEA_LEVEL, BLOCK_ID_WATER);
-        set_block_and_meta(uvec3(pos.x, SEA_LEVEL, pos.y), sea_depth < biome_props.sea_depth ? biome_props.water_top : BLOCK_ID_WATER);
+        fill_column_and_meta_to(uvec3(pos.x, height, pos.y), SEA_LEVEL, BLOCK_ID_WATER, humidity,temperature);
+        set_block_and_meta_at(uvec3(pos.x, SEA_LEVEL, pos.y), sea_depth < biome_props.sea_depth ? biome_props.water_top : BLOCK_ID_WATER, humidity,temperature);
     } else {
-        const float resource_random_value = has_resource_scale_interpolated_value*resource_type_scale_interpolated_value;
+        const float resource_random_value = has_resource*resource_type;
         const float artifact_random_value = random_vals[SURFACE_ARTIFACT_SCALE_SUB_BUFFER_OFFSET+gID];
         const uint resource_id = get_biome_resource(biome_props, resource_random_value);
-        set_block_and_meta(uvec3(pos.x, height, pos.y), resource_id);
+        set_block_and_meta_at(uvec3(pos.x, height, pos.y), resource_id, humidity,temperature);
         const uint surface_artifact_id = get_biome_surface_artifact(biome_props, artifact_random_value);
-        set_block_and_meta(uvec3(pos.x, height+1, pos.y), surface_artifact_id);
+        set_block_and_meta_at(uvec3(pos.x, height+1, pos.y), surface_artifact_id, humidity,temperature);
     }
-    set_block_and_meta(uvec3(pos.x, 0, pos.y), BLOCK_ID_BEDROCK);
+    set_block_and_meta_at(uvec3(pos.x, 0, pos.y), BLOCK_ID_BEDROCK, humidity,temperature);
 }

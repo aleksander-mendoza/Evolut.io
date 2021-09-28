@@ -1,4 +1,5 @@
 #version 450
+#extension GL_GOOGLE_include_directive : enable
 //#extension GL_EXT_debug_printf : enable
 #define IS_AVAILABLE_BUFFER_GLOBAL_MUTABLES
 #define IS_AVAILABLE_BUFFER_WORLD
@@ -24,7 +25,7 @@ void main()
         if (ray.found){
             const uvec3 hit_pos = uvec3(player_event.u32_slot0>0?ray.prev_v:ray.v);
             const uint hit_idx = block_pos_into_world_idx(hit_pos);
-            world_copy[hit_idx] = player_event.u32_slot0;
+            world[hit_idx].block_id_copy = player_event.u32_slot0;
             blocks_to_be_inserted_or_removed[blocks_to_be_inserted_or_removed_count++] = hit_idx;
         }
     }

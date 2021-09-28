@@ -1,12 +1,12 @@
 #version 450
 //#extension GL_EXT_debug_printf : enable
 #define IS_AVAILABLE_BUFFER_WORLD
-#define IS_AVAILABLE_BUFFER_WORLD_COPY
 
 #include "descriptors_generate.comp"
 layout (local_size_x_id = GROUP_SIZE_CONST_ID) in;
+#include "utils.comp"
 
 void main() {
     const uint gID = gl_GlobalInvocationID.x;
-    world_copy[gID] = world[gID];
+    set_block_id_copy(gID, get_block_id(gID));
 }

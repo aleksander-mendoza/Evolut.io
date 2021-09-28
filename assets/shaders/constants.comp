@@ -383,12 +383,14 @@ struct BlockProp{
     float mass;
 };
 
-
-struct BlockMeta{
+struct Block{
+    uint block_id;
+    uint block_id_copy;
     uint humidity;
+    uint temperature;
+    uint new_humidity;
+    uint new_temperature;
 };
-
-#define Block uint
 
 const uint BLOCK_ID_AIR = 0;
 const uint BLOCK_ID_WATER = 1;
@@ -666,11 +668,22 @@ const uint[BLOCKS_LEN] BLOCK_HUMIDITY = uint[BLOCKS_LEN](
     200, // sponge
     120 // snow
 );
-
-BlockMeta get_default_block_meta(Block block_id){
-    return BlockMeta(BLOCK_HUMIDITY[block_id]);
+float get_opacity(uint block_id){
+    return BLOCK_OPACITY[block_id];
 }
-
+uint get_texture_id(uint block_id, uint face_orientation){
+    return BLOCK_TEXTURE_IDS[block_id][face_orientation];
+}
+Block get_default_block_meta(uint block_id,float chunk_humidity,float chunk_temperature){
+    return Block(
+    block_id,
+    block_id,
+    uint(BLOCK_HUMIDITY[block_id]*chunk_humidity),
+    0,
+    uint(chunk_temperature),
+    0
+    );
+}
 /////////////////////////////////////////////////////////////////////////////////
 ///////// BELOW SECTION CONTAINS DEFINITIONS OF NEURAL NETWORKS
 /////////////////////////////////////////////////////////////////////////////////
@@ -791,9 +804,9 @@ struct BiomeRes{
     float prob;
 };
 struct BiomeProp{
-    Block dirt;
-    Block grass;
-    Block water_top;
+    uint dirt;
+    uint grass;
+    uint water_top;
     uint sea_depth;
     BiomeRes[MAX_BIOME_RESOURCES] resources;
     BiomeRes[MAX_BIOME_SURFACE_ARTIFACTS] surface_artifacts;

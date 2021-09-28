@@ -46,30 +46,30 @@ void main() {
     const uint pos_z_relative_to_chunk_of_z_neighbour = (pos_relative_to_chunk.y==0?CHUNK_DEPTH:pos_relative_to_chunk.y)-1;
     const uint from_block_idx = block_pos_into_world_idx(uvec3(pos.x,0,pos.y));
     const uint to_block_idx = block_pos_into_world_idx(uvec3(pos.x,CHUNK_HEIGHT,pos.y));
-    uint block_below_id = world[from_block_idx];
-    float block_below_opacity = BLOCK_OPACITY[block_below_id];
+    uint block_below_id = get_block_id(from_block_idx);
+    float block_below_opacity = get_opacity(block_below_id);
     const uint[2] chunk_face_offset = get_chunk_offset(chunk_idx);
     const uint[2] chunk_face_offset_of_z_neighbour = get_chunk_offset(chunk_idx_of_z_neighbour);
     const uint[2] chunk_face_offset_of_x_neighbour = get_chunk_offset(chunk_idx_of_x_neighbour);
     uvec3 pos_3d_relative_to_chunk = uvec3(pos_relative_to_chunk.x,1,pos_relative_to_chunk.y);
     for(uint idx=from_block_idx+WORLD_AREA;idx<to_block_idx;idx=block_idx_y_plus_1(idx)){
-        const uint block_id = world[idx];
-        const float block_opacity = BLOCK_OPACITY[block_id];
+        const uint block_id = get_block_id(idx);
+        const float block_opacity = get_opacity(block_id);
         insert_either_block_face(
             InsertionArgs(pos_3d_relative_to_chunk, chunk_idx, chunk_face_offset, YMinus, chunk_x, chunk_z, block_id, block_opacity),
             InsertionArgs(pos_3d_relative_to_chunk-uvec3(0,1,0), chunk_idx, chunk_face_offset, YPlus, chunk_x, chunk_z, block_below_id, block_below_opacity));
         if(pos.x > 0){
             const uint neighbour_idx = block_idx_x_minus_1(idx); // go one block in the negative x direction
-            const uint neighbour_id = world[neighbour_idx];
-            const float neighbour_opacity = BLOCK_OPACITY[neighbour_id];
+            const uint neighbour_id = get_block_id(neighbour_idx);
+            const float neighbour_opacity = get_opacity(neighbour_id);
             insert_either_block_face(
                 InsertionArgs(pos_3d_relative_to_chunk, chunk_idx, chunk_face_offset, XMinus, chunk_x, chunk_z, block_id, block_opacity),
                 InsertionArgs(uvec3(pos_x_relative_to_chunk_of_x_neighbour,pos_3d_relative_to_chunk.yz), chunk_idx_of_x_neighbour, chunk_face_offset_of_x_neighbour, XPlus, chunk_x_of_x_neighbour, chunk_z, neighbour_id, neighbour_opacity));
         }
         if(pos.y > 0){
             const uint neighbour_idx = block_idx_z_minus_1(idx); // go one block in the negative z direction
-            const uint neighbour_id = world[neighbour_idx];
-            const float neighbour_opacity = BLOCK_OPACITY[neighbour_id];
+            const uint neighbour_id = get_block_id(neighbour_idx);
+            const float neighbour_opacity = get_opacity(neighbour_id);
             insert_either_block_face(
                 InsertionArgs(pos_3d_relative_to_chunk, chunk_idx, chunk_face_offset, ZMinus, chunk_x, chunk_z, block_id, block_opacity),
                 InsertionArgs(uvec3(pos_3d_relative_to_chunk.xy,pos_z_relative_to_chunk_of_z_neighbour), chunk_idx_of_z_neighbour, chunk_face_offset_of_z_neighbour, ZPlus, chunk_x, chunk_z_of_z_neighbour, neighbour_id, neighbour_opacity));

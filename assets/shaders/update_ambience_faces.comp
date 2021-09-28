@@ -1,4 +1,5 @@
 #version 450
+#extension GL_GOOGLE_include_directive : enable
 //#extension GL_EXT_debug_printf : enable
 #define IS_AVAILABLE_BUFFER_GLOBAL_MUTABLES
 #define IS_AVAILABLE_BUFFER_TMP_FACES_COPY
@@ -32,8 +33,8 @@ void main() {
     if (gID < blocks_to_be_inserted_or_removed_count){
         const uint block_idx = blocks_to_be_inserted_or_removed[gID];
         const uvec3 block_pos = world_idx_into_block_pos(block_idx);
-        const uint block_old_id = world[block_idx];
-        const uint block_new_id = world_copy[block_idx];
+        const uint block_old_id = get_block_id(block_idx);
+        const uint block_new_id = get_block_id_copy(block_idx);
         const float block_old_opacity = BLOCK_OPACITY[block_old_id];
         const float block_new_opacity = BLOCK_OPACITY[block_new_id];
         const uint chunk_x = block_pos.x / CHUNK_WIDTH;
@@ -56,8 +57,8 @@ void main() {
             const uvec3 neighbour_block_pos_relative_to_chunk = uvec3(neighbour_pos.x - neighbour_chunk_x*CHUNK_WIDTH, neighbour_pos.y,neighbour_pos.z - neighbour_chunk_z*CHUNK_DEPTH);
             if (is_in_world_borders(neighbour_pos)){ //if pos.x==0 then pox.x-1==MAX_INT which obviously must be greater than world border
                 const uint neighbour_idx = block_pos_into_world_idx(neighbour_pos);
-                const uint neighbour_block_old_id = world[neighbour_idx];
-                const uint neighbour_block_new_id = world_copy[neighbour_idx];
+                const uint neighbour_block_old_id = get_block_id(neighbour_idx);
+                const uint neighbour_block_new_id = get_block_id_copy(neighbour_idx);
                 const float neighbour_old_opacity = BLOCK_OPACITY[neighbour_block_old_id];
                 const float neighbour_new_opacity = BLOCK_OPACITY[neighbour_block_new_id];
                 const bool is_neighbour_unchanged = neighbour_block_old_id == neighbour_block_new_id;

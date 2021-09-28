@@ -15,61 +15,48 @@ restrict layout (std430, set = 0, binding = 1) buffer GlobalMutablesBlock{
 };
 #endif
 
-#ifdef IS_AVAILABLE_BUFFER_WORLD_BLOCK_META
-restrict layout(std430, set = 0, binding = 2) buffer WorldBlockMeta{
-    BlockMeta world_block_meta[];
-};
-#endif // IS_AVAILABLE_BUFFER_WORLD_BLOCK_META
-
 #ifdef IS_AVAILABLE_BUFFER_FACES_TO_BE_INSERTED
-restrict layout(std430, set = 0, binding = 3) buffer FacesToBeInserted{
+restrict layout(std430, set = 0, binding = 2) buffer FacesToBeInserted{
     Face faces_to_be_inserted[];
 };
 #endif
 
 
 #ifdef IS_AVAILABLE_BUFFER_FACES_TO_BE_REMOVED
-restrict layout(std430, set = 0, binding = 4) buffer FacesToBeRemoved{
+restrict layout(std430, set = 0, binding = 3) buffer FacesToBeRemoved{
     uint faces_to_be_removed[];
 };
 #endif
 
 
 #ifdef IS_AVAILABLE_BUFFER_INDIRECT
-restrict layout(std430, set = 0, binding = 5) buffer Indirect{
+restrict layout(std430, set = 0, binding = 4) buffer Indirect{
     DispatchIndirectCommand[DISPATCH_INDIRECT_LEN] dispatch_indirect;
     DrawIndirectCommand[DRAW_INDIRECT_LEN] draw_indirect;
 };
 #endif //IS_AVAILABLE_BUFFER_INDIRECT
 
 #ifdef IS_AVAILABLE_BUFFER_TMP_FACES_COPY
-restrict layout(std430, set = 0, binding = 6) buffer TmpFacesCopy{
+restrict layout(std430, set = 0, binding = 5) buffer TmpFacesCopy{
     uint tmp_faces_copy[];
 };
 #endif
 
 
 #ifdef IS_AVAILABLE_BUFFER_WORLD
-restrict layout(std430, set = 0, binding = 7) buffer World{
-    uint world[];
+restrict layout(std430, set = 0, binding = 6) buffer World{
+    Block world[];
 };
 #endif
 
 #ifdef IS_AVAILABLE_BUFFER_FACES
-restrict layout(std430, set = 0, binding = 8) buffer Faces{
+restrict layout(std430, set = 0, binding = 7) buffer Faces{
     Face faces[];
 };
 #endif //IS_AVAILABLE_BUFFER_FACES
 
-
-#ifdef IS_AVAILABLE_BUFFER_WORLD_COPY
-restrict layout(std430, set = 0, binding = 9) buffer WorldCopy{
-    uint world_copy[];
-};
-#endif
-
 #ifdef IS_AVAILABLE_BUFFER_BLOCKS_TO_BE_INSERTED_OR_REMOVED
-restrict layout(std430, set = 0, binding = 10) buffer BlocksToBeInsertedOrRemoved{
+restrict layout(std430, set = 0, binding = 8) buffer BlocksToBeInsertedOrRemoved{
     uint blocks_to_be_inserted_or_removed[];
 };
 #endif

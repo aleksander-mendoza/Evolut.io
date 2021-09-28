@@ -21,42 +21,35 @@ restrict layout(std430, set = 0, binding = 2) buffer CollisionGrid{
 };
 #endif // IS_AVAILABLE_BUFFER_COLLISION_GRID
 
-#ifdef IS_AVAILABLE_BUFFER_WORLD_BLOCK_META
-restrict layout(std430, set = 0, binding = 3) buffer WorldBlockMeta{
-    BlockMeta world_block_meta[];
-};
-#endif // IS_AVAILABLE_BUFFER_WORLD_BLOCK_META
-
-
 #ifdef IS_AVAILABLE_BUFFER_PARTICLES
-restrict layout(std430, set = 0, binding = 4) buffer Particles{
+restrict layout(std430, set = 0, binding = 3) buffer Particles{
     Particle particles[];
 };
 #endif
 
 
 #ifdef IS_AVAILABLE_BUFFER_INDIRECT
-restrict layout(std430, set = 0, binding = 5) buffer Indirect{
+restrict layout(std430, set = 0, binding = 4) buffer Indirect{
     DispatchIndirectCommand[DISPATCH_INDIRECT_LEN] dispatch_indirect;
     DrawIndirectCommand[DRAW_INDIRECT_LEN] draw_indirect;
 };
 #endif //IS_AVAILABLE_BUFFER_INDIRECT
 
 #ifdef IS_AVAILABLE_BUFFER_BONES
-restrict layout(std430, set = 0, binding = 6) buffer Bones{
+restrict layout(std430, set = 0, binding = 5) buffer Bones{
     Bone bones[];
 };
 #endif
 
 
 #ifdef IS_AVAILABLE_BUFFER_WORLD
-restrict layout(std430, set = 0, binding = 7) buffer World{
-    uint world[];
+restrict layout(std430, set = 0, binding = 6) buffer World{
+    Block world[];
 };
 #endif
 
 #ifdef IS_AVAILABLE_BUFFER_FACES
-restrict layout(std430, set = 0, binding = 8) buffer Faces{
+restrict layout(std430, set = 0, binding = 7) buffer Faces{
 // The first few faces are in fact, not faces at all!
 // Instead the faces at possitons 0..total_chunks are used to store the number of faces in eahc chunk.
 // For example faces[0].x stores the number of faces in first chunk, faces[1].x is second chunk and so on.
@@ -75,19 +68,19 @@ restrict layout(std430, set = 0, binding = 8) buffer Faces{
 #endif //IS_AVAILABLE_BUFFER_FACES
 
 #ifdef IS_AVAILABLE_BUFFER_HTM_ENTITIES
-restrict layout(std430, set = 0, binding = 9) buffer HtmEntities{
+restrict layout(std430, set = 0, binding = 8) buffer HtmEntities{
     HtmEntity htm_entities[];
 };
 #endif
 
 #ifdef IS_AVAILABLE_BUFFER_ANN_ENTITIES
-restrict layout(std430, set = 0, binding = 10) buffer AnnEntities{
+restrict layout(std430, set = 0, binding = 9) buffer AnnEntities{
     AnnEntity ann_entities[];
 };
 #endif
 
 #ifdef IS_AVAILABLE_BUFFER_RAND_UINT
-restrict layout(std430, set = 0, binding = 11) buffer RandUInt{
+restrict layout(std430, set = 0, binding = 10) buffer RandUInt{
     uint rand_uint[];
 };
 #endif
