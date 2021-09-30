@@ -2,30 +2,30 @@ use crate::render::data::{VertexSource, VertexAttrib};
 use ash::vk::VertexInputAttributeDescription;
 use ash::vk;
 use crate::neat::num::Num;
+use crate::blocks::block_properties::DIRT;
 
 #[repr(C, packed)]
 #[derive(Copy,Clone,Debug)]
 pub struct Bone{
-    new_center:glm::Vec3,
-    half_side_length:f32,
-    direction:glm::Vec3,
-    half_height:f32,
-    impulse:glm::Vec3,
-    mass:f32,
-    old_center:glm::Vec3,
-    entity_idx:u32,
-    position_relative_to_parent:glm::Vec3,
-    parent_bone_idx:u32,
-    texture_coords:glm::Vec4,
+    new_center: glm::Vec3,
+    texture_for_block_id: u32,
+    impulse: glm::Vec3,
+    mass: f32 ,
+    old_center: glm::Vec3,
+    entity_idx: u32,
+    position_relative_to_parent: glm::Vec3,
+    parent_bone_idx: u32,
+    half_side_length: f32,//width == 2*half_side_length && depth == 2*half_side_length
+    half_height: f32,
+    yaw_and_pitch: glm::Vec2, // yaw = how high (up/down) is the entity looking
+    //  pitch = which direction (left/right) is the entity looking
 }
 
 impl Bone{
     pub fn new(center:glm::Vec3,
                half_side_length:f32,
-               direction:glm::Vec3,
                height:f32,
                mass:f32) -> Self{
-        let direction_xz_len =  (direction.x*direction.x + direction.z*direction.z).sqrt();
         let velocity = f32::random_vec3()*0.02-glm::vec3(0.01,0.01,0.01);
         Self{
             new_center:center,
@@ -35,8 +35,8 @@ impl Bone{
             entity_idx: 0,
             position_relative_to_parent: Default::default(),
             mass,
-            texture_coords:f32::random_vec4(),
-            direction:direction / direction_xz_len, //normalize direction, but only the xz dimension has unit length
+            yaw_and_pitch:f32::random_vec2(),
+            texture_for_block_id:DIRT.id(),
             impulse: glm::vec3(0.,0.,0.),
             parent_bone_idx: u32::MAX
         }
@@ -61,8 +61,8 @@ impl VertexSource for Bone{
             vk::VertexInputAttributeDescription {
                 binding,
                 location: 2,
-                format:  glm::Vec4::FORMAT,
-                offset: offset_of!(Self, texture_coords)  as u32,
+                format:  u32::FORMAT,
+                offset: offset_of!(Self, texture_for_block_id)  as u32,
             },
             vk::VertexInputAttributeDescription {
                 binding,
@@ -73,8 +73,8 @@ impl VertexSource for Bone{
             vk::VertexInputAttributeDescription {
                 binding,
                 location: 4,
-                format:  glm::Vec3::FORMAT,
-                offset: offset_of!(Self, direction) as u32,
+                format:  glm::Vec2::FORMAT,
+                offset: offset_of!(Self, yaw_and_pitch) as u32,
             },
         ]
     }

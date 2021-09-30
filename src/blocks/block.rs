@@ -7,9 +7,18 @@ use ash::vk::VertexInputAttributeDescription;
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 #[repr(C, packed)]
 pub struct Block {
-    id: u32,
+    block_id:BlockId,
+    block_id_copy:BlockId,
+    humidity:u32,
+    temperature:u32,
+    new_humidity:u32,
+    new_temperature:u32,
 }
-
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+#[repr(C, packed)]
+pub struct BlockId {
+    id:u32
+}
 impl VertexSource for Block{
     fn get_attribute_descriptions(binding: u32) -> Vec<VertexInputAttributeDescription> {
         vec![
@@ -17,19 +26,31 @@ impl VertexSource for Block{
                 location: 0,
                 binding,
                 format: u32::FORMAT,
-                offset: offset_of!(Block, id) as u32
+                offset: offset_of!(Block, block_id) as u32
+            }
+        ]
+    }
+}
+impl VertexSource for BlockId{
+    fn get_attribute_descriptions(binding: u32) -> Vec<VertexInputAttributeDescription> {
+        vec![
+            VertexInputAttributeDescription{
+                location: 0,
+                binding,
+                format: u32::FORMAT,
+                offset: offset_of!(BlockId, id) as u32
             }
         ]
     }
 }
 
-impl Display for Block {
+impl Display for BlockId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name())
     }
 }
 
-impl Block {
+impl BlockId {
     pub const fn air() -> Self {
         Self::new(0)
     }

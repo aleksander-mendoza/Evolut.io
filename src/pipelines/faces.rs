@@ -1,4 +1,4 @@
-use crate::blocks::{Face, Block, WorldBlocks, WorldFaces};
+use crate::blocks::{Face, Block};
 use crate::blocks::block_properties::{BEDROCK, DIRT, GRASS, PLANK, GLASS};
 use ash::vk;
 use crate::render::shader_module::{ShaderModule, Fragment, Vertex, Compute};

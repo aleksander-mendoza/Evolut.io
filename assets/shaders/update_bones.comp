@@ -97,8 +97,8 @@ void main() {
                 velocity[neighbours_to_check[i].velocity_component_affected] = 0;
             }
         }
-       bones[gID].old_center = bone.new_center;
-       bones[gID].new_center = bone.new_center + velocity;
-       bones[gID].impulse = bone.impulse * IMPULSE_AVERAGING_OVER_TIMESETP;
+        bones[gID].old_center = bone.new_center;
+        bones[gID].new_center = bone.new_center + velocity;
+        bones[gID].impulse = bone.impulse * IMPULSE_AVERAGING_OVER_TIMESETP;
     }
 }

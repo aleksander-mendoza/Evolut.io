@@ -18,7 +18,7 @@ use crate::render::subbuffer::SubBuffer;
 use crate::pipelines::constraint::Constraint;
 use crate::render::buffer::{Buffer, make_shader_buffer_barrier};
 use crate::pipelines::global_mutables::{GlobalMutables};
-use crate::blocks::{WorldSize, Block, Face, WorldBlocks, WorldFaces};
+use crate::blocks::{WorldSize, Block, Face};
 use crate::render::sampler::Sampler;
 use crate::pipelines::bone::Bone;
 use crate::blocks::block_properties::{BLOCKS, BlockProp, BEDROCK, DIRT, GRASS, GLASS, PLANK, AIR, STONE, WATER};
@@ -174,15 +174,13 @@ impl WorldGeneratorInitializer {
         } = self;
         let mut descriptors = ComputeDescriptorsBuilder::new();
         descriptors.storage_buffer(foundations.global_mutables());//0
-        descriptors.storage_buffer(foundations.world_block_meta());//1
-        descriptors.storage_buffer(foundations.indirect().super_buffer());//2
-        descriptors.storage_buffer(foundations.bones());//3
-        descriptors.storage_buffer(foundations.world());//4
-        descriptors.storage_buffer(foundations.world_copy());//5
-        descriptors.storage_buffer(foundations.faces());//6
-        descriptors.storage_buffer(&random_vals_buffer);//7
-        descriptors.storage_buffer(foundations.rand_uint());//8
-        descriptors.storage_buffer(foundations.ann_entities_buffer());//9
+        descriptors.storage_buffer(foundations.indirect().super_buffer());//1
+        descriptors.storage_buffer(foundations.bones());//2
+        descriptors.storage_buffer(foundations.world());//3
+        descriptors.storage_buffer(foundations.faces());//4
+        descriptors.storage_buffer(&random_vals_buffer);//5
+        descriptors.storage_buffer(foundations.rand_uint());//6
+        descriptors.storage_buffer(foundations.ann_entities_buffer());//7
         let descriptors = descriptors.build(cmd_pool.device())?;
         let large_scale = large_scale.take()?.take_gpu();
         let chunk_scale = chunk_scale.take()?.take_gpu();
@@ -208,6 +206,7 @@ impl WorldGeneratorInitializer {
         assert_eq!(world_area%subgroup_size,0,"World area {} is not divisible by subgroup size {}",world_area,cmd_pool.device().get_max_subgroup_size());
         assert!(foundations.default_global_mutables().ann_entities<foundations.cap().max_rand_uint as u32/ /*xz dimensions*/2);
 
+        println!("Generating world!");
         let area_groups = world_area/subgroup_size;
         let rand_uint_groups = (foundations.cap().max_rand_uint as u32+subgroup_size-1)/subgroup_size;
         let volume_groups = (world_volume/subgroup_size as usize) as u32;
@@ -220,7 +219,6 @@ impl WorldGeneratorInitializer {
             .dispatch_1d(rand_uint_groups)
             .buffer_barriers(vk::PipelineStageFlags::COMPUTE_SHADER, vk::PipelineStageFlags::COMPUTE_SHADER, &[
                 make_shader_buffer_barrier(foundations.world()),
-                make_shader_buffer_barrier(foundations.world_block_meta()),
                 make_shader_buffer_barrier(foundations.rand_uint()),
             ])
             // .bind_compute_pipeline(&generate_world_update_meta)
@@ -248,6 +246,7 @@ impl WorldGeneratorInitializer {
         let generate_fence = Fence::new(cmd_pool.device(), false)?;
         generate_command_buffer.submit(&[], &[], Some(&generate_fence))?;
         generate_fence.wait(None)?;
+        println!("Finished world generation!");
         Ok(())
     }
 }

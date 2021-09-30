@@ -1,6 +1,10 @@
 #ifndef CONSTANTS_COMP
 #define CONSTANTS_COMP
 
+//////////////////////////////////////////////////////////////////////////////
+/////////////// BELOW SECTION CONTAINS ALL SPECIALISATION CONSTANTS
+//////////////////////////////////////////////////////////////////////////////
+
 #define Face uvec2
 
 #define XPlus 0
@@ -12,6 +16,8 @@
 const uint CHUNK_WIDTH = 16;
 const uint CHUNK_DEPTH = 16;
 const uint CHUNK_HEIGHT = 256;
+const float PI = 3.1415926535897932384626433832795;
+const float SQRT_2 = sqrt(2);
 const uint MAX_UINT = 4294967295;
 const uvec3 MAX_UVEC3 = uvec3(MAX_UINT,MAX_UINT,MAX_UINT);
 const uvec2 MAX_UVEC2 = uvec2(MAX_UINT,MAX_UINT);
@@ -71,35 +77,35 @@ bool is_in_world_borders(uvec3 pos){
     return all(lessThan(pos,WORLD_BORDERS));
 }
 
-const uint PLAYER_EVENT_NOTHING = 0;
-const uint PLAYER_EVENT_THROW = 1;
-const uint PLAYER_EVENT_SET_BLOCK = 2;
 
-struct PlayerEvent{
-    vec3 vec3_slot0;
-    uint u32_slot0;
-    vec3 vec3_slot1;
-    uint u32_slot1;
-    uvec3 uvec3_slot0;
-    uint event_type;
-};
+
+//////////////////////////////////////////////////////////////////////////////
+/////////////// BELOW SECTION CONTAINS BONE DEFINITIONS AND UTILITIES
+//////////////////////////////////////////////////////////////////////////////
 
 struct Bone{
     vec3 new_center;
-    float half_side_length;//width == 2*half_side_length && depth == 2*half_side_length
-    vec3 direction;
-    float half_height;
+    uint texture_for_block_id;
     vec3 impulse;
     float mass;
     vec3 old_center;
     uint entity_idx;
     vec3 position_relative_to_parent;
     uint parent_bone_idx;
-    vec4 texture_coords;//xy components hold text UV coordinates. zw components hold width and height
+    float half_side_length;//width == 2*half_side_length && depth == 2*half_side_length
+    float half_height;
+    vec2 yaw_and_pitch; // yaw = how high (up/down) is the entity looking
+    //  pitch = which direction (left/right) is the entity looking
 };
 
 const uint ENTITY_TYPE_ANN = 0;
 const uint ENTITY_TYPE_HTM = 1;
+vec3 get_bone_half_size(float half_side_length,float half_height){
+    return vec3(half_side_length,half_height,half_side_length);
+}
+vec3 get_bone_size(float half_side_length,float half_height){
+    return get_bone_half_size(half_side_length, half_height)*2;
+}
 uint encode_ann_entity_idx(uint ann_entity_idx){
     return ann_entity_idx*2+ENTITY_TYPE_ANN;
 }
@@ -111,20 +117,6 @@ uint decode_entity_idx(uint encoded_entity_idx){
 }
 uint decode_entity_type(uint encoded_entity_idx){
     return encoded_entity_idx&1u;
-}
-mat2 normal_vec2_to_rotation_matrix(vec2 direction){
-    vec2 new_z_axis = direction;
-    vec2 new_x_axis = vec2(direction.y,-direction.x);
-    return mat2(new_x_axis,new_z_axis);
-}
-/**When you move your mouse you can rotate only in two euler angles - yaw and pitch - but you cannot rotate roll angle.
-This function works analogically. The input is the direction in which you are looking. The output is a 3D rotation matrix
-that first applies rotation around x axis (like moving your head left and right) and then around y axis (like moving your had up and down);
-*/
-mat3 normal_vec3_to_rotation_matrix(vec3 direction){
-    const vec3 new_x_axis = vec3(direction.z,0,-direction.x);
-    const vec3 new_y_axis = cross(direction,new_x_axis);
-    return mat3(new_x_axis,new_y_axis,direction);
 }
 
 bool is_ray_intersecting_axis_aligned_box(vec3 start, vec3 distance_and_direction, const vec3 left_bottom_front_corner, const vec3 box_size) {
@@ -148,6 +140,24 @@ bool is_ray_intersecting_bone(vec3 start, vec3 distance_and_direction, const Bon
     const vec3 half_size = vec3(bone.half_side_length,bone.half_height,bone.half_side_length);
     return is_ray_intersecting_axis_aligned_box(start,distance_and_direction,bone.new_center - half_size, 2*half_size);
 }
+
+
+//////////////////////////////////////////////////////////////////////////////
+/////////////// BELOW SECTION CONTAINS DEFINITIONS THAT ARE TOO SHORT AND SIMPLE TO HAVE THEIR OWN SECTIONS
+//////////////////////////////////////////////////////////////////////////////
+
+const uint PLAYER_EVENT_NOTHING = 0;
+const uint PLAYER_EVENT_THROW = 1;
+const uint PLAYER_EVENT_SET_BLOCK = 2;
+
+struct PlayerEvent{
+    vec3 vec3_slot0;
+    uint u32_slot0;
+    vec3 vec3_slot1;
+    uint u32_slot1;
+    uvec3 uvec3_slot0;
+    uint event_type;
+};
 
 struct CollisionCell{
     uint len;
@@ -335,6 +345,14 @@ uint xorshift32(uint x){
     return x;
 }
 
+float rand_uint_to_random_float(uint rand){
+    return float(MAX_UINT - rand) / float(MAX_UINT);
+}
+
+vec2 rand_uvec2_to_random_vec2(vec2 rand){
+    return vec2(MAX_UVEC2 - rand) / vec2(MAX_UVEC2);
+}
+
 uint max_vec3_component(vec3 v){
     return v.x > v.y ? (v.x > v.z ? 0 : 2) : (v.y > v.z ? 1 : 2);
 }
@@ -359,6 +377,51 @@ vec4 quat_mult(vec4 q1, vec4 q2)
 
 vec3 quat_rotate_vec(vec4 q, vec3 v){
     return quat_mult(q,quat_mult(vec4(v,0.),quat_conj(q))).xyz;
+}
+mat2 normal_vec2_to_rotation_matrix(vec2 direction){
+    vec2 new_z_axis = direction;
+    vec2 new_x_axis = vec2(direction.y,-direction.x);
+    return mat2(new_x_axis,new_z_axis);
+}
+/**When you move your mouse you can rotate only in two euler angles - yaw and pitch - but you cannot rotate roll angle.
+This function works analogically. The input is the direction in which you are looking. The output is a 3D rotation matrix
+that first applies rotation around x axis (like moving your head left and right) and then around y axis (like moving your had up and down);
+*/
+mat3 normal_vec3_to_rotation_matrix(vec3 direction){
+    const vec3 new_x_axis = vec3(direction.z,0,-direction.x);
+    const vec3 new_y_axis = cross(direction,new_x_axis);
+    return mat3(new_x_axis,new_y_axis,direction);
+}
+/**rotates around y axis in the right-hand direction (position your thumb upwards, then your fingers will point in the rotation direction)*/
+mat3 rotation_mat3_from_yaw(float yaw){
+    const float s = sin(yaw);
+    const float c = cos(yaw);
+    return mat3(c,0,s,0,1,0,-s,0,c);
+}
+/**rotates around z axis in the left-hand direction (position your thumb forwards, then your fingers will point in the rotation direction)*/
+mat3 rotation_mat3_from_pitch(float pitch){
+    const float s = sin(pitch);
+    const float c = cos(pitch);
+    return mat3(c,s,0,-s,c,0,0,0,1);
+}
+mat3 rotation_mat_from_yaw_and_pitch(vec2 yaw_and_pitch){
+    const vec2 Ss = sin(yaw_and_pitch); // let S denote sin(yaw) and s denote sin(pitch)
+    const vec2 Cc = cos(yaw_and_pitch); // let C denote cos(yaw) and c denote cos(pitch)
+    const vec4 Cs_cC_Sc_sS = vec4(Cc,Ss) * vec4(Ss.y,Cc,Ss.x);
+    // https://www.wolframalpha.com/input/?i=%7B%7BC%2C0%2CS%7D%2C%7B0%2C1%2C0%7D%2C%7B-S%2C0%2CC%7D%7D++*+%7B%7Bc%2Cs%2C0%7D%2C%7B-s%2Cc%2C0%7D%2C%7B0%2C0%2C1%7D%7D+
+    return mat3(Cs_cC_Sc_sS.y,-Ss.y,-Cs_cC_Sc_sS.z,Cs_cC_Sc_sS.x,Cc.y,-Cs_cC_Sc_sS.w,Ss.x,0,Cc.x);
+}
+/**when yaw and pitch is 0 radians, then direction is vec3(1,0,0)*/
+vec3 direction_from_yaw_and_pitch(vec2 yaw_and_pitch){
+    const vec2 c = cos(yaw_and_pitch);
+    const vec2 s = sin(yaw_and_pitch);
+    // unit_direction_on_xz_plane = vec2(cos(yaw),sin(yaw))
+    // length(final_3d_direction.xz) == cos(pitch)
+    // final_3d_direction.y == sin(pitch)
+    // Therefore:
+    // final_3d_direction.xz ==  unit_direction_on_xz_plane*cos(pitch)
+    const vec2 final_direction_on_xz_plane = vec2(c.x,s.x) * c.y;
+    return vec3(final_direction_on_xz_plane.x,s.y,final_direction_on_xz_plane.y);
 }
 
 float smoothstep(float x) {
@@ -448,7 +511,10 @@ const uint BLOCK_ID_DARK_STEM = 46;
 const uint BLOCK_ID_OBSIDIAN = 47;
 const uint BLOCK_ID_SPONGE = 48;
 const uint BLOCK_ID_SNOW = 49;
-const uint BLOCKS_LEN = 50;
+const uint BLOCK_ID_POROUS_ROCK = 50;
+const uint BLOCK_ID_HIGHLY_POROUS_ROCK = 51;
+const uint BLOCK_ID_LIMESTONE = 52;
+const uint BLOCKS_LEN = 53;
 const uint NO_OF_TRAVERSABLE_BLOCKS = 3; // every traversable block (mobs can pass through it without colliding) is transparent but the opposite may not necessarily hold
 const uint NO_OF_TRANSPARENT_BLOCKS = 11; // The blocks are aligned in such a way that transparent blocks come first. Hence in
 // order to check whether a block is transparent or not, it's enough to just check if its ID is below this value
@@ -507,7 +573,10 @@ const uint[BLOCKS_LEN][6] BLOCK_TEXTURE_IDS = uint[BLOCKS_LEN][6](
     new_block_tex_ids_top_sides_bottom( 32,30,32), // dark_stem
     new_block_tex_ids_regular( 33), // obsidian
     new_block_tex_ids_regular( 34), // sponge
-    new_block_tex_ids_regular( 15) // snow
+    new_block_tex_ids_regular( 15), // snow
+    new_block_tex_ids_regular( 18), // porous_rock
+    new_block_tex_ids_regular( 18), // highly_porous_rock
+    new_block_tex_ids_regular( 53) // limestone
 );
 
 const float[BLOCKS_LEN] BLOCK_OPACITY = float[BLOCKS_LEN](
@@ -560,7 +629,10 @@ const float[BLOCKS_LEN] BLOCK_OPACITY = float[BLOCKS_LEN](
     1., // dark_stem
     1., // obsidian
     1., // sponge
-    1. // snow
+    1., // snow
+    1., // porous_rock
+    1., // highly_porous_rock
+    1.// limestone
 );
 
 const float[BLOCKS_LEN] BLOCK_MASS = float[BLOCKS_LEN](
@@ -613,10 +685,13 @@ const float[BLOCKS_LEN] BLOCK_MASS = float[BLOCKS_LEN](
     1.5, // dark_stem
     3.1, // obsidian
     0.1, // sponge
-    0.05 // snow
+    0.05, // snow
+    2., // porous_rock
+    1.9, // highly_porous_rock
+    1.8// limestone
 );
 
-const uint[BLOCKS_LEN] BLOCK_HUMIDITY = uint[BLOCKS_LEN](
+const float[BLOCKS_LEN] BLOCK_HUMIDITY = float[BLOCKS_LEN](
     0, // air
     255, // water
     0, // lava
@@ -666,8 +741,126 @@ const uint[BLOCKS_LEN] BLOCK_HUMIDITY = uint[BLOCKS_LEN](
     180, // dark_stem
     15, // obsidian
     200, // sponge
-    120 // snow
+    120, // snow
+    30, // porous_rock
+    60, // highly_porous_rock
+    10 // limestone
 );
+
+
+const float[BLOCKS_LEN] BLOCK_HUMIDITY_DIFFUSION_RATE = float[BLOCKS_LEN](
+    0.8, // air
+    0.2, // water
+    1.0, // lava
+    0.0, // glass
+    0.05, // ice
+    0.8, // swamp_leaves
+    0.5, // golden_leaves
+    0.6, // oak_leaves
+    0.6, // peach_leaves
+    0.2, // aether_leaves
+    0.4, // frost_leaves
+    0.05, // stone
+    0.05, // gold_ore
+    0.05, // iron_ore
+    0.4, // coal_ore
+    0.05, // diamond_ore
+    0.5, // redstone_ore
+    0.7, // dirt
+    0.7, // swamp_dirt
+    0.75, // iron_rich_dirt
+    0.1, // aether_dirt
+    0.5, // frost_dirt
+    0.5, // grass
+    0.45, // berries
+    0.34, // strawberries
+    0.5, // wheat
+    0.55, // swamp_grass
+    0.5, // swamp_berries
+    0.5, // swamp_backberries
+    0.34, // frost_grass
+    0.33, // snow_crocus
+    0.3, // snow_blackberries
+    0.1, // plank
+    0.05, // slab
+    0.01, // brick
+    0.5, // cobblestone
+    0, // bedrock
+    1, // sand
+    1, // rare_sand
+    3, // gravel
+    60, // wet_gravel
+    60, // oak_wood
+    100, // oak_stem
+    50, // pink_wood
+    70, // pink_stem
+    100, // dark_wood
+    180, // dark_stem
+    15, // obsidian
+    200, // sponge
+    120, // snow
+    1, // porous_rock
+    1, // highly_porous_rock
+    1 // limestone
+);
+const uint BLOCK_SENSORY_FEATURES_LEN = 6;
+const bool[BLOCKS_LEN][BLOCK_SENSORY_FEATURES_LEN] BLOCK_SENSORY_FEATURES = bool[BLOCKS_LEN][BLOCK_SENSORY_FEATURES_LEN](
+////////////////// is_water, is_organic, is_stone, is_edible, is_soil, is_processed
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,false,false,false,false,false), // air
+    bool[BLOCK_SENSORY_FEATURES_LEN](true,false,false,false,false,false), // water
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,false,true,false,false,false), // lava
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,false,false,false,false,true), // glass
+    bool[BLOCK_SENSORY_FEATURES_LEN](true,false,true,false,false,false), // ice
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,true,false,false,false,false), // swamp_leaves
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,true,false,false,false,false), // golden_leaves
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,true,false,false,false,false), // oak_leaves
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,true,false,false,false,false), // peach_leaves
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,true,false,false,false,false), // aether_leaves
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,true,false,false,false,false), // frost_leaves
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,false,true,false,false,false), // stone
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,false,true,false,false,false), // gold_ore
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,false,true,false,false,false), // iron_ore
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,false,true,false,false,false), // coal_ore
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,false,true,false,false,false), // diamond_ore
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,false,true,false,false,false), // redstone_ore
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,true,false,false,true,false), // dirt
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,true,false,false,true,false), // swamp_dirt
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,true,false,false,true,false), // iron_rich_dirt
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,true,false,false,true,false), // aether_dirt
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,true,false,false,true,false), // frost_dirt
+    bool[BLOCK_SENSORY_FEATURES_LEN](true,true,false,false,true,false), // grass
+    bool[BLOCK_SENSORY_FEATURES_LEN](true,true,false,true,true,false), // berries
+    bool[BLOCK_SENSORY_FEATURES_LEN](true,true,false,true,true,false), // strawberries
+    bool[BLOCK_SENSORY_FEATURES_LEN](true,true,false,true,true,false), // wheat
+    bool[BLOCK_SENSORY_FEATURES_LEN](true,true,false,false,true,false), // swamp_grass
+    bool[BLOCK_SENSORY_FEATURES_LEN](true,true,false,true,true,false), // swamp_berries
+    bool[BLOCK_SENSORY_FEATURES_LEN](true,true,false,true,true,false), // swamp_backberries
+    bool[BLOCK_SENSORY_FEATURES_LEN](true,true,false,false,true,false), // frost_grass
+    bool[BLOCK_SENSORY_FEATURES_LEN](true,true,false,true,true,false), // snow_crocus
+    bool[BLOCK_SENSORY_FEATURES_LEN](true,true,false,true,true,false), // snow_blackberries
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,true,false,false,false,true), // plank
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,false,true,false,false,true), // slab
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,false,true,false,false,true), // brick
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,false,true,false,false,true), // cobblestone
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,false,true,false,false,false), // bedrock
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,false,false,true,false,false), // sand
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,false,false,true,false,false), // rare_sand
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,false,false,true,false,false), // gravel
+    bool[BLOCK_SENSORY_FEATURES_LEN](true,false,false,true,false,false), // wet_gravel
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,true,true,false,false,false), // oak_wood
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,true,true,false,false,false), // oak_stem
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,true,true,false,false,false), // pink_wood
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,true,true,false,false,false), // pink_stem
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,true,true,false,false,false), // dark_wood
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,true,true,false,false,false), // dark_stem
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,false,true,false,false,false), // obsidian
+    bool[BLOCK_SENSORY_FEATURES_LEN](true,true,false,false,false,false), // sponge
+    bool[BLOCK_SENSORY_FEATURES_LEN](true,false,false,false,true,false), // snow
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,false,true,false,false,false), // porous_rock
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,false,true,false,false,false), // highly_porous_rock
+    bool[BLOCK_SENSORY_FEATURES_LEN](false,false,true,false,false,false) // limestone
+);
+
 float get_opacity(uint block_id){
     return BLOCK_OPACITY[block_id];
 }
@@ -676,16 +869,16 @@ uint get_texture_id(uint block_id, uint face_orientation){
 }
 Block get_default_block_meta(uint block_id,float chunk_humidity,float chunk_temperature){
     return Block(
-    block_id,
-    block_id,
-    uint(BLOCK_HUMIDITY[block_id]*chunk_humidity),
-    0,
-    uint(chunk_temperature),
-    0
+        block_id,
+        block_id,
+        uint(BLOCK_HUMIDITY[block_id]*chunk_humidity),
+        0,
+        uint(chunk_temperature),
+        0
     );
 }
 /////////////////////////////////////////////////////////////////////////////////
-///////// BELOW SECTION CONTAINS DEFINITIONS OF NEURAL NETWORKS
+///////// BELOW SECTION CONTAINS DEFINITIONS OF HTM NEURAL NETWORKS
 /////////////////////////////////////////////////////////////////////////////////
 
 const uint ENTITY_LIDAR_COUNT = 32;
@@ -736,16 +929,63 @@ struct HtmEntity{
     float max_speed;
 };
 
+/////////////////////////////////////////////////////////////////////////////////
+///////// BELOW SECTION CONTAINS DEFINITIONS OF ARTIFICIAL NEURAL NETWORKS
+/////////////////////////////////////////////////////////////////////////////////
+
 const uint ANN_LIDAR_COUNT = 32;
-const uint ANN_INPUT_SIZE = ANN_LIDAR_COUNT;
+const uint BLOCK_EXTENDED_SENSORY_FEATURES_LEN = BLOCK_SENSORY_FEATURES_LEN+2;// + block_mass and is_air
+const uint ANN_TOUCHED_BLOCK_COUNT = 8;//cube has 8 corners
+const uint ANN_INPUT_SIZE = ANN_LIDAR_COUNT+BLOCK_EXTENDED_SENSORY_FEATURES_LEN*ANN_TOUCHED_BLOCK_COUNT;
 const uint ANN_HIDDEN_SIZE = 32;
 const uint ANN_INPUT_CONNECTIONS_PER_HIDDEN_NEURON = 16;
 const uint ANN_LATENT_SIZE = 32;
 const uint ANN_HIDDEN_CONNECTIONS_PER_LATENT_NEURON = 4;
 const uint ANN_LATENT_CONNECTIONS_PER_LATENT_NEURON = 4;
-const uint ANN_OUTPUT_SIZE = 32;
+const uint ANN_OUTPUT_ATTACK_MUSCLES_SIZE = 4;
+const uint ANN_OUTPUT_MOVEMENT_MUSCLES_SIZE = 20;
+const uint ANN_OUTPUT_ROTATION_MUSCLES_SIZE = 8;
+const uint ANN_OUTPUT_ATTACK_MUSCLES_OFFSET = 0;
+const uint ANN_OUTPUT_MOVEMENT_MUSCLES_OFFET= ANN_OUTPUT_ATTACK_MUSCLES_OFFSET+ANN_OUTPUT_ATTACK_MUSCLES_SIZE;
+const uint ANN_OUTPUT_ROTATION_MUSCLES_OFFSET = ANN_OUTPUT_MOVEMENT_MUSCLES_OFFET + ANN_OUTPUT_MOVEMENT_MUSCLES_SIZE;
+const uint ANN_OUTPUT_SIZE = ANN_OUTPUT_MOVEMENT_MUSCLES_SIZE+ANN_OUTPUT_ATTACK_MUSCLES_SIZE+ANN_OUTPUT_ROTATION_MUSCLES_SIZE;
 const uint ANN_LATENT_CONNECTIONS_PER_OUTPUT_NEURON = 4;
 const uint ANN_MAX_SIZE = max(max(max(ANN_HIDDEN_SIZE,ANN_LATENT_SIZE),ANN_OUTPUT_SIZE),ANN_INPUT_SIZE);
+const float ROTATION_MUSCLE_STRENGTH = 0.01;
+const vec2[ANN_OUTPUT_ROTATION_MUSCLES_SIZE] ANN_IMPULSES_OF_ROTATION_MUSCLES = vec2[ANN_OUTPUT_ROTATION_MUSCLES_SIZE](
+    vec2(ROTATION_MUSCLE_STRENGTH,0),
+    vec2(ROTATION_MUSCLE_STRENGTH,0),
+    vec2(ROTATION_MUSCLE_STRENGTH,0),
+    vec2(ROTATION_MUSCLE_STRENGTH,0),
+    vec2(0,ROTATION_MUSCLE_STRENGTH),
+    vec2(0,ROTATION_MUSCLE_STRENGTH),
+    vec2(0,ROTATION_MUSCLE_STRENGTH),
+    vec2(0,ROTATION_MUSCLE_STRENGTH)
+);
+#define xyz_point_on_unit_xz_circle(angle) vec3(sin(angle),0,cos(angle))
+const vec3[ANN_OUTPUT_MOVEMENT_MUSCLES_SIZE] ANN_IMPULSES_OF_DIRECTIONAL_MUSCLES = vec3[ANN_OUTPUT_MOVEMENT_MUSCLES_SIZE](
+    vec3(0,1,0),
+    vec3(0,1,0),
+    vec3(0,-1,0),
+    vec3(0,-1,0),
+    xyz_point_on_unit_xz_circle(2.*PI*0./16.),
+    xyz_point_on_unit_xz_circle(2.*PI*1./16.),
+    xyz_point_on_unit_xz_circle(2.*PI*2./16.),
+    xyz_point_on_unit_xz_circle(2.*PI*3./16.),
+    xyz_point_on_unit_xz_circle(2.*PI*4./16.),
+    xyz_point_on_unit_xz_circle(2.*PI*5./16.),
+    xyz_point_on_unit_xz_circle(2.*PI*6./16.),
+    xyz_point_on_unit_xz_circle(2.*PI*7./16.),
+    xyz_point_on_unit_xz_circle(2.*PI*8./16.),
+    xyz_point_on_unit_xz_circle(2.*PI*9./16.),
+    xyz_point_on_unit_xz_circle(2.*PI*10./16.),
+    xyz_point_on_unit_xz_circle(2.*PI*11./16.),
+    xyz_point_on_unit_xz_circle(2.*PI*12./16.),
+    xyz_point_on_unit_xz_circle(2.*PI*13./16.),
+    xyz_point_on_unit_xz_circle(2.*PI*14./16.),
+    xyz_point_on_unit_xz_circle(2.*PI*15./16.)
+);
+
 struct AnnSparseConnection{
     uint src_neuron;
     float weight;
@@ -772,7 +1012,7 @@ struct AnnEntity{
     AnnSparseLatentNeuron[ANN_LATENT_SIZE] ann_latent;
     AnnSparseOutputNeuron[ANN_OUTPUT_SIZE] ann_output;
     float[ANN_LATENT_SIZE] latent;
-    AnnLidar[ENTITY_LIDAR_COUNT] lidars;
+    AnnLidar[ANN_LIDAR_COUNT] lidars;
     uint bone_idx;
     uint main;
     float energy;

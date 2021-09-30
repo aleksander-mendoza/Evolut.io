@@ -18,7 +18,7 @@ use crate::render::subbuffer::SubBuffer;
 use crate::pipelines::constraint::Constraint;
 use crate::render::buffer::Buffer;
 use crate::pipelines::global_mutables::{GlobalMutables};
-use crate::blocks::{WorldSize, Block, Face, WorldBlocks, WorldFaces, BlockMeta};
+use crate::blocks::{WorldSize, Block, Face, BlockMeta};
 use crate::render::sampler::Sampler;
 use crate::pipelines::bone::Bone;
 use crate::blocks::block_properties::{BLOCKS, BlockProp, BEDROCK, DIRT, GRASS, GLASS, PLANK, AIR, STONE, WATER};
@@ -136,9 +136,7 @@ pub struct FoundationInitializer {
     htm_entities_buffer: SubBuffer<HtmEntity, Storage>,
     ann_entities_buffer: SubBuffer<AnnEntity, Storage>,
     opaque_and_transparent_face_buffer: SubBuffer<Face, Storage>,
-    world_copy: SubBuffer<Block, Storage>,
     tmp_faces_copy: Submitter<SubBuffer<u32, Storage>>,
-    world_block_meta_buffer: SubBuffer<BlockMeta, Storage>,
     blocks_to_be_inserted_or_removed: SubBuffer<u32, Storage>,
     faces_to_be_inserted: SubBuffer<Face, Storage>,
     faces_to_be_removed: SubBuffer<u32, Storage>,
@@ -273,8 +271,6 @@ impl FoundationInitializer {
         let tmp_faces_copy_in_bytes = std::mem::size_of::<u32>() as u64 * 3 * cap.max_faces_copy;
         let grid_in_bytes = std::mem::size_of::<CollisionCell>() as u64 * cap.grid_size();
         let world_in_bytes = (std::mem::size_of::<Block>() * cap.world_size.world_volume()) as u64;
-        let world_copy_in_bytes = world_in_bytes;
-        let world_block_meta_in_bytes = (std::mem::size_of::<BlockMeta>() * cap.world_size.world_volume()) as u64;
         let blocks_to_be_inserted_or_removed_in_bytes = std::mem::size_of::<u32>() as u64 * cap.max_blocks_to_be_inserted_or_removed;
         let global_mutables_in_bytes = std::mem::size_of_val(&mutables) as u64;
         let rand_uint_in_bytes = std::mem::size_of::<f32>() as u64 * cap.max_rand_uint;
@@ -290,8 +286,6 @@ impl FoundationInitializer {
                                                                                 tmp_faces_copy_in_bytes +
                                                                                 grid_in_bytes +
                                                                                 world_in_bytes +
-                                                                                world_copy_in_bytes +
-                                                                                world_block_meta_in_bytes +
                                                                                 blocks_to_be_inserted_or_removed_in_bytes +
                                                                                 global_mutables_in_bytes +
                                                                                 particles_in_bytes +
@@ -316,12 +310,6 @@ impl FoundationInitializer {
         assert_eq!(offset % 16, 0);
         let world_buffer = super_buffer.sub(offset..offset + world_in_bytes).reinterpret_into::<Block>();
         let offset = offset + world_in_bytes;
-        assert_eq!(offset % 16, 0);
-        let world_copy_buffer = super_buffer.sub(offset..offset + world_copy_in_bytes).reinterpret_into::<Block>();
-        let offset = offset + world_copy_in_bytes;
-        assert_eq!(offset % 16, 0);
-        let world_block_meta_buffer = super_buffer.sub(offset..offset + world_block_meta_in_bytes).reinterpret_into::<BlockMeta>();
-        let offset = offset + world_block_meta_in_bytes;
         assert_eq!(offset % 16, 0);
         let blocks_to_be_inserted_or_removed_buffer = super_buffer.sub(offset..offset + blocks_to_be_inserted_or_removed_in_bytes).reinterpret_into::<u32>();
         let offset = offset + blocks_to_be_inserted_or_removed_in_bytes;
@@ -456,9 +444,7 @@ impl FoundationInitializer {
             opaque_and_transparent_face_buffer,
             rand_uint:rand_uint_buffer,
             faces:face_buffer,
-            world_copy:world_copy_buffer,
             world:world_buffer,
-            world_block_meta_buffer,
             sampler,
             player_event_uniform,
             htm_entities_buffer,
@@ -487,8 +473,6 @@ impl FoundationInitializer {
             ann_entities_buffer,
             opaque_and_transparent_face_buffer,
             faces,
-            world_copy,
-            world_block_meta_buffer,
             faces_to_be_inserted,
             faces_to_be_removed,
             tmp_faces_copy,
@@ -516,12 +500,10 @@ impl FoundationInitializer {
             faces_to_be_removed,
             tmp_faces_copy,
             blocks_to_be_inserted_or_removed,
-            world_block_meta_buffer,
             player_event_uniform,
             face_count_per_chunk_buffer,
             opaque_and_transparent_face_buffer,
             faces,
-            world_copy,
             particles,
             world,
             cap,
@@ -545,8 +527,6 @@ pub struct Foundations {
     rand_uint: SubBuffer<u32, Storage>,
     face_count_per_chunk_buffer: SubBuffer<Face, Storage>,
     opaque_and_transparent_face_buffer: SubBuffer<Face, Storage>,
-    world_block_meta_buffer: SubBuffer<BlockMeta, Storage>,
-    world_copy: SubBuffer<Block, Storage>,
     faces_to_be_inserted: SubBuffer<Face, Storage>,
     faces_to_be_removed: SubBuffer<u32, Storage>,
     cap: FoundationsCapacity,
@@ -603,9 +583,6 @@ impl Foundations {
     pub fn bones(&self) -> &SubBuffer<Bone, Storage> {
         &self.bones
     }
-    pub fn world_block_meta(&self) -> &SubBuffer<BlockMeta, Storage> {
-        &self.world_block_meta_buffer
-    }
     pub fn faces_to_be_inserted(&self) -> &SubBuffer<Face, Storage> {
         &self.faces_to_be_inserted
     }
@@ -623,9 +600,6 @@ impl Foundations {
     }
     pub fn world(&self) -> &SubBuffer<Block, Storage> {
         &self.world
-    }
-    pub fn world_copy(&self) -> &SubBuffer<Block, Storage> {
-        &self.world_copy
     }
     pub fn default_global_mutables(&self) -> &GlobalMutables {
         &self.default_global_mutables

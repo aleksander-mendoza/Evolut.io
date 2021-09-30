@@ -1,5 +1,5 @@
 
-use crate::blocks::{Block, WorldSize};
+use crate::blocks::{Block, WorldSize, BlockId};
 use std::fmt::{Debug, Formatter};
 use crate::blocks::block_properties::AIR;
 
@@ -49,7 +49,7 @@ impl PlayerEvent{
     pub fn make_nothing(&mut self){
         self.event_type = EventType::Nothing;
     }
-    pub fn set_block(position:glm::Vec3,ray_cast_direction:glm::Vec3, block:Block)->Self{
+    pub fn set_block(position:glm::Vec3,ray_cast_direction:glm::Vec3, block:BlockId)->Self{
         Self {
             event_type: EventType::SetBlock,
             vec3_slot0: position,

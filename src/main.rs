@@ -90,6 +90,7 @@ fn run() -> Result<(),failure::Error>{
         if input.pause(){
             run_simulation = !run_simulation;
         }
+
         player.update(&mut display, &input, &fps_counter);
         // player.send_events(sx);
         if run_simulation || input.next(){

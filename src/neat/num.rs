@@ -28,6 +28,7 @@ pub trait Num: Debug + num_traits::Num + Copy + Display + std::ops::AddAssign + 
     const ACT_FN_NEG:fn(Self)->Self;
     const ALL_ACT_FN: [fn(Self)->Self; 21];
     fn random() -> Self;
+    fn random_vec2() -> glm::TVec2<Self>;
     fn random_vec3() -> glm::TVec3<Self>;
     fn random_vec4() -> glm::TVec4<Self>;
     fn random_walk(self) -> Self;
@@ -101,6 +102,9 @@ impl Num for f64 {
     fn random() -> Self{
         rand::random()
     }
+    fn random_vec2() -> glm::TVec2<Self>{
+        glm::vec2(Self::random(),Self::random())
+    }
     fn random_vec3() -> glm::TVec3<Self>{
         glm::vec3(Self::random(),Self::random(),Self::random())
     }
@@ -167,7 +171,9 @@ impl Num for f32 {
     fn random() -> Self{
         rand::random()
     }
-
+    fn random_vec2() -> glm::TVec2<Self>{
+        glm::vec2(Self::random(),Self::random())
+    }
     fn random_vec3() -> glm::TVec3<Self>{
         glm::vec3(Self::random(),Self::random(),Self::random())
     }

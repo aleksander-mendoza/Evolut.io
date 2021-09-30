@@ -2,13 +2,13 @@
 #extension GL_GOOGLE_include_directive : enable
 //#extension GL_EXT_debug_printf : enable
 #extension GL_KHR_shader_subgroup_basic : enable
+#extension GL_KHR_shader_subgroup_arithmetic : enable
 
-#define IS_AVAILABLE_BUFFER_LIDARS
 #define IS_AVAILABLE_BUFFER_ANN_ENTITIES
 #define IS_AVAILABLE_BUFFER_GLOBAL_MUTABLES
 #define IS_AVAILABLE_BUFFER_BONES
 #define IS_AVAILABLE_BUFFER_WORLD
-#define IS_AVAILABLE_BUFFER_COLLISION_GRID
+//#define IS_AVAILABLE_BUFFER_COLLISION_GRID
 
 #include "descriptors_compute.comp"
 
@@ -18,51 +18,84 @@ layout (local_size_x_id = GROUP_SIZE_CONST_ID) in;
 
 shared float[ANN_MAX_SIZE] tmp1;
 shared float[ANN_MAX_SIZE] tmp2;
+shared uint[ANN_TOUCHED_BLOCK_COUNT] touched_block_ids;
 
 void main() {
     const uint entity_id = gl_WorkGroupID.x;
     const uint lID = gl_LocalInvocationID.x;
     const uint entities_count = global_mutables.ann_entities;
     if (entity_id < entities_count){
-        const AnnEntity entity = ann_entities[entity_id];
-        const Bone bone = bones[entity.bone_idx];
-        const mat3 rotation = normal_vec3_to_rotation_matrix(bone.direction);
-
-        for(uint i=lID;i<entity.lidars.length;i+=GROUP_SIZE){
-            const vec3 rotated_lidar_direction = rotation * entity.lidars[i].direction;
-            const RayCastResult ray = ray_cast(bone.new_center, rotate_lidar_direction);
-            tmp1[i] = ray.ratio_of_traversed_length;
+        const uint bone_idx = ann_entities[entity_id].bone_idx;
+        const Bone bone = bones[bone_idx];
+        const mat3 rotation = rotation_mat_from_yaw_and_pitch(bone.yaw_and_pitch);
+        const uint BLOCK_TOUCH_SENSE_OFFSET = 0;
+        const uint LIDAR_LENGTH_SENSE_OFFSET = BLOCK_EXTENDED_SENSORY_FEATURES_LEN*ANN_TOUCHED_BLOCK_COUNT;
+        for(uint i=lID;i<ANN_LIDAR_COUNT;i+=GROUP_SIZE){
+            const vec3 rotated_lidar_direction = rotation * ann_entities[entity_id].lidars[i].direction;
+            const RayCastResult ray = ray_cast(bone.new_center, rotated_lidar_direction);
+            tmp1[LIDAR_LENGTH_SENSE_OFFSET+i] = ray.ratio_of_traversed_length;
         }
-        for(uint i = lID;i<entity.ann_hidden.length;i+=GROUP_SIZE){
-            const AnnSparseHiddenNeuron neuron = entity.ann_hidden[i];
+        if(lID < ANN_TOUCHED_BLOCK_COUNT){
+            const float reach = 1.1;
+            const vec3 cube_point_pos = (vec3(uvec3(lID,lID>>1,lID>>2)&1u)*2-1)*reach;
+            const vec3 bone_point_pos = bone.new_center + cube_point_pos*vec3(bone.half_side_length,bone.half_height,bone.half_side_length);
+            const uint touched_block_id = get_block_id_at(uvec3(bone_point_pos));;
+            touched_block_ids[lID] = touched_block_id;
+            const uint TOUCH_OFFSET = BLOCK_TOUCH_SENSE_OFFSET+lID*BLOCK_EXTENDED_SENSORY_FEATURES_LEN;
+            tmp1[TOUCH_OFFSET+BLOCK_EXTENDED_SENSORY_FEATURES_LEN-1] = float(touched_block_id==BLOCK_ID_AIR);
+            tmp1[TOUCH_OFFSET+BLOCK_EXTENDED_SENSORY_FEATURES_LEN-2] = BLOCK_MASS[touched_block_id];
+        }
+        const uint BLOCK_FEATURES_COPIED_IN_PARALLEL = GROUP_SIZE / ANN_TOUCHED_BLOCK_COUNT;
+        const uint THREADS_RUNNING_IN_PARALLEL = BLOCK_FEATURES_COPIED_IN_PARALLEL * ANN_TOUCHED_BLOCK_COUNT;
+        if(lID < THREADS_RUNNING_IN_PARALLEL){
+            const uint touched_block_feature = lID/ANN_TOUCHED_BLOCK_COUNT;
+            const uint touched_block = lID - touched_block_feature*ANN_TOUCHED_BLOCK_COUNT;
+            const uint touched_block_id = touched_block_ids[touched_block];
+            const uint TOUCH_OFFSET = BLOCK_TOUCH_SENSE_OFFSET+touched_block*BLOCK_EXTENDED_SENSORY_FEATURES_LEN;
+            for(uint i=touched_block_feature;i<BLOCK_SENSORY_FEATURES_LEN;i+=BLOCK_FEATURES_COPIED_IN_PARALLEL){
+                tmp1[TOUCH_OFFSET + i] = float(BLOCK_SENSORY_FEATURES[touched_block_id][i]);
+            }
+        }
+        for(uint i = lID;i<ANN_HIDDEN_SIZE;i+=GROUP_SIZE){
+            const AnnSparseHiddenNeuron neuron = ann_entities[entity_id].ann_hidden[i];
             float sum = neuron.bias;
-            for(uint j=0;j<neuron.incoming.length;j++){
+            for(uint j=0;j<neuron.incoming.length();j++){
                 sum += tmp1[neuron.incoming[j].src_neuron] * neuron.incoming[j].weight;
             }
             tmp2[i] = max(0,sum);//ReLU activation
         }
-        for(uint i = lID;i<entity.ann_latent.length;i+=GROUP_SIZE){
-            const AnnSparseLatentNeuron neuron = entity.ann_latent[i];
+        for(uint i = lID;i<ANN_LATENT_SIZE;i+=GROUP_SIZE){
+            const AnnSparseLatentNeuron neuron = ann_entities[entity_id].ann_latent[i];
             float sum = neuron.bias;
-            for(uint j=0;j<neuron.incoming_from_hidden.length;j++){
+            for(uint j=0;j<neuron.incoming_from_hidden.length();j++){
                 sum += tmp2[neuron.incoming_from_hidden[j].src_neuron] * neuron.incoming_from_hidden[j].weight;
             }
-            for(uint j=0;j<neuron.recurrent_from_latent.length;j++){
-                sum += entity.latent[neuron.recurrent_from_latent[j].src_neuron] * neuron.recurrent_from_latent[j].weight;
+            for(uint j=0;j<neuron.recurrent_from_latent.length();j++){
+                sum += ann_entities[entity_id].latent[neuron.recurrent_from_latent[j].src_neuron] * neuron.recurrent_from_latent[j].weight;
             }
             tmp1[i] = max(sum,0);//ReLU activation
         }
-        for(uint i=lID;i<entity.latent.length;i+=GROUP_SIZE){
-            entity.latent[i] = tmp1[i];
+        subgroupBarrier();
+        for(uint i=lID;i<ANN_LATENT_SIZE;i+=GROUP_SIZE){
+            ann_entities[entity_id].latent[i] = tmp1[i];
         }
-        for(uint i = lID;i<entity.ann_output.length;i+=GROUP_SIZE){
-            const AnnSparseHiddenNeuron neuron = entity.ann_output[i];
+        for(uint i = lID;i<ANN_OUTPUT_SIZE;i+=GROUP_SIZE){
+            const AnnSparseOutputNeuron neuron = ann_entities[entity_id].ann_output[i];
             float sum = neuron.bias;
-            for(uint j=0;j<neuron.incoming.length;j++){
+            for(uint j=0;j<neuron.incoming.length();j++){
                 sum += tmp1[neuron.incoming[j].src_neuron] * neuron.incoming[j].weight;
             }
             tmp2[i] = max(0,sum);//ReLU activation
         }
+        vec2 rotation_change = vec2(0,0);
+        for(uint i = lID;i<ANN_OUTPUT_ROTATION_MUSCLES_SIZE;i+=GROUP_SIZE){
+            rotation_change += tmp2[ANN_OUTPUT_ROTATION_MUSCLES_OFFSET+i] * ANN_IMPULSES_OF_ROTATION_MUSCLES[i];
+        }
+        rotation_change = subgroupAdd(rotation_change);
+        if(lID==0){
+            bones[bone_idx].yaw_and_pitch += rotation_change;
+        }
 
+//        bones[entity.bone_idx].impulse;
     }
 }

@@ -1,0 +1,19 @@
+#version 450
+//#extension GL_EXT_debug_printf : enable
+#define IS_AVAILABLE_BUFFER_WORLD
+#define IS_AVAILABLE_BUFFER_RANDOM_VALS
+#define IS_AVAILABLE_BUFFER_WORLD_BLOCK_META
+
+#include "descriptors_generate.comp"
+layout (local_size_x_id = GROUP_SIZE_CONST_ID) in;
+#include "utils.comp"
+
+void main() {
+    const vec2 WORLD_SIZE = vec2(WORLD_WIDTH,WORLD_DEPTH);
+    const uint gID = gl_GlobalInvocationID.x;
+    const uvec2 pos = world_2d_idx_into_xz_pos(gID);
+    // the actual code that generates terrain
+    const uint height = uint(large + chunk);
+    const uint biome = get_biome(humidity,temperature);
+    set_block_and_meta_at(uvec3(pos.x, 0, pos.y), BLOCK_ID_BEDROCK, 0,0);
+}

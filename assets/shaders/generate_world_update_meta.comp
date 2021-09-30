@@ -8,4 +8,5 @@ layout (local_size_x_id = GROUP_SIZE_CONST_ID) in;
 void main() {
 //    const uint gID = gl_GlobalInvocationID.x;
 //    world_block_meta[gID] = BlockMeta(BLOCK_HUMIDITY[world[gID]]);
+
 }

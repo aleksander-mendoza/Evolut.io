@@ -35,7 +35,7 @@ pub struct PhysicsResources {
     narrow_phase_collision_detection: ShaderModule<Compute>,
     update_bones: ShaderModule<Compute>,
     update_particles: ShaderModule<Compute>,
-    // feed_forward_net: ShaderModule<Compute>,
+    update_ann_entities: ShaderModule<Compute>,
     // update_entity_lidars: ShaderModule<Compute>,
 }
 
@@ -44,22 +44,20 @@ pub struct PhysicsResources {
 
 impl PhysicsResources {
     pub fn new(cmd_pool: &CommandPool, _foundations:&FoundationInitializer) -> Result<Self, failure::Error> {
-        // let generate_faces = ShaderModule::new(include_glsl!("assets/shaders/generate_faces.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let broad_phase_collision_detection = ShaderModule::new(include_glsl!("assets/shaders/broad_phase_collision_detection.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let broad_phase_collision_detection_cleanup = ShaderModule::new(include_glsl!("assets/shaders/broad_phase_collision_detection_cleanup.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let narrow_phase_collision_detection = ShaderModule::new(include_glsl!("assets/shaders/narrow_phase_collision_detection.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let update_particles = ShaderModule::new(include_glsl!("assets/shaders/update_particles.comp", kind: comp) as &[u32], cmd_pool.device())?;
         let update_bones = ShaderModule::new(include_glsl!("assets/shaders/update_bones.comp", kind: comp) as &[u32], cmd_pool.device())?;
-        // let feed_forward_net = ShaderModule::new(include_glsl!("assets/shaders/feed_forward_net.comp", kind: comp, target: vulkan1_1) as &[u32], cmd_pool.device())?;
-        // let update_entity_lidars = ShaderModule::new(include_glsl!("assets/shaders/update_entity_lidars.comp", kind: comp) as &[u32], cmd_pool.device())?;
+        let update_ann_entities = ShaderModule::new(include_glsl!("assets/shaders/update_ann_entities.comp", kind: comp, target: vulkan1_1) as &[u32], cmd_pool.device())?;
+        // let update_htm_entities = ShaderModule::new(include_glsl!("assets/shaders/update_htm_entities.comp", kind: comp) as &[u32], cmd_pool.device())?;
         Ok(Self {
             broad_phase_collision_detection,
             broad_phase_collision_detection_cleanup,
             narrow_phase_collision_detection,
             update_particles,
             update_bones,
-            // update_entity_lidars,
-            // feed_forward_net
+            update_ann_entities
         })
     }
 }
@@ -73,14 +71,13 @@ impl ComputeResources for PhysicsResources{
             update_particles,
             narrow_phase_collision_detection,
             update_bones,
-            // update_entity_lidars,
+            update_ann_entities,
             // feed_forward_net,
         } = self;
         let mut descriptors = ComputeDescriptorsBuilder::new();
         let uniform_binding = descriptors.uniform_buffer(foundations.player_event_uniform().buffer());//0
         descriptors.storage_buffer(foundations.global_mutables());//1
         descriptors.storage_buffer(foundations.collision_grid());//2
-        descriptors.storage_buffer(foundations.world_block_meta());//3
         descriptors.storage_buffer(foundations.particles());//4
         descriptors.storage_buffer(foundations.indirect().super_buffer());//5
         descriptors.storage_buffer(foundations.bones());//6
@@ -100,14 +97,14 @@ impl ComputeResources for PhysicsResources{
         let broad_phase_collision_detection = descriptors.build("main", broad_phase_collision_detection,&sc)?;
         let broad_phase_collision_detection_cleanup = descriptors.build("main", broad_phase_collision_detection_cleanup,&sc)?;
         let update_bones = descriptors.build("main", update_bones,&sc)?;
-        // let update_entity_lidars = descriptors.build("main", update_entity_lidars,&sc)?;
+        let update_ann_entities = descriptors.build("main", update_ann_entities,&sc)?;
         // let feed_forward_net = descriptors.build("main", feed_forward_net)?;
         let update_particles = descriptors.build("main", update_particles,&sc)?;
         let narrow_phase_collision_detection = descriptors.build("main", narrow_phase_collision_detection,&sc)?;
         Ok(Physics {
             narrow_phase_collision_detection,
             update_particles,
-            // update_entity_lidars,
+            update_ann_entities,
             // feed_forward_net,
             broad_phase_collision_detection,
             broad_phase_collision_detection_cleanup,
@@ -119,14 +116,13 @@ impl ComputeResources for PhysicsResources{
 
 
 pub struct Physics {
-    //The order matters because of drop!
     uniform_binding: UniformBufferBinding<PlayerEvent>,
     broad_phase_collision_detection: ComputePipeline,
     broad_phase_collision_detection_cleanup: ComputePipeline,
     narrow_phase_collision_detection: ComputePipeline,
     update_bones: ComputePipeline,
     update_particles: ComputePipeline,
-    // update_entity_lidars: ComputePipeline,
+    update_ann_entities: ComputePipeline,
     // feed_forward_net: ComputePipeline,
 }
 
@@ -149,10 +145,16 @@ impl Computable for Physics {
             .buffer_barriers(vk::PipelineStageFlags::COMPUTE_SHADER, vk::PipelineStageFlags::COMPUTE_SHADER, &[
                 make_shader_buffer_barrier(foundations.bones())
             ])
+            // .bind_compute_pipeline(&self.update_ann_entities)
+            // .dispatch_indirect(foundations.indirect().update_ann_entities(), 0)
+            // .buffer_barriers(vk::PipelineStageFlags::COMPUTE_SHADER, vk::PipelineStageFlags::COMPUTE_SHADER, &[
+            //     make_shader_buffer_barrier(foundations.bones())
+            // ])
             .bind_compute_pipeline(&self.update_bones)
             .dispatch_indirect(foundations.indirect().update_bones(), 0)
-            .bind_compute_pipeline(&self.update_particles)
-            .dispatch_indirect(foundations.indirect().update_particles(), 0)
+
+            // .bind_compute_pipeline(&self.update_particles)
+            // .dispatch_indirect(foundations.indirect().update_particles(), 0)
             // .bind_compute_pipeline(&self.update_entity_lidars)
             // .dispatch_indirect(foundations.indirect().update_entity_lidars(), 0)
 

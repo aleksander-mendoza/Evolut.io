@@ -1,4 +1,4 @@
-use crate::blocks::Block;
+use crate::blocks::{Block, BlockId};
 use crate::input::Input;
 use crate::fps::FpsCounter;
 use crate::pipelines::mvp_uniforms::MvpUniforms;
@@ -17,7 +17,7 @@ pub struct Player {
     mvp_uniforms: MvpUniforms,
     rotation: glm::Quat,
     location: glm::Vec3,
-    block_in_hand: Block,
+    block_in_hand: BlockId,
     model_matrix: glm::Mat4,
     movement_speed: f32,
     player_reach: f32,
@@ -42,7 +42,7 @@ impl Player {
             mvp_uniforms: MvpUniforms::new(),
             rotation: glm::quat_angle_axis(45./360.*2.*f32::PI(),&glm::vec3(0.,1.,0.)),
             location: glm::vec3(2f32, 128f32, 2f32),
-            block_in_hand: Block::new(2u32),
+            block_in_hand: BlockId::new(2u32),
             model_matrix: glm::identity::<f32, 4>(),
             movement_speed: 0.009f32,
             player_reach: 4f32,
@@ -83,7 +83,7 @@ impl Player {
         }
 
         if input.number() > -1 {
-            const BLOCK_KEY_BINDING:[Block;10] = [GLASS,GRASS,DIRT,PLANK,OAK_WOOD,STONE,SAND,COBBLESTONE,COAL_ORE,WATER];
+            const BLOCK_KEY_BINDING:[BlockId;10] = [GLASS,GRASS,DIRT,PLANK,OAK_WOOD,STONE,SAND,COBBLESTONE,COAL_ORE,WATER];
             self.block_in_hand = BLOCK_KEY_BINDING[input.number() as usize]
         }
         let v = glm::quat_to_mat4(&self.rotation) * glm::translation(&-self.location);

@@ -6,9 +6,9 @@
 
 layout(location = 0) in vec3 center;
 layout(location = 1) in float half_side_length;
-layout(location = 2) in vec4 texture_coords;
+layout(location = 2) in uint texture_for_block_id;
 layout(location = 3) in float half_height;
-layout(location = 4) in vec3 direction;
+layout(location = 4) in vec2 yaw_and_pitch;
 layout(location = 0) out vec4 texColor;
 
 
@@ -57,12 +57,8 @@ void main() {
         // ZMinus ortientation = block's front face
         M, L, K, M, K, N
     );
-
-    mat2 rotation_matrix = normal_vec2_to_rotation_matrix(direction.xz * half_side_length);
-    vec3 normalized_vertex_pos = direction_per_vertex[gl_VertexIndex];
-    vec2 rotated_and_scaled_vertex_pos_xz = rotation_matrix * normalized_vertex_pos.xz;
-    vec3 rotated_and_scaled_vertex_pos = vec3(rotated_and_scaled_vertex_pos_xz.x,normalized_vertex_pos.y*half_height,rotated_and_scaled_vertex_pos_xz.y);
-    gl_Position = MVP * vec4(center + rotated_and_scaled_vertex_pos, 1.0);
+    vec3 vertex_pos = rotation_mat_from_yaw_and_pitch(yaw_and_pitch) * direction_per_vertex[gl_VertexIndex] * get_bone_half_size(half_side_length,half_height);
+    gl_Position = MVP * vec4(center + vertex_pos, 1.0);
     gl_Position.y = -gl_Position.y;
 //    uint bone_idx = body_part_to_bone_idx[part_variant];
 //    float bone_stride = tex_stride[bone_idx];
@@ -72,5 +68,5 @@ void main() {
 //    vec2 tex_size = tex_offset_and_size[tex_idx+uint(1)];
 //    fragTex = texture_uv[gl_VertexIndex] * tex_size + tex_offset;
 //    fragTex.x += bone_stride*texture_variant;
-    texColor = vec4(texture_coords.xyz, 0);
+    texColor = vec4(1,0,0,0);
 }

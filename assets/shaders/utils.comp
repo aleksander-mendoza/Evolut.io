@@ -523,7 +523,16 @@ uvec2 get_face_copy(uint face_idx){
 }
 #endif // IS_AVAILABLE_BUFFER_TMP_FACES_COPY
 
-
+#ifdef IS_AVAILABLE_BUFFER_RAND_UINT
+uvec2 rand_uvec2(uint index){
+    const uint rand_uint_offset = index*2;
+    const uvec2 rand_uint_offsets = uvec2(rand_uint_offset, rand_uint_offset+1) % MAX_RAND_UINT;
+    return uvec2(rand_uint[rand_uint_offsets.x], rand_uint[rand_uint_offsets.y]);
+}
+vec2 rand_vec2(uint index){
+    return rand_uvec2_to_random_vec2(rand_uvec2(index));
+}
+#endif // IS_AVAILABLE_BUFFER_RAND_UINT
 
 #endif // UTILS_COMP
 

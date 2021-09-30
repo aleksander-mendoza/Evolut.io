@@ -12,10 +12,7 @@ layout (local_size_x_id = GROUP_SIZE_CONST_ID) in;
 void main() {
     const uint gID = gl_GlobalInvocationID.x;
     if(gID < global_mutables.ann_entities){
-        const uint rand_uint_offset = gID*2;
-        const uvec2 rand_uint_offsets = uvec2(rand_uint_offset, rand_uint_offset+1) % MAX_RAND_UINT;
-        const uvec2 rand_vec = uvec2(rand_uint[rand_uint_offsets.x], rand_uint[rand_uint_offsets.y]);
-        const vec2 rand_pos_f = vec2(MAX_UVEC2 - rand_vec) / vec2(MAX_UVEC2);
+        const vec2 rand_pos_f = rand_vec2(gID);
         const uvec2 rand_pos = uvec2(rand_pos_f * WORLD_BORDERS.xz);
         uvec3 block_pos = uvec3(rand_pos.x, SEA_LEVEL, rand_pos.y);
         const uint block_idx = block_pos_into_world_idx(block_pos);
@@ -30,16 +27,16 @@ void main() {
         const uint agent_entity_idx = gID;
         const Bone agent_bone = Bone(
             agent_pos, // vec3 new_center;
-            0.48, // float half_side_length;//width == 2*half_side_length && depth == 2*half_side_length
-            vec3(1, 0, 0), // vec3 direction;
-            0.48, // float half_height;
+            BLOCK_ID_DIRT, //uint texture_for_block_id
             vec3(0, 0, 0), // vec3 impulse;
             1, // float mass;
             agent_pos, // vec3 old_center;
             encode_ann_entity_idx(agent_entity_idx), // uint entity_idx;
             vec3(0, 0, 0), // vec3 position_relative_to_parent;
             0, // uint parent_bone_idx;
-            vec4(rand_pos_f, rand_pos_f)// vec4 texture_coords;//xy components hold text UV coordinates. zw components hold width and height
+            0.48, // float half_side_length;
+            0.48, // float half_height;
+            vec2(0,0) // vec2 yaw_and_pitch
         );
         bones[gID] = agent_bone;
     }

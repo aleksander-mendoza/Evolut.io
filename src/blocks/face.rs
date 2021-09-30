@@ -4,6 +4,7 @@ use crate::blocks::face_orientation::FaceOrientation;
 use crate::blocks::world_size::{CHUNK_WIDTH, CHUNK_HEIGHT, CHUNK_DEPTH};
 use crate::render::data::VertexSource;
 use ash::vk;
+use crate::blocks::BlockId;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 #[repr(C, packed)]
@@ -50,7 +51,7 @@ impl Face {
     pub fn zero()->Self{
         Face{ coords: u8_u8_u8_u8::new(0,0,0,0), tex_id: u8_u8_u16::new(0,0,0) }
     }
-    pub fn update_texture(&mut self, new_block: Block) {
+    pub fn update_texture(&mut self, new_block: BlockId) {
         let ort = self.block_orientation();
         self.tex_id.d2 = new_block.texture_id(ort) as u16;
     }
