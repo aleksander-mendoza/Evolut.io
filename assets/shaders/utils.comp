@@ -102,7 +102,7 @@ RayCastResult ray_cast(vec3 start, vec3 distance_and_direction) {
         uint min_dim = min_vec3_component(t_max);
         vec3 new_v = v;
         new_v[min_dim] += step[min_dim];
-        if(!is_air_at(uvec3(new_v))){
+        if(0 > new_v[min_dim] || new_v[min_dim] >= WORLD_BORDERS[min_dim] || !is_air_at(uvec3(new_v))){
             return RayCastResult(new_v,t_max[min_dim],v,true);
         }
         t_max[min_dim] += t_delta[min_dim];
@@ -524,6 +524,14 @@ uvec2 get_face_copy(uint face_idx){
 #endif // IS_AVAILABLE_BUFFER_TMP_FACES_COPY
 
 #ifdef IS_AVAILABLE_BUFFER_RAND_UINT
+
+float rand_float(uint index){
+    return rand_uint_to_random_float(rand_uint[index]);
+}
+/**Random float in range (-1,1)*/
+float rand_float_neg_pos(uint index){
+    return rand_float(index)*2-1;
+}
 uvec2 rand_uvec2(uint index){
     const uint rand_uint_offset = index*2;
     const uvec2 rand_uint_offsets = uvec2(rand_uint_offset, rand_uint_offset+1) % MAX_RAND_UINT;
@@ -531,6 +539,17 @@ uvec2 rand_uvec2(uint index){
 }
 vec2 rand_vec2(uint index){
     return rand_uvec2_to_random_vec2(rand_uvec2(index));
+}
+uvec2 rand_vec2_world_pos(uint index){
+    return rand_uvec2(index) % WORLD_BORDERS.xz;
+}
+uvec3 rand_uvec3(uint index){
+    const uint rand_uint_offset = index*4;
+    const uvec3 rand_uint_offsets = uvec3(rand_uint_offset, rand_uint_offset+1, rand_uint_offset+2) % MAX_RAND_UINT;
+    return uvec3(rand_uint[rand_uint_offsets.x], rand_uint[rand_uint_offsets.y], rand_uint[rand_uint_offsets.z]);
+}
+vec3 rand_vec3(uint index){
+    return rand_uvec3_to_random_vec3(rand_uvec3(index));
 }
 #endif // IS_AVAILABLE_BUFFER_RAND_UINT
 

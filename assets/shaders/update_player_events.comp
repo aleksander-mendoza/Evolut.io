@@ -14,7 +14,6 @@ layout (local_size_x = 1) in;
 
 void main()
 {
-    uint gID = gl_GlobalInvocationID.x;
     const int tick = ++global_mutables.tick;
     int blocks_to_be_inserted_or_removed_count = 0;
     if (player_event.event_type == PLAYER_EVENT_SET_BLOCK){

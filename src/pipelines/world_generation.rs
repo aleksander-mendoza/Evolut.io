@@ -202,7 +202,7 @@ impl WorldGeneratorInitializer {
         let subgroup_size = cmd_pool.device().get_max_subgroup_size();
         let world_area = foundations.world_size().world_area() as u32;
         let world_volume = foundations.world_size().world_volume() ;
-        let agents_groups = foundations.default_global_mutables().ann_entities/subgroup_size;
+        let agents_groups = (foundations.default_global_mutables().ann_entities+subgroup_size-1)/subgroup_size;
         assert_eq!(world_area%subgroup_size,0,"World area {} is not divisible by subgroup size {}",world_area,cmd_pool.device().get_max_subgroup_size());
         assert!(foundations.default_global_mutables().ann_entities<foundations.cap().max_rand_uint as u32/ /*xz dimensions*/2);
 

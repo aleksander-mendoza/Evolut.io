@@ -145,11 +145,11 @@ impl Computable for Physics {
             .buffer_barriers(vk::PipelineStageFlags::COMPUTE_SHADER, vk::PipelineStageFlags::COMPUTE_SHADER, &[
                 make_shader_buffer_barrier(foundations.bones())
             ])
-            // .bind_compute_pipeline(&self.update_ann_entities)
-            // .dispatch_indirect(foundations.indirect().update_ann_entities(), 0)
-            // .buffer_barriers(vk::PipelineStageFlags::COMPUTE_SHADER, vk::PipelineStageFlags::COMPUTE_SHADER, &[
-            //     make_shader_buffer_barrier(foundations.bones())
-            // ])
+            .bind_compute_pipeline(&self.update_ann_entities)
+            .dispatch_indirect(foundations.indirect().update_ann_entities(), 0)
+            .buffer_barriers(vk::PipelineStageFlags::COMPUTE_SHADER, vk::PipelineStageFlags::COMPUTE_SHADER, &[
+                make_shader_buffer_barrier(foundations.bones())
+            ])
             .bind_compute_pipeline(&self.update_bones)
             .dispatch_indirect(foundations.indirect().update_bones(), 0)
 

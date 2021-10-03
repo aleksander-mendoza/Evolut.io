@@ -14,11 +14,6 @@ layout (local_size_x_id = GROUP_SIZE_CONST_ID) in;
 
 #include "utils.comp"
 
-struct Neighbour{
-    uint velocity_component_affected;
-    uint block_idx;
-};
-
 void main() {
     uint gID = gl_GlobalInvocationID.x;
     const uint bone_count = global_mutables.bones;
@@ -40,26 +35,22 @@ void main() {
         vec3 hitbox_from = bone.new_center-half_hitbox;
         vec3 hitbox_to = bone.new_center+half_hitbox;
         vec3 hitbox_to_ceil = ceil(hitbox_to);
-        uvec3 start = uvec3(hitbox_from);
-        uvec3 end = uvec3(hitbox_to_ceil);
-        bvec3 is_start_limited_by_world_borders = equal(start,uvec3(0,0,0));
+        ivec3 start = ivec3(hitbox_from);
+        ivec3 end = ivec3(hitbox_to_ceil);
+        bvec3 is_start_limited_by_world_borders = equal(start,ivec3(0,0,0));
         bvec3 is_end_limited_by_world_borders = lessThan(WORLD_BORDERS,end);
 
-        uint neighbours_to_check_len = 0;
-        Neighbour[32] neighbours_to_check;
         bvec3 velocity_sign = lessThan(velocity,vec3(0,0,0));
-        bvec3 velocity_sign_rotated = velocity_sign.yzx; // doesn't matter how we rotate this, we just need to chose one rotation and stick to it.
-        ivec3 dim_of_rotated_velocity_sign = ivec3(1,2,0);
         bvec3 will_hitbox_move_to_next_block = mix(lessThan(hitbox_to_ceil, hitbox_to + velocity),lessThan(hitbox_from + velocity, vec3(start)),velocity_sign);
         for(int dim=0;dim<3;dim++){
             bool neg = velocity_sign[dim];
             if(will_hitbox_move_to_next_block[dim]){
-                bool bounded_by_world_border = neg ? start[dim] == 0 : end[dim] >= WORLD_BORDERS[dim];
+                bool bounded_by_world_border = neg ? start[dim] <= 0 : end[dim] >= WORLD_BORDERS[dim];
                 if (bounded_by_world_border){
                     velocity[dim] = 0;
                 } else {
-                    uvec3 from = start;
-                    uvec3 to = end;
+                    uvec3 from = uvec3(start);
+                    uvec3 to = uvec3(end);
                     // Every box has 6 faces and 8 edges. We need to check all the blocks that touch those faces and edges.
                     // If they do, then we zero-out the respective components of velocity vector
                     // Some optimisation can be made. If we know which direction the box is moving, we do not need to check the faces that
@@ -67,36 +58,57 @@ void main() {
                     // The code in the blow if-statement marks the region of blocks that touch a specific face.
                     if (neg){
                         from[dim]--;
-                        to[dim] = start[dim];
+                        to[dim] = uint(start[dim]);
                     } else {
-                        from[dim] = end[dim];
+                        from[dim] = uint(end[dim]);
                         to[dim]++;
-                    }
-                    // The if-statement below will extend this region to also include blocks touching one of the edges (if necessary).
-                    if(will_hitbox_move_to_next_block[dim_of_rotated_velocity_sign[dim]]){
-                        if (velocity_sign_rotated[dim]){
-                            from[dim_of_rotated_velocity_sign[dim]]--;
-                        } else {
-                            to[dim_of_rotated_velocity_sign[dim]]++;
-                        }
                     }
                     for(uint y=from.y;y<to.y;y++){
                         for(uint z=from.z;z<to.z;z++){
                             for(uint x=from.x;x<to.x;x++){
-                                neighbours_to_check[neighbours_to_check_len++] = Neighbour(dim,block_pos_into_world_idx(uvec3(x,y,z)));
+                                if(!is_traversable(block_pos_into_world_idx(uvec3(x,y,z)))){
+                                    velocity[dim] = 0;
+                                }
                             }
                         }
                     }
                 }
             }
         }
-        for(uint i=0;i<neighbours_to_check_len;i++){
-            if(!is_traversable(neighbours_to_check[i].block_idx)){ // this operation is the most expensive, because it queries global memory.
-                // We can make major optimisation by factoring this out into it's own loop. This way all threads will query
-                // those blocks in parallel.
-                velocity[neighbours_to_check[i].velocity_component_affected] = 0;
+        will_hitbox_move_to_next_block = mix(lessThan(hitbox_to_ceil, hitbox_to + velocity),lessThan(hitbox_from + velocity, vec3(start)),velocity_sign);
+        const uvec3[3] dimensions_per_edge = uvec3[3](
+            // An edge can be carachterised by the two faces that it joins.
+            // The normal vector of each face will point in a specific direction (like vec3(1,0,0), vec3(0,1,0), vec3(0,0,1) or negation of any of these ).
+            // So one way to identify each edge is by first storing the dimension (axis) along which one normal vector of one face is pointing, then store
+            // the dimensions of the vector of the other face.
+            uvec3(/*dimension(axis) of the normal of first face*/0,/*dimension of the normal of second face*/1, /*dimension along which the edge itself lies*/2),
+            uvec3(1,2,0),
+            uvec3(2,0,1)
+        );
+        const ivec3 common_corner_block = mix(end+1, start-1, velocity_sign);
+        const ivec3 opposite_corner_block = mix(start, end, velocity_sign);
+        const ivec3 velocity_direction = mix(ivec3(-1,-1,-1),ivec3(1,1,1),velocity_sign);
+        for(uint edge=0;edge<2;edge++){
+            const uvec3 dimensions = dimensions_per_edge[edge];
+            if(will_hitbox_move_to_next_block[dimensions.x] && will_hitbox_move_to_next_block[dimensions.y]){
+                const int step = velocity_direction[dimensions.z];
+                uvec3 block_on_edge = common_corner_block;
+                while(true){
+                    block_on_edge[dimensions.z]+=step;
+                    if(!is_traversable(block_pos_into_world_idx(uvec3(block_on_edge)))){
+                        velocity[dimensions.x] = 0;
+                        velocity[dimensions.y] = 0;
+                        break;
+                    }
+                    if(block_on_edge[dimensions.z]==opposite_corner_block[dimensions.z]){
+                        break;
+                    }
+                }
             }
         }
+//        if(all(notEqual(velocity,vec3(0,0,0))) && !is_traversable(block_pos_into_world_idx(uvec3(common_corner_block)))){
+//            velocity=vec3(0,0,0);
+//        }
         bones[gID].old_center = bone.new_center;
         bones[gID].new_center = bone.new_center + velocity;
         bones[gID].impulse = bone.impulse * IMPULSE_AVERAGING_OVER_TIMESETP;

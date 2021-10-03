@@ -35,8 +35,8 @@ use crate::pipelines::player_event::PlayerEvent;
 use crate::render::compute::{ComputeDescriptorsBuilder, ComputeDescriptors};
 use crate::render::specialization_constants::SpecializationConstants;
 use crate::neat::htm_entity::{HtmEntity, ENTITY_MAX_LIDAR_COUNT};
-use crate::neat::ann_entity::AnnEntity;
 use std::time::{UNIX_EPOCH, SystemTime};
+use crate::neat::ann_entity::AnnEntity;
 
 pub struct Indirect {
     per_particle: SubBuffer<vk::DispatchIndirectCommand, GpuIndirect>,
@@ -189,7 +189,7 @@ impl FoundationsCapacity {
             max_faces_to_be_removed: faces_to_be_removed_chunk_capacity as u64 * 2 * world_size.total_chunks() as u64,
             max_sensors: 0u64,
             max_htm_entities: 128u64,
-            max_ann_entities: 128u64,
+            max_ann_entities: 2048u64,
             max_faces_copy: 1024u64 * world_size.total_chunks() as u64,
             max_particles: 1024u64,
             world_size,
@@ -266,6 +266,7 @@ impl FoundationInitializer {
             lidars: 0,
             ann_entities: entity_count,
         };
+        assert!(cap.max_ann_entities>=entity_count as u64, "{} >= {}", cap.max_ann_entities,entity_count);
         let bones_in_bytes = std::mem::size_of::<Bone>() as u64 * cap.max_bones;
         let faces_in_bytes = std::mem::size_of::<Face>() as u64 * cap.max_faces;
         let tmp_faces_copy_in_bytes = std::mem::size_of::<u32>() as u64 * 3 * cap.max_faces_copy;
@@ -370,7 +371,11 @@ impl FoundationInitializer {
             dispatch_indirect(0, cmd_pool.device().get_max_subgroup_size()),// update_ambience.comp
             dispatch_indirect(0, cmd_pool.device().get_max_subgroup_size()),// update_ambience_faces.comp, update_ambience_flush_world_copy.comp
             dispatch_indirect(0, cmd_pool.device().get_max_subgroup_size()),// update_htm_entities.comp
-            dispatch_indirect(0, cmd_pool.device().get_max_subgroup_size()),// update_ann_entities.comp
+            vk::DispatchIndirectCommand{
+                x: mutables.ann_entities,
+                y: 1,
+                z: 1
+            },// update_ann_entities.comp
         ];
         let indirect_draw_data = vec![
             draw_indirect(36, mutables.bones),// bones.vert

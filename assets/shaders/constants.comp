@@ -349,10 +349,12 @@ float rand_uint_to_random_float(uint rand){
     return float(MAX_UINT - rand) / float(MAX_UINT);
 }
 
-vec2 rand_uvec2_to_random_vec2(vec2 rand){
+vec2 rand_uvec2_to_random_vec2(uvec2 rand){
     return vec2(MAX_UVEC2 - rand) / vec2(MAX_UVEC2);
 }
-
+vec3 rand_uvec3_to_random_vec3(uvec3 rand){
+    return vec3(MAX_UVEC3 - rand) / vec3(MAX_UVEC3);
+}
 uint max_vec3_component(vec3 v){
     return v.x > v.y ? (v.x > v.z ? 0 : 2) : (v.y > v.z ? 1 : 2);
 }
@@ -946,8 +948,8 @@ const uint ANN_OUTPUT_ATTACK_MUSCLES_SIZE = 4;
 const uint ANN_OUTPUT_MOVEMENT_MUSCLES_SIZE = 20;
 const uint ANN_OUTPUT_ROTATION_MUSCLES_SIZE = 8;
 const uint ANN_OUTPUT_ATTACK_MUSCLES_OFFSET = 0;
-const uint ANN_OUTPUT_MOVEMENT_MUSCLES_OFFET= ANN_OUTPUT_ATTACK_MUSCLES_OFFSET+ANN_OUTPUT_ATTACK_MUSCLES_SIZE;
-const uint ANN_OUTPUT_ROTATION_MUSCLES_OFFSET = ANN_OUTPUT_MOVEMENT_MUSCLES_OFFET + ANN_OUTPUT_MOVEMENT_MUSCLES_SIZE;
+const uint ANN_OUTPUT_MOVEMENT_MUSCLES_OFFSET= ANN_OUTPUT_ATTACK_MUSCLES_OFFSET+ANN_OUTPUT_ATTACK_MUSCLES_SIZE;
+const uint ANN_OUTPUT_ROTATION_MUSCLES_OFFSET = ANN_OUTPUT_MOVEMENT_MUSCLES_OFFSET + ANN_OUTPUT_MOVEMENT_MUSCLES_SIZE;
 const uint ANN_OUTPUT_SIZE = ANN_OUTPUT_MOVEMENT_MUSCLES_SIZE+ANN_OUTPUT_ATTACK_MUSCLES_SIZE+ANN_OUTPUT_ROTATION_MUSCLES_SIZE;
 const uint ANN_LATENT_CONNECTIONS_PER_OUTPUT_NEURON = 4;
 const uint ANN_MAX_SIZE = max(max(max(ANN_HIDDEN_SIZE,ANN_LATENT_SIZE),ANN_OUTPUT_SIZE),ANN_INPUT_SIZE);
@@ -963,7 +965,7 @@ const vec2[ANN_OUTPUT_ROTATION_MUSCLES_SIZE] ANN_IMPULSES_OF_ROTATION_MUSCLES = 
     vec2(0,ROTATION_MUSCLE_STRENGTH)
 );
 #define xyz_point_on_unit_xz_circle(angle) vec3(sin(angle),0,cos(angle))
-const vec3[ANN_OUTPUT_MOVEMENT_MUSCLES_SIZE] ANN_IMPULSES_OF_DIRECTIONAL_MUSCLES = vec3[ANN_OUTPUT_MOVEMENT_MUSCLES_SIZE](
+const vec3[ANN_OUTPUT_MOVEMENT_MUSCLES_SIZE] ANN_IMPULSES_OF_MOVEMENT_MUSCLES = vec3[ANN_OUTPUT_MOVEMENT_MUSCLES_SIZE](
     vec3(0,1,0),
     vec3(0,1,0),
     vec3(0,-1,0),
@@ -1017,7 +1019,6 @@ struct AnnEntity{
     uint main;
     float energy;
     float speed;
-    float max_speed;
 };
 
 
