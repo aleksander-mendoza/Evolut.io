@@ -409,13 +409,14 @@ impl FoundationInitializer {
         specialization_constants.entry_uint(5,cap.faces_to_be_removed_chunk_capacity);//
         specialization_constants.entry_uint(6,2);//BROAD_PHASE_CELL_SIZE
         specialization_constants.entry_uint(7,8);//BROAD_PHASE_CELL_CAPACITY
-        specialization_constants.entry_float(100,0.7);//BLOCK_COLLISION_FRICTION
+        specialization_constants.entry_float(100,0.99);//BLOCK_COLLISION_FRICTION
         specialization_constants.entry_float(101,0.01);//BLOCK_COLLISION_MINIMUM_BOUNCE
         specialization_constants.entry_float(102,1.0);//PHYSICS_SIMULATION_DELTA_TIME_PER_STEP
         specialization_constants.entry_float(103,0.01);//BONE_COLLISION_FORCE_PER_AREA_UNIT
         specialization_constants.entry_float(104,0.2);//IMPULSE_AVERAGING_OVER_TIMESETP
         specialization_constants.entry_float(105,0.001f32);//GRAVITY
         specialization_constants.entry_float(106,0.99);//DAMPING_COEFFICIENT
+        specialization_constants.entry_float(107,0.9);//BLOCK_RIGIDITY
 
         specialization_constants.entry_uint(300,cap.max_bones as u32);//MAX_BONES
         specialization_constants.entry_uint(301,cap.max_sensors as u32);//MAX_SENSORS

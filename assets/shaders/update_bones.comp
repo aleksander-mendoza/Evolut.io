@@ -31,6 +31,7 @@ void main() {
         vec3 velocity = bone.new_center - bone.old_center;
         velocity += bone.impulse * PHYSICS_SIMULATION_DELTA_TIME_PER_STEP / bone.mass;
         velocity.y -= GRAVITY * PHYSICS_SIMULATION_DELTA_TIME_PER_STEP;
+        velocity *= DAMPING_COEFFICIENT;
         vec3 half_hitbox = vec3(bone.half_side_length,bone.half_height,bone.half_side_length);
         vec3 hitbox_from = bone.new_center-half_hitbox;
         vec3 hitbox_to = bone.new_center+half_hitbox;
@@ -39,7 +40,7 @@ void main() {
         ivec3 end = ivec3(hitbox_to_ceil);
         bvec3 is_start_limited_by_world_borders = equal(start,ivec3(0,0,0));
         bvec3 is_end_limited_by_world_borders = lessThan(WORLD_BORDERS,end);
-
+        const vec3 velocity_before_block_collisions = velocity;
         bvec3 velocity_sign = lessThan(velocity,vec3(0,0,0));
         bvec3 will_hitbox_move_to_next_block = mix(lessThan(hitbox_to_ceil, hitbox_to + velocity),lessThan(hitbox_from + velocity, vec3(start)),velocity_sign);
         for(int dim=0;dim<3;dim++){
@@ -110,7 +111,7 @@ void main() {
 //            velocity=vec3(0,0,0);
 //        }
         bones[gID].old_center = bone.new_center;
-        bones[gID].new_center = bone.new_center + velocity;
-        bones[gID].impulse = bone.impulse * IMPULSE_AVERAGING_OVER_TIMESETP;
+        bones[gID].new_center = bone.new_center + velocity*mix(BLOCK_COLLISION_FRICTION,1.,velocity == velocity_before_block_collisions);
+        bones[gID].impulse = (velocity - velocity_before_block_collisions)*BLOCK_RIGIDITY;
     }
 }

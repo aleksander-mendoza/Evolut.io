@@ -530,7 +530,7 @@ float rand_float(uint index){
 }
 /**Random float in range (-1,1)*/
 float rand_float_neg_pos(uint index){
-    return rand_float(index)*2-1;
+    return rand_float(index)*2.-1.;
 }
 uvec2 rand_uvec2(uint index){
     const uint rand_uint_offset = index*2;

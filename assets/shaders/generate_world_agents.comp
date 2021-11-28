@@ -40,46 +40,62 @@ void main() {
         );
         bones[gID] = agent_bone;
 
-        uint rand_index = gID*0xAF03;//this is just some arbitrary value
+        uint rand_index = (gID*0xAF03) % MAX_RAND_UINT;//this is just some arbitrary value
         ann_entities[gID].bone_idx = gID;
         ann_entities[gID].speed = 0.01;
         for(int i=0;i<ANN_LATENT_SIZE;i++){
             ann_entities[gID].latent[i] = rand_float_neg_pos(rand_index+=0x3477);
+            if(rand_index>=MAX_RAND_UINT)rand_index-=MAX_RAND_UINT;
         }
         for(int i=0;i<ANN_LIDAR_COUNT;i++){
             ann_entities[gID].lidars[i].direction = rand_vec3(rand_index+=0x2C6A);
+            if(rand_index>=MAX_RAND_UINT)rand_index-=MAX_RAND_UINT;
         }
         for(int i=0;i<ANN_OUTPUT_SIZE;i++){
             ann_entities[gID].ann_output[i].bias = rand_float_neg_pos(rand_index+=0x3D7F);
+            if(rand_index>=MAX_RAND_UINT)rand_index-=MAX_RAND_UINT;
             for(int j=0;j<ANN_LATENT_CONNECTIONS_PER_OUTPUT_NEURON;j++){
+                const uint rand_incoming_idx = rand_uint[rand_index+=0x6F30]%ANN_LATENT_SIZE;
+                if(rand_index>=MAX_RAND_UINT)rand_index-=MAX_RAND_UINT;
                 ann_entities[gID].ann_output[i].incoming[j] = AnnSparseConnection(
-                    rand_uint[rand_index+=0x6F30]%ANN_LATENT_SIZE,
+                    rand_incoming_idx,
                     rand_float_neg_pos(rand_index+=0x69BF)
                 );
+                if(rand_index>=MAX_RAND_UINT)rand_index-=MAX_RAND_UINT;
             }
         }
         for(int i=0;i<ANN_LATENT_SIZE;i++){
             ann_entities[gID].ann_latent[i].bias = rand_float_neg_pos(rand_index+=0x0407);
+            if(rand_index>=MAX_RAND_UINT)rand_index-=MAX_RAND_UINT;
             for(int j=0;j<ANN_HIDDEN_CONNECTIONS_PER_LATENT_NEURON;j++){
+                const uint rand_incoming_idx = rand_uint[rand_index+=0x6F30]%ANN_HIDDEN_SIZE;
+                if(rand_index>=MAX_RAND_UINT)rand_index-=MAX_RAND_UINT;
                 ann_entities[gID].ann_latent[i].incoming_from_hidden[j] = AnnSparseConnection(
-                    rand_uint[rand_index+=0x6F30]%ANN_HIDDEN_SIZE,
+                    rand_incoming_idx,
                     rand_float_neg_pos(rand_index+=0x69BE)
                 );
+                if(rand_index>=MAX_RAND_UINT)rand_index-=MAX_RAND_UINT;
             }
             for(int j=0;j<ANN_LATENT_CONNECTIONS_PER_LATENT_NEURON;j++){
+                const uint rand_incoming_idx = rand_uint[rand_index+=0x6FF0]%ANN_LATENT_SIZE;
+                if(rand_index>=MAX_RAND_UINT)rand_index-=MAX_RAND_UINT;
                 ann_entities[gID].ann_latent[i].recurrent_from_latent[j] = AnnSparseConnection(
-                    rand_uint[rand_index+=0x6FF0]%ANN_LATENT_SIZE,
+                    rand_incoming_idx,
                     rand_float_neg_pos(rand_index+=0x09BF)
                 );
+                if(rand_index>=MAX_RAND_UINT)rand_index-=MAX_RAND_UINT;
             }
         }
         for(int i=0;i<ANN_HIDDEN_SIZE;i++){
             ann_entities[gID].ann_hidden[i].bias = rand_float_neg_pos(rand_index+=0x3477);
             for(int j=0;j<ANN_INPUT_CONNECTIONS_PER_HIDDEN_NEURON;j++){
+                const uint rand_incoming_idx = rand_uint[rand_index+=0x1F30]%ANN_INPUT_SIZE;
+                if(rand_index>=MAX_RAND_UINT)rand_index-=MAX_RAND_UINT;
                 ann_entities[gID].ann_hidden[i].incoming[j] = AnnSparseConnection(
-                    rand_uint[rand_index+=0x1F30]%ANN_INPUT_SIZE,
+                    rand_incoming_idx,
                     rand_float_neg_pos(rand_index+=0x69BF)
                 );
+                if(rand_index>=MAX_RAND_UINT)rand_index-=MAX_RAND_UINT;
             }
         }
     }

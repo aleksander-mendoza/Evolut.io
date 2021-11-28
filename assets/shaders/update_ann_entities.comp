@@ -82,7 +82,7 @@ void main() {
             for(uint j=0;j<neuron.recurrent_from_latent.length();j++){
                 sum += ann_entities[entity_id].latent[neuron.recurrent_from_latent[j].src_neuron] * neuron.recurrent_from_latent[j].weight;
             }
-            tmp1[i] = clamp(sum,-1,1);
+            tmp1[i] = clamp(sum,0, 1);
         }
         subgroupBarrier();
         for(uint i=lID;i<ANN_LATENT_SIZE;i+=GROUP_SIZE){
@@ -94,7 +94,7 @@ void main() {
             for(uint j=0;j<neuron.incoming.length();j++){
                 sum += tmp1[neuron.incoming[j].src_neuron] * neuron.incoming[j].weight;
             }
-            tmp2[i] = max(0,sum);//ReLU activation
+            tmp2[i] = clamp(sum,0,1);
         }
         subgroupBarrier();
         vec2 rotation_change = vec2(0,0);
@@ -109,12 +109,14 @@ void main() {
         }
         vec3 directional_impulse = vec3(0, 0, 0);
         for (uint i = lID;i<ANN_OUTPUT_MOVEMENT_MUSCLES_SIZE;i+=GROUP_SIZE){
+//            if(i>4)debugPrintfEXT("%d:%v3f:%f",i, ANN_IMPULSES_OF_MOVEMENT_MUSCLES[i], tmp2[ANN_OUTPUT_MOVEMENT_MUSCLES_OFFSET+i]);
             directional_impulse += tmp2[ANN_OUTPUT_MOVEMENT_MUSCLES_OFFSET+i] * ANN_IMPULSES_OF_MOVEMENT_MUSCLES[i];
         }
         directional_impulse = subgroupAdd(directional_impulse);
+
         if(subgroupAny(is_standing_on_the_ground) && lID==0){
-            float speed = ann_entities[entity_id].speed;
-            bones[bone_idx].impulse += clamp(directional_impulse,-speed,speed);
+//            debugPrintfEXT("%v3f",directional_impulse);
+            bones[bone_idx].impulse += directional_impulse * ann_entities[entity_id].speed;
         }
     }
 }

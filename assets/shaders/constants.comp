@@ -47,6 +47,8 @@ layout (constant_id = 103) const float BONE_COLLISION_FORCE_PER_AREA_UNIT = 0.01
 layout (constant_id = 104) const float IMPULSE_AVERAGING_OVER_TIMESETP = 0.2;
 layout (constant_id = 105) const float GRAVITY = 0;
 layout (constant_id = 106) const float DAMPING_COEFFICIENT = 0.99;
+layout (constant_id = 107) const float BLOCK_RIGIDITY = 0.9;
+
 layout (constant_id = 300) const uint MAX_BONES = 128;
 layout (constant_id = 301) const uint MAX_SENSORS = 128;
 layout (constant_id = 302) const uint MAX_FACES = 128;

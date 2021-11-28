@@ -80,12 +80,12 @@ void main() {
                 /*penetration_distance = vector pointing from this bone towards neighbouring bone. This vector is of length equal to the diagonal of the
                 overlapping cuboid region.*/
                 vec3 penetration_distance = mix(penetration_distance_to, penetration_distance_from, lessThan(-penetration_distance_from, penetration_distance_to));
-                vec3 overlapping_area_on_each_face = abs(vec3(
-                    penetration_distance.y*penetration_distance.z,
-                    penetration_distance.z*penetration_distance.x,
-                    penetration_distance.x*penetration_distance.y
-                ));
-                vec3 impulse = overlapping_area_on_each_face * sign(penetration_distance) * (BONE_COLLISION_FORCE_PER_AREA_UNIT) * 0.5;
+//                vec3 overlapping_area_on_each_face = abs(vec3(
+//                    penetration_distance.y*penetration_distance.z,
+//                    penetration_distance.z*penetration_distance.x,
+//                    penetration_distance.x*penetration_distance.y
+//                ));
+                vec3 impulse = /*overlapping_area_on_each_face * */dot(penetration_distance,penetration_distance) * penetration_distance * (BONE_COLLISION_FORCE_PER_AREA_UNIT) * 0.5;
                 bone_impulse -= impulse;
 //                debugPrintfEXT("%d %d:%v3f:%v3f", neighbouring_bone_idx, gID, bone.new_center, neighbour_bone.new_center);
                 atomicAdd(bones[neighbouring_bone_idx].impulse.x, impulse.x);
