@@ -1,6 +1,5 @@
 use ash::vk;
 use crate::render::device::Device;
-use ash::version::DeviceV1_0;
 use ash::prelude::VkResult;
 
 pub struct Fence {

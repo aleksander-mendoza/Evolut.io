@@ -4,7 +4,6 @@ use crate::render::command_pool::{CommandPool, CommandBuffer};
 use std::ops::{Deref, DerefMut};
 use ash::prelude::VkResult;
 use crate::render::device::Device;
-use ash::version::DeviceV1_0;
 
 use crate::render::buffer_type::BufferType;
 use crate::render::buffer::Buffer;

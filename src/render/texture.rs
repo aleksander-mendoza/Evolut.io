@@ -4,7 +4,6 @@ use crate::render::device::Device;
 use ash::vk;
 use std::marker::PhantomData;
 use ash::vk::{Extent3D, DeviceMemory, Image, Extent2D};
-use ash::version::{DeviceV1_0};
 use failure::err_msg;
 use std::path::Path;
 use crate::render::command_pool::{CommandPool};

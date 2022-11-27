@@ -72,8 +72,8 @@ impl SingleRenderPass{
         Ok(Self{render_pass,depth_attachment, swapchain, framebuffers})
     }
 
-    pub fn new_swapchain_and_render_pass(instance: &Instance, device: &Device, surface: &Surface)->Result<Self,failure::Error>{
-        instance.create_swapchain(device, surface).and_then(Self::new)
+    pub fn new_swapchain_and_render_pass(instance: &Instance, device: &Device, surface: &Surface, old:Option<&SwapChain>)->Result<Self,failure::Error>{
+        instance.create_swapchain(device, surface, old).and_then(Self::new)
     }
 
     fn create_framebuffers(swapchain:&SwapChain, render_pass:&RenderPass, depth_attachment:&TextureView<Dim2D,Depth>) -> Result<Vec<Framebuffer>,failure::Error>{

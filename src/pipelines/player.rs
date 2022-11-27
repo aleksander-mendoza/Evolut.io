@@ -46,7 +46,7 @@ impl Player {
             model_matrix: glm::identity::<f32, 4>(),
             movement_speed: 0.009f32,
             player_reach: 4f32,
-            rotation_speed: 1f32,
+            rotation_speed: 1f32/1024f32,
             events: VecDeque::with_capacity(4),
             ray_trace_vector: glm::zero()
         }
@@ -55,12 +55,12 @@ impl Player {
 
     pub fn update<P: RenderResources, C: ComputeResources, A: ComputeResources>(&mut self, display:&mut Display<P,C, A>, input: &Input, fps_counter: &FpsCounter) ->Result<(),failure::Error>{
         let ash::vk::Extent2D { width, height } = display.extent();
-        let (width, height) = (width as f32, height as f32);
+        // let (width, height) = (width as f32, height as f32);
         if input.has_mouse_move() {
-            let normalized_x = (input.mouse_move_xrel() as f32) / width
+            let normalized_x = (input.mouse_move_xrel() as f32) // / width
                 * fps_counter.delta_f32()
                 * self.rotation_speed;
-            let normalized_y = (input.mouse_move_yrel() as f32) / height
+            let normalized_y = (input.mouse_move_yrel() as f32) // / height
                 * fps_counter.delta_f32()
                 * self.rotation_speed;
             self.rotation = glm::quat_angle_axis(normalized_y, &glm::vec3(1f32, 0f32, 0f32))

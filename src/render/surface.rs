@@ -2,17 +2,18 @@ use ash::vk;
 use ash::prelude::VkResult;
 use ash::vk::{SurfaceCapabilitiesKHR, SurfaceFormatKHR, PresentModeKHR, SurfaceKHR, Handle};
 use crate::render::instance::Instance;
-use ash::version::InstanceV1_0;
 use failure::err_msg;
+use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
+use winit::dpi::PhysicalSize;
 
 pub struct Surface {
     surface_loader: ash::extensions::khr::Surface,
     raw: vk::SurfaceKHR,
-    window: sdl2::video::Window
+    window: winit::window::Window
 }
 
 impl Surface {
-    pub fn window(&self)->&sdl2::video::Window{
+    pub fn window(&self)->&winit::window::Window{
         &self.window
     }
     pub fn raw(&self) -> vk::SurfaceKHR {
@@ -20,10 +21,11 @@ impl Surface {
     }
     pub fn new(entry: &ash::Entry,
                instance: &Instance,
-               window: sdl2::video::Window) -> Result<Self, failure::Error> {
-        let surface = window.vulkan_create_surface( instance.raw().handle().as_raw() as usize).map_err(err_msg)?;
+               window: winit::window::Window) -> Result<Self, failure::Error> {
+        let surface =  unsafe { ash_window::create_surface(entry, instance.raw(), window.raw_display_handle(), window.raw_window_handle(),None).unwrap() };
+        // window.vulkan_create_surface( instance.raw().handle().as_raw() as usize).map_err(err_msg)?;
         let surface_loader = ash::extensions::khr::Surface::new(entry, instance.raw());
-        let surface = SurfaceKHR::from_raw(surface);
+        let surface = SurfaceKHR::from_raw(surface.as_raw());
         Ok(Self {
             surface_loader,
             raw: surface,
@@ -31,7 +33,8 @@ impl Surface {
         })
     }
     pub fn size(&self) -> (u32, u32) {
-        self.window.size()
+        let PhysicalSize{ width, height } = self.window.inner_size();
+        (width, height)
     }
     pub fn supported_by(&self, device: vk::PhysicalDevice, family_idx: u32) -> VkResult<bool> {
         unsafe {

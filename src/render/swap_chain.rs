@@ -92,7 +92,7 @@ impl Iterator for ImgIter{
 }
 
 impl SwapChain {
-    pub fn new(instance: &Instance, device: &Device, surface: &Surface) -> Result<Self, failure::Error> {
+    pub fn new(instance: &Instance, device: &Device, surface: &Surface, old:Option<&Self>) -> Result<Self, failure::Error> {
         let capabilities = surface.capabilities(device.physical_device())?;
         let formats = surface.formats(device.physical_device())?;
         let present_modes = surface.present_modes(device.physical_device())?;
@@ -120,7 +120,7 @@ impl SwapChain {
             .pre_transform(capabilities.current_transform)
             .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
             .clipped(true)
-            .old_swapchain(vk::SwapchainKHR::null())
+            .old_swapchain(old.map(|o|o.raw()).unwrap_or(vk::SwapchainKHR::null()))
             .image_array_layers(1)
             .present_mode(present_mode);
 

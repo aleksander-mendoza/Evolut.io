@@ -80,7 +80,7 @@ impl <P: RenderResources, C:ComputeResources, A:ComputeResources> Display<P,C,A>
                render:impl FnOnce(&CommandPool, &FoundationInitializer)->Result<P,failure::Error>,
                compute:impl FnOnce(&CommandPool, &FoundationInitializer)->Result<C,failure::Error>,
                compute_background:impl FnOnce(&CommandPool, &FoundationInitializer)->Result<A,failure::Error>) -> Result<Self, failure::Error> {
-        let render_pass = vulkan.create_single_render_pass()?;
+        let render_pass = vulkan.create_single_render_pass(None)?;
         let graphics_cmd_pool = CommandPool::new(vulkan.device(),QUEUE_IDX_GRAPHICS, true)?;
         let compute_cmd_pool = CommandPool::new(vulkan.device(),QUEUE_IDX_COMPUTE, true)?;
         let compute_background_cmd_pool = CommandPool::new(vulkan.device(),QUEUE_IDX_AMBIENT_COMPUTE, true)?;
@@ -131,6 +131,9 @@ impl <P: RenderResources, C:ComputeResources, A:ComputeResources> Display<P,C,A>
     }
     pub fn device(&self) -> &Device {
         self.vulkan.device()
+    }
+    pub fn window(&self) -> &winit::window::Window {
+        self.vulkan.window()
     }
     pub fn foundations(&self) -> &Foundations {
         &self.foundations
@@ -190,7 +193,7 @@ impl <P: RenderResources, C:ComputeResources, A:ComputeResources> Display<P,C,A>
         self.swapchain().extent()
     }
     pub fn recreate_graphics(&mut self) -> Result<(), failure::Error> {
-        self.render_pass=self.vulkan.create_single_render_pass()?;
+        self.render_pass=self.vulkan.create_single_render_pass(Some(self.render_pass.swapchain()))?;
         self.graphics_pipeline.recreate(&self.render_pass,self.foundations.specialization_constants())?;
         self.descriptors = self.descriptors_builder.build(self.render_pass.swapchain())?;
         let missing_buffers = self.swapchain().len() - self.graphics_command_buffers.len();

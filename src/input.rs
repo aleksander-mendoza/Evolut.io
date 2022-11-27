@@ -1,9 +1,10 @@
 use nalgebra_glm as glm;
-use sdl2;
-use sdl2::mouse::MouseButton;
+use winit::dpi::{PhysicalPosition, PhysicalSize};
+use winit::error::ExternalError;
+use winit::event::{ElementState, MouseButton, WindowEvent};
+use crate::VulkanContext;
 
 pub struct Input {
-    event_pump: sdl2::EventPump,
     quit: bool,
     escape: bool,
     left: bool,
@@ -12,13 +13,16 @@ pub struct Input {
     down: bool,
     forward: bool,
     backward: bool,
-    resize_w: i32,
-    resize_h: i32,
+    window_width: i32,
+    window_height: i32,
     has_resize: bool,
-    mouse_move_x: i32,
-    mouse_move_y: i32,
-    mouse_move_xrel: i32,
-    mouse_move_yrel: i32,
+    hide_mouse: bool,
+    mouse_x: f64,
+    mouse_y: f64,
+    prev_mouse_x: f64,
+    prev_mouse_y: f64,
+    mouse_move_xrel: f64,
+    mouse_move_yrel: f64,
     has_mouse_move: bool,
     has_mouse_left_click: bool,
     has_mouse_right_click: bool,
@@ -40,12 +44,13 @@ pub struct Input {
     no8: bool,
     no9: bool,
     number: i32,
+    verbose: bool,
 }
 
 impl Input {
-    pub fn new(event_pump: sdl2::EventPump) -> Input {
+    pub fn new(window: &winit::window::Window) -> Input {
+        let PhysicalSize { width, height } = window.inner_size();
         Input {
-            event_pump,
             quit: false,
             escape: false,
             left: false,
@@ -54,13 +59,16 @@ impl Input {
             down: false,
             forward: false,
             backward: false,
-            resize_w: 0,
-            resize_h: 0,
+            window_width: width as i32,
+            window_height: height as i32,
             has_resize: false,
-            mouse_move_x: 0,
-            mouse_move_y: 0,
-            mouse_move_xrel: 0,
-            mouse_move_yrel: 0,
+            hide_mouse: false,
+            mouse_x: 0.,
+            mouse_y: 0.,
+            prev_mouse_x: 0.,
+            prev_mouse_y: 0.,
+            mouse_move_xrel: 0.,
+            mouse_move_yrel: 0.,
             has_mouse_move: false,
             has_mouse_left_click: false,
             has_mouse_right_click: false,
@@ -81,10 +89,14 @@ impl Input {
             no8: false,
             no9: false,
             number: 0,
-            next: false
+            next: false,
+            verbose: false,
         }
     }
-    pub fn poll(&mut self) {
+    pub fn set_verbose(&mut self, verbose: bool) {
+        self.verbose = verbose
+    }
+    pub fn reset(&mut self) {
         self.has_resize = false;
         self.has_mouse_move = false;
         self.has_mouse_left_click = false;
@@ -93,222 +105,252 @@ impl Input {
         self.pause = false;
         self.next = false;
         self.number = -1;
-        for event in self.event_pump.poll_iter() {
-            match event {
-                sdl2::event::Event::Quit { .. } => self.quit = true,
-                sdl2::event::Event::Window {
-                    win_event: sdl2::event::WindowEvent::Resized(w, h),
-                    ..
-                } => {
-                    self.resize_w = w;
-                    self.resize_h = h;
-                    self.has_resize = true;
-                }
-                sdl2::event::Event::KeyDown { keycode, .. } => {
-                    if let Some(k) = keycode {
-                        match k {
-                            sdl2::keyboard::Keycode::Num0 => {
-                                self.no0 = true;
-                                self.number = 0;
-                            }
-                            sdl2::keyboard::Keycode::Num1 => {
-                                self.no1 = true;
-                                self.number = 1;
-                            }
-                            sdl2::keyboard::Keycode::Num2 => {
-                                self.no2 = true;
-                                self.number = 2;
-                            }
-                            sdl2::keyboard::Keycode::Num3 => {
-                                self.no3 = true;
-                                self.number = 3;
-                            }
-                            sdl2::keyboard::Keycode::Num4 => {
-                                self.no4 = true;
-                                self.number = 4;
-                            }
-                            sdl2::keyboard::Keycode::Num5 => {
-                                self.no5 = true;
-                                self.number = 5;
-                            }
-                            sdl2::keyboard::Keycode::Num6 => {
-                                self.no6 = true;
-                                self.number = 6;
-                            }
-                            sdl2::keyboard::Keycode::Num7 => {
-                                self.no7 = true;
-                                self.number = 7;
-                            }
-                            sdl2::keyboard::Keycode::Num8 => {
-                                self.no8 = true;
-                                self.number = 8;
-                            }
-                            sdl2::keyboard::Keycode::Num9 => {
-                                self.no9 = true;
-                                self.number = 9;
-                            }
-                            sdl2::keyboard::Keycode::R => {
-                                self.r = true;
-                            }
-                            sdl2::keyboard::Keycode::E => {
-                                self.e = true;
-                            }
-                            sdl2::keyboard::Keycode::Q => {
-                                self.q = true;
-                            }
-                            sdl2::keyboard::Keycode::Right => {
-                                self.next = true;
-                            }
-                            sdl2::keyboard::Keycode::P => {
-                                self.pause = true;
-                            }
-                            sdl2::keyboard::Keycode::D => {
-                                self.right = true;
-                            }
-                            sdl2::keyboard::Keycode::A => {
-                                self.left = true;
-                            }
-                            sdl2::keyboard::Keycode::W => {
-                                self.forward = true;
-                            }
-                            sdl2::keyboard::Keycode::S => {
-                                self.backward = true;
-                            }
-                            sdl2::keyboard::Keycode::Space => {
-                                self.up = true;
-                            }
-                            sdl2::keyboard::Keycode::LShift => {
-                                self.down = true;
-                            }
-                            sdl2::keyboard::Keycode::Escape => {
-                                self.escape = true;
-                            }
-                            _ => (),
-                        }
-                    }
-                }
-                sdl2::event::Event::KeyUp { keycode, .. } => {
-                    if let Some(k) = keycode {
-                        match k {
-                            sdl2::keyboard::Keycode::Num0 => {
-                                self.no0 = false;
-                            }
-                            sdl2::keyboard::Keycode::Num1 => {
-                                self.no1 = false;
-                            }
-                            sdl2::keyboard::Keycode::Num2 => {
-                                self.no2 = false;
-                            }
-                            sdl2::keyboard::Keycode::Num3 => {
-                                self.no3 = false;
-                            }
-                            sdl2::keyboard::Keycode::Num4 => {
-                                self.no4 = false;
-                            }
-                            sdl2::keyboard::Keycode::Num5 => {
-                                self.no5 = false;
-                            }
-                            sdl2::keyboard::Keycode::Num6 => {
-                                self.no6 = false;
-                            }
-                            sdl2::keyboard::Keycode::Num7 => {
-                                self.no7 = false;
-                            }
-                            sdl2::keyboard::Keycode::Num8 => {
-                                self.no8 = false;
-                            }
-                            sdl2::keyboard::Keycode::Num9 => {
-                                self.no9 = false;
-                            }
-                            sdl2::keyboard::Keycode::R => {
-                                self.r = false;
-                            }
-                            sdl2::keyboard::Keycode::E => {
-                                self.e = false;
-                            }
-                            sdl2::keyboard::Keycode::Q => {
-                                self.q = false;
-                            }
-                            sdl2::keyboard::Keycode::D => {
-                                self.right = false;
-                            }
-                            sdl2::keyboard::Keycode::A => {
-                                self.left = false;
-                            }
-                            sdl2::keyboard::Keycode::W => {
-                                self.forward = false;
-                            }
-                            sdl2::keyboard::Keycode::S => {
-                                self.backward = false;
-                            }
-                            sdl2::keyboard::Keycode::Space => {
-                                self.up = false;
-                            }
-                            sdl2::keyboard::Keycode::LShift => {
-                                self.down = false;
-                            }
-                            sdl2::keyboard::Keycode::Escape => {
-                                self.escape = false;
-                            }
-                            _ => (),
-                        }
-                    }
-                }
-                sdl2::event::Event::MouseMotion {
-                    x, y, xrel, yrel, ..
-                } => {
-                    self.mouse_move_x = x;
-                    self.mouse_move_y = y;
-                    self.mouse_move_xrel = xrel;
-                    self.mouse_move_yrel = yrel;
-                    self.has_mouse_move = true;
-                }
-                sdl2::event::Event::MouseButtonDown {
-                    mouse_btn, ..
-                } => match mouse_btn {
-                    MouseButton::Unknown => {}
-                    MouseButton::Left => {
-                        if !self.has_mouse_left_down {
-                            self.has_mouse_left_click = true;
-                        }
-                        self.has_mouse_left_down = true;
-                    }
-                    MouseButton::Middle => {}
-                    MouseButton::Right => {
-                        if !self.has_mouse_right_down {
-                            self.has_mouse_right_click = true;
-                        }
-                        self.has_mouse_right_down = true;
-                    }
-                    MouseButton::X1 => {}
-                    MouseButton::X2 => {}
-                },
-                sdl2::event::Event::MouseButtonUp {
-                    mouse_btn, ..
-                } => match mouse_btn {
-                    MouseButton::Unknown => {}
-                    MouseButton::Left => {
-                        self.has_mouse_left_down = false;
-                    }
-                    MouseButton::Middle => {}
-                    MouseButton::Right => {
-                        self.has_mouse_right_down = false;
-                    }
-                    MouseButton::X1 => {}
-                    MouseButton::X2 => {}
-                },
-                _ => {}
+        self.prev_mouse_x = self.mouse_x;
+        self.prev_mouse_y = self.mouse_y;
+    }
+    pub fn is_mouse_hidden(&self) -> bool {
+        self.hide_mouse
+    }
+    pub fn set_mouse_hidden(&mut self, hide: bool, window: &winit::window::Window) {
+        self.hide_mouse = hide;
+        window.set_cursor_visible(!hide)
+    }
+    pub fn finish_poll(&mut self, window: &winit::window::Window) -> Result<(), ExternalError> {
+        if self.hide_mouse {
+            self.center_cursor(window)
+        } else {
+            Ok(())
+        }
+    }
+    pub fn center_cursor(&mut self, window: &winit::window::Window) -> Result<(), ExternalError> {
+        let center = PhysicalPosition::new(self.window_width / 2, self.window_height / 2);
+        self.mouse_x = center.x as f64;
+        self.mouse_y = center.y as f64;
+        window.set_cursor_position(center)
+    }
+
+    pub fn poll(&mut self, event: WindowEvent) {
+        match event {
+            WindowEvent::CloseRequested => self.quit = true,
+            WindowEvent::Resized(size) => {
+                self.window_width = size.width as i32;
+                self.window_height = size.height as i32;
+                self.has_resize = true;
             }
+            WindowEvent::KeyboardInput { device_id, is_synthetic, input } => {
+                if self.verbose {
+                    println!("Keyboard {:?}", input);
+                }
+                match input.state {
+                    ElementState::Pressed => {
+                        if let Some(k) = input.virtual_keycode {
+                            match k {
+                                winit::event::VirtualKeyCode::Numpad0 => {
+                                    self.no0 = true;
+                                    self.number = 0;
+                                }
+                                winit::event::VirtualKeyCode::Numpad1 => {
+                                    self.no1 = true;
+                                    self.number = 1;
+                                }
+                                winit::event::VirtualKeyCode::Numpad2 => {
+                                    self.no2 = true;
+                                    self.number = 2;
+                                }
+                                winit::event::VirtualKeyCode::Numpad3 => {
+                                    self.no3 = true;
+                                    self.number = 3;
+                                }
+                                winit::event::VirtualKeyCode::Numpad4 => {
+                                    self.no4 = true;
+                                    self.number = 4;
+                                }
+                                winit::event::VirtualKeyCode::Numpad5 => {
+                                    self.no5 = true;
+                                    self.number = 5;
+                                }
+                                winit::event::VirtualKeyCode::Numpad6 => {
+                                    self.no6 = true;
+                                    self.number = 6;
+                                }
+                                winit::event::VirtualKeyCode::Numpad7 => {
+                                    self.no7 = true;
+                                    self.number = 7;
+                                }
+                                winit::event::VirtualKeyCode::Numpad8 => {
+                                    self.no8 = true;
+                                    self.number = 8;
+                                }
+                                winit::event::VirtualKeyCode::Numpad9 => {
+                                    self.no9 = true;
+                                    self.number = 9;
+                                }
+                                winit::event::VirtualKeyCode::R => {
+                                    self.r = true;
+                                }
+                                winit::event::VirtualKeyCode::E => {
+                                    self.e = true;
+                                }
+                                winit::event::VirtualKeyCode::Q => {
+                                    self.q = true;
+                                }
+                                winit::event::VirtualKeyCode::Right => {
+                                    self.next = true;
+                                }
+                                winit::event::VirtualKeyCode::P => {
+                                    self.pause = true;
+                                }
+                                winit::event::VirtualKeyCode::D => {
+                                    self.right = true;
+                                }
+                                winit::event::VirtualKeyCode::A => {
+                                    self.left = true;
+                                }
+                                winit::event::VirtualKeyCode::W => {
+                                    self.forward = true;
+                                }
+                                winit::event::VirtualKeyCode::S => {
+                                    self.backward = true;
+                                }
+                                winit::event::VirtualKeyCode::Space => {
+                                    self.up = true;
+                                }
+                                winit::event::VirtualKeyCode::LShift => {
+                                    self.down = true;
+                                }
+                                winit::event::VirtualKeyCode::Escape => {
+                                    self.escape = true;
+                                }
+                                _ => (),
+                            }
+                        }
+                    }
+                    ElementState::Released => {
+                        if let Some(k) = input.virtual_keycode {
+                            match k {
+                                winit::event::VirtualKeyCode::Numpad0 => {
+                                    self.no0 = false;
+                                }
+                                winit::event::VirtualKeyCode::Numpad1 => {
+                                    self.no1 = false;
+                                }
+                                winit::event::VirtualKeyCode::Numpad2 => {
+                                    self.no2 = false;
+                                }
+                                winit::event::VirtualKeyCode::Numpad3 => {
+                                    self.no3 = false;
+                                }
+                                winit::event::VirtualKeyCode::Numpad4 => {
+                                    self.no4 = false;
+                                }
+                                winit::event::VirtualKeyCode::Numpad5 => {
+                                    self.no5 = false;
+                                }
+                                winit::event::VirtualKeyCode::Numpad6 => {
+                                    self.no6 = false;
+                                }
+                                winit::event::VirtualKeyCode::Numpad7 => {
+                                    self.no7 = false;
+                                }
+                                winit::event::VirtualKeyCode::Numpad8 => {
+                                    self.no8 = false;
+                                }
+                                winit::event::VirtualKeyCode::Numpad9 => {
+                                    self.no9 = false;
+                                }
+                                winit::event::VirtualKeyCode::R => {
+                                    self.r = false;
+                                }
+                                winit::event::VirtualKeyCode::E => {
+                                    self.e = false;
+                                }
+                                winit::event::VirtualKeyCode::Q => {
+                                    self.q = false;
+                                }
+                                winit::event::VirtualKeyCode::D => {
+                                    self.right = false;
+                                }
+                                winit::event::VirtualKeyCode::A => {
+                                    self.left = false;
+                                }
+                                winit::event::VirtualKeyCode::W => {
+                                    self.forward = false;
+                                }
+                                winit::event::VirtualKeyCode::S => {
+                                    self.backward = false;
+                                }
+                                winit::event::VirtualKeyCode::Space => {
+                                    self.up = false;
+                                }
+                                winit::event::VirtualKeyCode::LShift => {
+                                    self.down = false;
+                                }
+                                winit::event::VirtualKeyCode::Escape => {
+                                    self.escape = false;
+                                }
+                                _ => (),
+                            }
+                        }
+                    }
+                }
+            }
+            WindowEvent::CursorMoved { position, .. } => {
+                self.mouse_x = position.x;
+                self.mouse_y = position.y;
+                self.mouse_move_xrel = self.mouse_x - self.prev_mouse_x;
+                self.mouse_move_yrel = self.mouse_y - self.prev_mouse_y;
+                self.has_mouse_move = true;
+                if self.verbose {
+                    println!("Mouse {{position:{{x:{},y:{}}},moved:{{x:{},y:{}}}}}", self.mouse_x, self.mouse_y, self.mouse_move_xrel, self.mouse_move_yrel);
+                }
+            }
+            // Accumulate input events
+            WindowEvent::MouseInput {
+                button,
+                state,
+                ..
+            } => {
+                if self.verbose{
+                    println!("Mouse button {:?}, {:?}", button, state)
+                }
+                match state {
+                    ElementState::Pressed => match button {
+                        MouseButton::Left => {
+                            if !self.has_mouse_left_down {
+                                self.has_mouse_left_click = true;
+                            }
+                            self.has_mouse_left_down = true;
+                        }
+                        MouseButton::Right => {
+                            if !self.has_mouse_right_down {
+                                self.has_mouse_right_click = true;
+                            }
+                            self.has_mouse_right_down = true;
+                        }
+                        _ => {}
+                    }
+                    ElementState::Released => match button {
+                        MouseButton::Left => {
+                            self.has_mouse_left_down = false;
+                        }
+                        MouseButton::Right => {
+                            self.has_mouse_right_down = false;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            _ => (),
         }
     }
     pub fn has_resize(&self) -> bool {
         self.has_resize
     }
     pub fn resize_w(&self) -> i32 {
-        self.resize_w
+        self.window_width
     }
     pub fn resize_h(&self) -> i32 {
-        self.resize_h
+        self.window_height
     }
     pub fn has_mouse_move(&self) -> bool {
         self.has_mouse_move
@@ -325,16 +367,16 @@ impl Input {
     pub fn has_mouse_right_down(&self) -> bool {
         self.has_mouse_right_down
     }
-    pub fn mouse_move_x(&self) -> i32 {
-        self.mouse_move_x
+    pub fn mouse_x(&self) -> f64 {
+        self.mouse_x
     }
-    pub fn mouse_move_y(&self) -> i32 {
-        self.mouse_move_y
+    pub fn mouse_y(&self) -> f64 {
+        self.mouse_y
     }
-    pub fn mouse_move_xrel(&self) -> i32 {
+    pub fn mouse_move_xrel(&self) -> f64 {
         self.mouse_move_xrel
     }
-    pub fn mouse_move_yrel(&self) -> i32 {
+    pub fn mouse_move_yrel(&self) -> f64 {
         self.mouse_move_yrel
     }
     pub fn quit(&self) -> bool {

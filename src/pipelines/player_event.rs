@@ -27,10 +27,14 @@ impl Debug for PlayerEvent{
                 write!(f,"Nothing")
             }
             EventType::Throw => {
-                write!(f,"Throw{{position={}, velocity={}}}",self.vec3_slot0, self.vec3_slot1)
+                let a = self.vec3_slot0;
+                let b = self.vec3_slot1;
+                write!(f,"Throw{{position={}, velocity={}}}",a, b)
             }
             EventType::SetBlock => {
-                write!(f,"SetBlock{{block_idx={}, block_id={}}}",self.u32_slot0, self.u32_slot1)
+                let a = self.u32_slot0;
+                let b = self.u32_slot1;
+                write!(f,"SetBlock{{block_idx={}, block_id={}}}",a,b)
             }
         }
     }

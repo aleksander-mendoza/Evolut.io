@@ -1,7 +1,6 @@
 use crate::render::shader_module::{ShaderModule, AnyShaderModule, Fragment, Vertex};
 use ash::vk;
 use crate::render::device::Device;
-use ash::version::DeviceV1_0;
 use std::ffi::{CString};
 use failure::err_msg;
 use crate::render::render_pass::{RenderPass};
@@ -150,7 +149,7 @@ impl PipelineBuilder {
     pub fn color_blend_attachment_states_disabled(&mut self) -> &mut Self{
         self.color_blend_attachment_states(vk::PipelineColorBlendAttachmentState {
             blend_enable: vk::FALSE,
-            color_write_mask: vk::ColorComponentFlags::all(),
+            color_write_mask: vk::ColorComponentFlags::RGBA,
             src_color_blend_factor: vk::BlendFactor::ONE,
             dst_color_blend_factor: vk::BlendFactor::ZERO,
             color_blend_op: vk::BlendOp::ADD,
@@ -162,7 +161,7 @@ impl PipelineBuilder {
     pub fn color_blend_attachment_states_default(&mut self) -> &mut Self{
         self.color_blend_attachment_states(vk::PipelineColorBlendAttachmentState {
             blend_enable: vk::TRUE,
-            color_write_mask: vk::ColorComponentFlags::all(),
+            color_write_mask: vk::ColorComponentFlags::RGBA,
             src_color_blend_factor: vk::BlendFactor::SRC_ALPHA,
             dst_color_blend_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
             color_blend_op: vk::BlendOp::ADD,

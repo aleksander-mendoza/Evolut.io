@@ -8,7 +8,6 @@ use crate::render::shader_module::ShaderModule;
 use crate::render::shader_module::Compute as ShCompute;
 use std::ffi::CString;
 use failure::err_msg;
-use ash::version::DeviceV1_0;
 use ash::vk::{Pipeline, PipelineLayout};
 use crate::render::descriptor_pool::{DescriptorPool, DescriptorSet};
 use crate::render::buffer_type::{AsStorage, Uniform};

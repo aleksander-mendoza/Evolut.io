@@ -1,7 +1,6 @@
 use ash::vk;
 use crate::render::device::Device;
 use crate::render::render_pass::RenderPass;
-use ash::version::DeviceV1_0;
 use crate::render::swap_chain::SwapChain;
 use crate::render::imageview::{ImageView, Depth, Color};
 

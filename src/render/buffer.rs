@@ -1,7 +1,6 @@
 use crate::render::buffer_type::{BufferType, AsDescriptor, CpuWriteable, AsStorage, GpuIndirect};
 use crate::render::device::Device;
 use ash::vk;
-use ash::version::DeviceV1_0;
 
 pub trait Buffer<V: Copy, T: BufferType>:Sized {
     fn device(&self) -> &Device;

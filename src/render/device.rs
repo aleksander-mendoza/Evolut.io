@@ -1,4 +1,3 @@
-use ash::version::{InstanceV1_0, DeviceV1_0, InstanceV1_1};
 use ash::vk;
 use failure::err_msg;
 use ash::vk::{QueueFamilyProperties, ExtensionProperties, PhysicalDeviceMemoryProperties, MemoryRequirements, PhysicalDeviceSubgroupProperties};

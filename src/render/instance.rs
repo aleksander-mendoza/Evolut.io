@@ -1,5 +1,4 @@
 
-use ash::version::{EntryV1_0, InstanceV1_0};
 use crate::render::constants::APP_INFO;
 use crate::render::platforms::{required_extension_names};
 use ash::{vk};
@@ -11,6 +10,7 @@ use crate::render::surface::Surface;
 use crate::render::swap_chain::SwapChain;
 
 use std::sync::Arc;
+use ash::extensions::khr::Swapchain;
 
 struct InstanceInner{
     raw: ash::Instance,
@@ -23,13 +23,14 @@ pub struct Instance {
 
 
 impl Instance {
-    pub fn new(entry: &ash::Entry, debug: bool) -> Result<Self, failure::Error> {
-        let extension_names = required_extension_names(debug);
+    pub fn new(entry: &ash::Entry, window:&winit::window::Window, debug: bool) -> Result<Self, failure::Error> {
+        let extension_names = required_extension_names(window,debug);
         let mut extension_features_vec = vec![];
         if debug{
             // extension_features_vec.push(vk::ValidationFeatureEnableEXT::BEST_PRACTICES);
             extension_features_vec.push(vk::ValidationFeatureEnableEXT::DEBUG_PRINTF);
         }
+
         let mut extension_features = vk::ValidationFeaturesEXT::builder().enabled_validation_features(&extension_features_vec).build();
         let mut debug_builder = DebugUtilsMessengerCreateInfoEXT::builder();
         let mut instance_builder = ash::vk::InstanceCreateInfo::builder()
@@ -52,8 +53,8 @@ impl Instance {
         Ok(Self { inner:Arc::new(InstanceInner{raw: instance, debug: debug_utils })})
     }
 
-    pub fn create_swapchain(&self, device: &Device, surface: &Surface) -> Result<SwapChain, failure::Error> {
-        SwapChain::new(self,device,surface)
+    pub fn create_swapchain(&self, device: &Device, surface: &Surface, old:Option<&SwapChain>) -> Result<SwapChain, failure::Error> {
+        SwapChain::new(self,device,surface, old)
     }
     pub fn raw(&self) -> &ash::Instance{
         &self.inner.raw
@@ -67,7 +68,7 @@ impl Instance {
         Device::new(entry, &self,physical_device,self.inner.debug.is_some())
     }
 
-    pub fn create_surface(&self,entry:&ash::Entry, window: sdl2::video::Window) -> Result<Surface, failure::Error> {
+    pub fn create_surface(&self,entry:&ash::Entry, window: winit::window::Window) -> Result<Surface, failure::Error> {
         Surface::new(entry,self,window)
     }
 }
